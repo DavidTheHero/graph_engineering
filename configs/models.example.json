@@ -1,0 +1,24 @@
+{
+  "a": {
+    "endpoint": "http://192.168.0.60:18020/v1",
+    "model_id": "qwen3.8-27b",
+    "context": 150000,
+    "output": 4096,
+    "api_key_env": null,
+    "timeout": 120,
+    "input_budget_bytes": 40000,
+    "structured_output": true,
+    "tools": false
+  },
+  "b": {
+    "endpoint": "http://192.168.0.62:18035/v1",
+    "model_id": "docker.io/local/qwen35-4b:8k",
+    "context": 8192,
+    "output": 1024,
+    "api_key_env": null,
+    "timeout": 120,
+    "input_budget_bytes": 6000,
+    "structured_output": true,
+    "tools": false
+  }
+}

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=65"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "graph-engineering"
+version = "0.1.0"
+description = "Auditable bounded software engineering graph with local OpenCode workers"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+graph-engineering = "graph_engineering.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
