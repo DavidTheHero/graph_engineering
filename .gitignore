@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+.env
+.runtime/
+evidence/connectivity/opencode-source/
+evidence/demos/
+evidence/live/
+*.sqlite3*
+build/
+dist/
