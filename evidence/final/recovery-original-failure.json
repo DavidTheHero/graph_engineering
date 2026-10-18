@@ -1,0 +1,16 @@
+{
+  "observed": {
+    "number": 3,
+    "url": "https://github.com/DavidTheHero/graph-engineering-public-fixture-20261018/issues/3",
+    "key": "controller-crash-recovery-20261018"
+  },
+  "effects": [
+    {
+      "run_id": "crash_recovery",
+      "key": "issue",
+      "status": "done",
+      "result": "{\"number\": 4, \"url\": \"https://github.com/DavidTheHero/graph-engineering-public-fixture-20261018/issues/4\", \"key\": \"controller-crash-recovery-20261018\"}"
+    }
+  ],
+  "outcome": "Original implementation created duplicate #4 after crash creating #3; both closed. Corrected read-only recovery retained in separate receipt."
+}

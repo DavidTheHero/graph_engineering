@@ -1,0 +1,16 @@
+{
+  "metric": {
+    "model_key": "a",
+    "model_id": "qwen3.8-27b",
+    "role": "investigation",
+    "run_id": "connectivity",
+    "attempt": 0,
+    "success": false,
+    "tool_calls": 0,
+    "raw_path": "D:\\git_code\\graph_engineering\\evidence\\connectivity\\implemented-worker\\connectivity\\investigation-0-12133318\\result.json",
+    "input_bytes": 94,
+    "utc": "2026-10-18T12:08:48.224251+00:00",
+    "latency_seconds": 0.078
+  },
+  "error": "ModelError: This provider configuration is verified for OpenCode 2.0.32; found opencode v2.0.32"
+}

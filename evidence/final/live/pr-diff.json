@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "gh",
+    "pr",
+    "diff",
+    "2",
+    "--repo",
+    "DavidTheHero/graph-engineering-public-fixture-20261018"
+  ],
+  "returncode": 0,
+  "stdout": "diff --git a/invoice.py b/invoice.py\nindex 97d1a08..6e9653d 100644\n--- a/invoice.py\n+++ b/invoice.py\n@@ -7,4 +7,4 @@ def discounted_total(subtotal_cents: int, discount_percent: int) -> int:\n         raise ValueError(\"subtotal must be nonnegative\")\n     if not 0 <= discount_percent <= 100:\n         raise ValueError(\"discount percentage must be between zero and one hundred\")\n-    return subtotal_cents - discount_percent\n+    return subtotal_cents - (subtotal_cents * discount_percent // 100)\n",
+  "stderr": ""
+}

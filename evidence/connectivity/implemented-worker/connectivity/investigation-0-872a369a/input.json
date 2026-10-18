@@ -1,0 +1,20 @@
+{
+  "role": "investigation",
+  "prompt": "Classify evidence pyproject.toml and tests/test_math.py. Return language python, confidence 1.",
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "language": {
+        "type": "string"
+      },
+      "confidence": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "language",
+      "confidence"
+    ],
+    "additionalProperties": false
+  }
+}

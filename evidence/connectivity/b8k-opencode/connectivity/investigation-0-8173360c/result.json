@@ -1,0 +1,20 @@
+{
+  "metric": {
+    "model_key": "b",
+    "model_id": "docker.io/local/qwen35-4b:8k",
+    "role": "investigation",
+    "run_id": "connectivity",
+    "attempt": 0,
+    "success": false,
+    "tool_calls": 0,
+    "raw_path": "D:\\git_code\\graph_engineering\\evidence\\connectivity\\b8k-opencode\\connectivity\\investigation-0-8173360c\\result.json",
+    "input_bytes": 134,
+    "utc": "2026-10-18T18:52:59.073354+00:00",
+    "opencode_version": "2.0.32",
+    "latency_seconds": 1.094
+  },
+  "exit_code": 1,
+  "stdout": "{\"type\":\"error\",\"timestamp\":1792349579955,\"sessionID\":\"ses_eafa3d6beffeCy5UL0vKt8JkYE\",\"error\":{\"type\":\"provider.invalid-request\",\"message\":\"Failed to initialize samplers: std::exception\",\"status\":400,\"response\":{\"body\":\"{\\\"error\\\":{\\\"code\\\":400,\\\"message\\\":\\\"Failed to initialize samplers: std::exception\\\",\\\"type\\\":\\\"invalid_request_error\\\"}}\"}}}\n",
+  "stderr": "",
+  "error": "ModelError: OpenCode exited unsuccessfully; inspect retained result"
+}

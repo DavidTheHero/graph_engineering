@@ -1,0 +1,119 @@
+{
+  "kind": "synthetic task benchmark, actual model responses",
+  "rows": [
+    {
+      "mode": "direct_a_baseline",
+      "role": "classification",
+      "repeat": 0,
+      "success": true,
+      "latency_seconds": 0.86
+    },
+    {
+      "mode": "opencode_a",
+      "role": "classification",
+      "repeat": 0,
+      "success": true,
+      "latency_seconds": 2.375,
+      "raw_path": "D:\\git_code\\graph_engineering\\evidence\\connectivity\\benchmark-sessions\\benchmark\\classification-0-4e0d1d5e\\result.json",
+      "model": "qwen3.8-27b"
+    },
+    {
+      "mode": "direct_a_baseline",
+      "role": "implementation",
+      "repeat": 0,
+      "success": true,
+      "latency_seconds": 0.843
+    },
+    {
+      "mode": "opencode_a",
+      "role": "implementation",
+      "repeat": 0,
+      "success": true,
+      "latency_seconds": 2.344,
+      "raw_path": "D:\\git_code\\graph_engineering\\evidence\\connectivity\\benchmark-sessions\\benchmark\\implementation-0-24554545\\result.json",
+      "model": "qwen3.8-27b"
+    },
+    {
+      "mode": "direct_a_baseline",
+      "role": "review",
+      "repeat": 0,
+      "success": true,
+      "latency_seconds": 0.515
+    },
+    {
+      "mode": "opencode_a",
+      "role": "review",
+      "repeat": 0,
+      "success": true,
+      "latency_seconds": 2.157,
+      "raw_path": "D:\\git_code\\graph_engineering\\evidence\\connectivity\\benchmark-sessions\\benchmark\\review-0-a88a7bc4\\result.json",
+      "model": "qwen3.8-27b"
+    },
+    {
+      "mode": "direct_a_baseline",
+      "role": "classification",
+      "repeat": 1,
+      "success": true,
+      "latency_seconds": 0.593
+    },
+    {
+      "mode": "opencode_a",
+      "role": "classification",
+      "repeat": 1,
+      "success": true,
+      "latency_seconds": 2.328,
+      "raw_path": "D:\\git_code\\graph_engineering\\evidence\\connectivity\\benchmark-sessions\\benchmark\\classification-1-e7327c80\\result.json",
+      "model": "qwen3.8-27b"
+    },
+    {
+      "mode": "direct_a_baseline",
+      "role": "implementation",
+      "repeat": 1,
+      "success": true,
+      "latency_seconds": 0.859
+    },
+    {
+      "mode": "opencode_a",
+      "role": "implementation",
+      "repeat": 1,
+      "success": true,
+      "latency_seconds": 2.657,
+      "raw_path": "D:\\git_code\\graph_engineering\\evidence\\connectivity\\benchmark-sessions\\benchmark\\implementation-1-0845d39c\\result.json",
+      "model": "qwen3.8-27b"
+    },
+    {
+      "mode": "direct_a_baseline",
+      "role": "review",
+      "repeat": 1,
+      "success": true,
+      "latency_seconds": 0.516
+    },
+    {
+      "mode": "opencode_a",
+      "role": "review",
+      "repeat": 1,
+      "success": false,
+      "latency_seconds": 3.672,
+      "raw_path": "D:\\git_code\\graph_engineering\\evidence\\connectivity\\benchmark-sessions\\benchmark\\review-1-d3d89550\\result.json",
+      "model": "qwen3.8-27b"
+    }
+  ],
+  "summary": {
+    "direct_a_baseline": {
+      "attempts": 6,
+      "successes": 6,
+      "average_latency_seconds": 0.6977
+    },
+    "opencode_a": {
+      "attempts": 6,
+      "successes": 5,
+      "average_latency_seconds": 2.5888
+    }
+  },
+  "b": {
+    "available": false,
+    "scored_tasks": 0,
+    "reason": "three /v1/models requests timed out; no invented ID or results"
+  },
+  "interpretation": "Tiny controlled sample. OpenCode adds isolation/session overhead. Multi-model quality or speed advantage is not established while B is unavailable."
+}

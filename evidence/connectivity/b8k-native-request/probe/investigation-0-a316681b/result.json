@@ -1,0 +1,25 @@
+{
+  "metric": {
+    "model_key": "b",
+    "model_id": "docker.io/local/qwen35-4b:8k",
+    "role": "investigation",
+    "run_id": "probe",
+    "attempt": 0,
+    "success": true,
+    "tool_calls": 0,
+    "raw_path": "D:\\git_code\\graph_engineering\\evidence\\connectivity\\b8k-native-request\\probe\\investigation-0-a316681b\\result.json",
+    "input_bytes": 34,
+    "utc": "2026-10-18T18:53:29.025490+00:00",
+    "opencode_version": "2.0.32",
+    "session_ids": [
+      "ses_eafa361b4fferVF44vb1rHBaRM"
+    ],
+    "latency_seconds": 2.532
+  },
+  "exit_code": 0,
+  "stdout": "{\"type\":\"text\",\"timestamp\":1792349611309,\"sessionID\":\"ses_eafa361b4fferVF44vb1rHBaRM\",\"part\":{\"id\":\"prt_1505c9fbf001Uq14blrCCb72hF_text-0\",\"sessionID\":\"ses_eafa361b4fferVF44vb1rHBaRM\",\"messageID\":\"msg_1505c9fbf001Uq14blrCCb72hF\",\"type\":\"text\",\"text\":\"{\\\"language\\\":\\\"python\\\"}\",\"time\":{\"start\":1792349609925,\"end\":1792349611309}}}\n",
+  "stderr": "",
+  "content": {
+    "language": "python"
+  }
+}

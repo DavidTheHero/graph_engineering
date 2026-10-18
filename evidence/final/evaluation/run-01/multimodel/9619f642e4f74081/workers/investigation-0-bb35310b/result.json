@@ -1,0 +1,36 @@
+{
+  "metric": {
+    "model_key": "b",
+    "model_id": "docker.io/local/qwen35-4b:8k",
+    "role": "investigation",
+    "run_id": "9619f642e4f74081",
+    "attempt": 0,
+    "success": true,
+    "tool_calls": 0,
+    "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\9619f642e4f74081\\investigation-0-bb35310b\\result.json",
+    "input_bytes": 2186,
+    "utc": "2026-10-18T18:57:23.661129+00:00",
+    "opencode_version": "2.0.32",
+    "session_ids": [
+      "ses_eaf9fcd58ffeEhpJbi1TznUiW4"
+    ],
+    "latency_seconds": 9.031
+  },
+  "exit_code": 0,
+  "stdout": "{\"type\":\"step_start\",\"timestamp\":1792349847689,\"sessionID\":\"ses_eaf9fcd58ffeEhpJbi1TznUiW4\",\"part\":{\"id\":\"prt_150604089001tbQQZLSMrH6QZA\",\"sessionID\":\"ses_eaf9fcd58ffeEhpJbi1TznUiW4\",\"messageID\":\"msg_15060341a00112ek0e8fTXc3Lk\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1792349852448,\"sessionID\":\"ses_eaf9fcd58ffeEhpJbi1TznUiW4\",\"part\":{\"id\":\"prt_15060341a00112ek0e8fTXc3Lk_text-0\",\"sessionID\":\"ses_eaf9fcd58ffeEhpJbi1TznUiW4\",\"messageID\":\"msg_15060341a00112ek0e8fTXc3Lk\",\"type\":\"text\",\"text\":\"{\\n  \\\"title\\\": \\\"Test failure in deduplication order preservation\\\",\\n  \\\"expected\\\": \\\"['zebra', 'ant', 'bird']\\\",\\n  \\\"actual\\\": \\\"['ant', 'bird', 'zebra']\\\",\\n  \\\"file\\\": \\\"src/unique.js\\\",\\n  \\\"line\\\": 2,\\n  \\\"severity\\\": \\\"medium\\\",\\n  \\\"confidence\\\": 0.95,\\n  \\\"category\\\": \\\"speculative\\\",\\n  \\\"acceptance\\\": [\\n    \\\"The function must preserve the first occurrence order of unique elements.\\\",\\n    \\\"The function must not sort the output array.\\\"\\n  ]\\n}\",\"time\":{\"start\":1792349844514,\"end\":1792349852448}}}\n",
+  "stderr": "",
+  "content": {
+    "title": "Test failure in deduplication order preservation",
+    "expected": "['zebra', 'ant', 'bird']",
+    "actual": "['ant', 'bird', 'zebra']",
+    "file": "src/unique.js",
+    "line": 2,
+    "severity": "medium",
+    "confidence": 0.95,
+    "category": "speculative",
+    "acceptance": [
+      "The function must preserve the first occurrence order of unique elements.",
+      "The function must not sort the output array."
+    ]
+  }
+}

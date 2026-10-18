@@ -1,0 +1,37 @@
+{
+  "metric": {
+    "model_key": "a",
+    "model_id": "qwen3.8-27b",
+    "role": "investigation",
+    "run_id": "68147996b9c4444f",
+    "attempt": 0,
+    "success": true,
+    "tool_calls": 0,
+    "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\controller\\workers\\68147996b9c4444f\\investigation-0-53d2e40c\\result.json",
+    "input_bytes": 2487,
+    "utc": "2026-10-18T18:57:44.805587+00:00",
+    "opencode_version": "2.0.32",
+    "session_ids": [
+      "ses_eaf9f7ac6fferSanZMu26d7ErQ"
+    ],
+    "latency_seconds": 5.921
+  },
+  "exit_code": 0,
+  "stdout": "{\"type\":\"step_start\",\"timestamp\":1792349866558,\"sessionID\":\"ses_eaf9f7ac6fferSanZMu26d7ErQ\",\"part\":{\"id\":\"prt_150608a3e001MTwAmIgWQd3fhc\",\"sessionID\":\"ses_eaf9f7ac6fferSanZMu26d7ErQ\",\"messageID\":\"msg_150608681001So0tyZaB10zWfl\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1792349870556,\"sessionID\":\"ses_eaf9f7ac6fferSanZMu26d7ErQ\",\"part\":{\"id\":\"prt_150608681001So0tyZaB10zWfl_text-0\",\"sessionID\":\"ses_eaf9f7ac6fferSanZMu26d7ErQ\",\"messageID\":\"msg_150608681001So0tyZaB10zWfl\",\"type\":\"text\",\"text\":\"{\\n  \\\"title\\\": \\\"uniqueStable sorts output instead of preserving first-occurrence order\\\",\\n  \\\"expected\\\": \\\"['zebra', 'ant', 'bird']\\\",\\n  \\\"actual\\\": \\\"['ant', 'bird', 'zebra']\\\",\\n  \\\"file\\\": \\\"src/unique.js\\\",\\n  \\\"line\\\": 3,\\n  \\\"severity\\\": \\\"high\\\",\\n  \\\"confidence\\\": 0.98,\\n  \\\"category\\\": \\\"assertion\\\",\\n  \\\"acceptance\\\": [\\n    \\\"uniqueStable(['zebra', 'ant', 'zebra', 'bird']) returns ['zebra', 'ant', 'bird']\\\",\\n    \\\"uniqueStable([1, 1, 1]) returns [1]\\\",\\n    \\\"uniqueStable([]) returns []\\\"\\n  ]\\n}\",\"time\":{\"start\":1792349865608,\"end\":1792349870556}}}\n",
+  "stderr": "",
+  "content": {
+    "title": "uniqueStable sorts output instead of preserving first-occurrence order",
+    "expected": "['zebra', 'ant', 'bird']",
+    "actual": "['ant', 'bird', 'zebra']",
+    "file": "src/unique.js",
+    "line": 3,
+    "severity": "high",
+    "confidence": 0.98,
+    "category": "assertion",
+    "acceptance": [
+      "uniqueStable(['zebra', 'ant', 'zebra', 'bird']) returns ['zebra', 'ant', 'bird']",
+      "uniqueStable([1, 1, 1]) returns [1]",
+      "uniqueStable([]) returns []"
+    ]
+  }
+}

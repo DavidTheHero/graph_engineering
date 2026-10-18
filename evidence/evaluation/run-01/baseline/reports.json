@@ -1,0 +1,188 @@
+[
+  {
+    "run_id": "94ba63702449405d",
+    "mode": "baseline",
+    "repository": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\repositories\\python-invoice",
+    "stack": "python",
+    "status": "blocked",
+    "node": "issue_validation",
+    "error": {
+      "type": "ValueError",
+      "message": "Issue line reference is outside the real file",
+      "attempt": 2
+    },
+    "resolved": false,
+    "detection": {
+      "true_positive": 0,
+      "false_positive": 0,
+      "false_negative": 1
+    },
+    "regression": {
+      "before_failed": true,
+      "after_passed": false
+    },
+    "duration_seconds": 9.31199999999808,
+    "retries": 2,
+    "duplicate_issues": 0,
+    "duplicate_prs": 0,
+    "merge_policy_violations": 0,
+    "gate_demonstrations": [],
+    "model_invocations": [
+      {
+        "model_key": "a",
+        "model_id": "qwen3.8-27b",
+        "role": "investigation",
+        "run_id": "94ba63702449405d",
+        "attempt": 0,
+        "success": true,
+        "tool_calls": 0,
+        "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\controller\\workers\\94ba63702449405d\\investigation-0-c053d7e7\\result.json",
+        "input_bytes": 2598,
+        "utc": "2026-10-18T18:57:35.397654+00:00",
+        "opencode_version": "2.0.32",
+        "session_ids": [
+          "ses_eaf9f9f6affejrxNrTCgymby65"
+        ],
+        "latency_seconds": 7.594,
+        "artifact": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\controller\\workers\\94ba63702449405d\\investigation-0-c053d7e7\\result.json",
+        "selected_model": "a"
+      }
+    ],
+    "actual_worker_tool_calls": 0,
+    "report": null
+  },
+  {
+    "run_id": "68147996b9c4444f",
+    "mode": "baseline",
+    "repository": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\repositories\\javascript-collections",
+    "stack": "javascript",
+    "status": "completed",
+    "node": "done",
+    "error": null,
+    "resolved": true,
+    "detection": {
+      "true_positive": 1,
+      "false_positive": 0,
+      "false_negative": 0
+    },
+    "regression": {
+      "before_failed": true,
+      "after_passed": true
+    },
+    "duration_seconds": 25.29699999999866,
+    "retries": 0,
+    "duplicate_issues": 0,
+    "duplicate_prs": 0,
+    "merge_policy_violations": 0,
+    "gate_demonstrations": [
+      {
+        "condition": "missing approval",
+        "status": "waiting_approval",
+        "reasons": [
+          "human approval missing or stale"
+        ]
+      },
+      {
+        "condition": "injected failed remote check (local backend)",
+        "status": "blocked",
+        "reasons": [
+          "human approval missing or stale",
+          "checks failed or pending"
+        ]
+      }
+    ],
+    "model_invocations": [
+      {
+        "model_key": "a",
+        "model_id": "qwen3.8-27b",
+        "role": "investigation",
+        "run_id": "68147996b9c4444f",
+        "attempt": 0,
+        "success": true,
+        "tool_calls": 0,
+        "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\controller\\workers\\68147996b9c4444f\\investigation-0-53d2e40c\\result.json",
+        "input_bytes": 2487,
+        "utc": "2026-10-18T18:57:44.805587+00:00",
+        "opencode_version": "2.0.32",
+        "session_ids": [
+          "ses_eaf9f7ac6fferSanZMu26d7ErQ"
+        ],
+        "latency_seconds": 5.921,
+        "artifact": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\controller\\workers\\68147996b9c4444f\\investigation-0-53d2e40c\\result.json",
+        "selected_model": "a"
+      },
+      {
+        "model_key": "a",
+        "model_id": "qwen3.8-27b",
+        "role": "planning",
+        "run_id": "68147996b9c4444f",
+        "attempt": 0,
+        "success": true,
+        "tool_calls": 0,
+        "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\controller\\workers\\68147996b9c4444f\\planning-0-013fd16a\\result.json",
+        "input_bytes": 2893,
+        "utc": "2026-10-18T18:57:50.924858+00:00",
+        "opencode_version": "2.0.32",
+        "session_ids": [
+          "ses_eaf9f62deffeN4MOg0HfqrkQs5"
+        ],
+        "latency_seconds": 5.109,
+        "artifact": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\controller\\workers\\68147996b9c4444f\\planning-0-013fd16a\\result.json",
+        "selected_model": "a"
+      },
+      {
+        "model_key": "a",
+        "model_id": "qwen3.8-27b",
+        "role": "implementation",
+        "run_id": "68147996b9c4444f",
+        "attempt": 0,
+        "success": true,
+        "tool_calls": 0,
+        "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\controller\\workers\\68147996b9c4444f\\implementation-0-949561c8\\result.json",
+        "input_bytes": 3381,
+        "utc": "2026-10-18T18:57:56.446483+00:00",
+        "opencode_version": "2.0.32",
+        "session_ids": [
+          "ses_eaf9f4d5affeNszieRKUjjVQ5y"
+        ],
+        "latency_seconds": 4.141,
+        "artifact": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\controller\\workers\\68147996b9c4444f\\implementation-0-949561c8\\result.json",
+        "selected_model": "a"
+      },
+      {
+        "model_key": "a",
+        "model_id": "qwen3.8-27b",
+        "role": "review",
+        "run_id": "68147996b9c4444f",
+        "attempt": 0,
+        "success": true,
+        "tool_calls": 0,
+        "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\controller\\workers\\68147996b9c4444f\\review-0-d86b26af\\result.json",
+        "input_bytes": 2591,
+        "utc": "2026-10-18T18:58:01.300591+00:00",
+        "opencode_version": "2.0.32",
+        "session_ids": [
+          "ses_eaf9f3a53ffeiabwp9rp3WD4hn"
+        ],
+        "latency_seconds": 5.171,
+        "artifact": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\controller\\workers\\68147996b9c4444f\\review-0-d86b26af\\result.json",
+        "selected_model": "a"
+      }
+    ],
+    "actual_worker_tool_calls": 0,
+    "report": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\controller\\runs\\68147996b9c4444f\\report.json",
+    "recovery_success": true
+  },
+  {
+    "run_id": "3c90e3452d4d4607",
+    "mode": "baseline",
+    "repository": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\repositories\\javascript-collections",
+    "stack": "javascript",
+    "negative_scan": true,
+    "status": "no_findings",
+    "detection": {
+      "false_positive": 0,
+      "true_negative": 1
+    }
+  }
+]

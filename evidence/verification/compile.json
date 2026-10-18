@@ -1,0 +1,15 @@
+{
+  "check": "compile",
+  "argv": [
+    "C:\\Users\\DavidDoo\\miniconda3\\python.exe",
+    "-m",
+    "compileall",
+    "-q",
+    "src",
+    "scripts"
+  ],
+  "returncode": 0,
+  "stdout": "",
+  "stderr": "",
+  "duration_seconds": 0.06300000000192085
+}

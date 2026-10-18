@@ -1,0 +1,29 @@
+{
+  "probe": "b_output_limit",
+  "url": "http://192.168.0.62:18035/v1/chat/completions",
+  "request": {
+    "model": "huggingface.co/unsloth/qwen3.5-4b-gguf:UD-Q4_K_XL",
+    "max_tokens": 999999,
+    "temperature": 0,
+    "chat_template_kwargs": {
+      "enable_thinking": false
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello"
+      }
+    ]
+  },
+  "auth": "absent",
+  "utc": "2026-10-18T12:11:10.872137+00:00",
+  "status": 500,
+  "body": {
+    "error": {
+      "code": 500,
+      "message": "Compute error.",
+      "type": "server_error"
+    }
+  },
+  "latency_seconds": 0.235
+}

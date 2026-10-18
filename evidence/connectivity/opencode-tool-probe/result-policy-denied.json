@@ -1,0 +1,43 @@
+{
+  "exit_code": 0,
+  "latency_seconds": 5.672,
+  "stdout": "{\"type\":\"step_start\",\"timestamp\":1792325391453,\"sessionID\":\"ses_eb114f142ffeX1q6kbkJCBwxi0\",\"part\":{\"id\":\"prt_14eeb145d001A0HiaIG3qx5GMP\",\"sessionID\":\"ses_eb114f142ffeX1q6kbkJCBwxi0\",\"messageID\":\"msg_14eeb1012001Tc6p75Qr4Vupk7\",\"type\":\"step-start\"}}\n{\"type\":\"tool_use\",\"timestamp\":1792325391857,\"sessionID\":\"ses_eb114f142ffeX1q6kbkJCBwxi0\",\"part\":{\"partID\":\"prt_14eeb145f001GN1cw1SwN5FZHl\",\"sessionID\":\"ses_eb114f142ffeX1q6kbkJCBwxi0\",\"messageID\":\"msg_14eeb1012001Tc6p75Qr4Vupk7\",\"type\":\"tool\",\"id\":\"chatcmpl-tool-bdc0ac6b4d6e9607\",\"tool\":\"read\",\"state\":{\"status\":\"error\",\"input\":{\"path\":\"fixture.txt\"},\"error\":\"Blocked by configuration policy\",\"metadata\":{\"providerCall\":{\"executed\":false},\"providerResult\":{\"executed\":false},\"rawInput\":\"{\\\"path\\\": \\\"fixture.txt\\\"}\"},\"time\":{\"start\":1792325391455,\"end\":1792325391857}}}}\n{\"type\":\"step_finish\",\"timestamp\":1792325391859,\"sessionID\":\"ses_eb114f142ffeX1q6kbkJCBwxi0\",\"part\":{\"id\":\"prt_14eeb15f3001ZL6i6QjVxHWemP\",\"sessionID\":\"ses_eb114f142ffeX1q6kbkJCBwxi0\",\"messageID\":\"msg_14eeb1012001Tc6p75Qr4Vupk7\",\"type\":\"step-finish\",\"reason\":\"tool-calls\",\"cost\":0,\"tokens\":{\"input\":747,\"output\":25,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}}\n{\"type\":\"step_start\",\"timestamp\":1792325392355,\"sessionID\":\"ses_eb114f142ffeX1q6kbkJCBwxi0\",\"part\":{\"id\":\"prt_14eeb17e30015loD7I5l80gre7\",\"sessionID\":\"ses_eb114f142ffeX1q6kbkJCBwxi0\",\"messageID\":\"msg_14eeb15f9001wD0ddJudetTmey\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1792325395051,\"sessionID\":\"ses_eb114f142ffeX1q6kbkJCBwxi0\",\"part\":{\"id\":\"prt_14eeb15f9001wD0ddJudetTmey_text-0\",\"sessionID\":\"ses_eb114f142ffeX1q6kbkJCBwxi0\",\"messageID\":\"msg_14eeb15f9001wD0ddJudetTmey\",\"type\":\"text\",\"text\":\"I called the read tool on `fixture.txt` as required, but the call was rejected by the environment's configuration policy:\\n\\n- **Tool:** `read`\\n- **Path:** `fixture.txt`\\n- **Result:** `permission.rejected` \u2014 \\\"Blocked by configuration policy\\\"\\n\\n**Failing assertion:** The read of `fixture.txt` failed with a permission rejection, so I cannot report its contents. The file's contents are not available to me \u2014 I did not infer them, and no other tool or file access is permitted per the probe's constraints.\",\"time\":{\"start\":1792325391871,\"end\":1792325395051}}}\n",
+  "stderr": "",
+  "tool_events": [
+    {
+      "type": "tool_use",
+      "timestamp": 1792325391857,
+      "sessionID": "ses_eb114f142ffeX1q6kbkJCBwxi0",
+      "part": {
+        "partID": "prt_14eeb145f001GN1cw1SwN5FZHl",
+        "sessionID": "ses_eb114f142ffeX1q6kbkJCBwxi0",
+        "messageID": "msg_14eeb1012001Tc6p75Qr4Vupk7",
+        "type": "tool",
+        "id": "chatcmpl-tool-bdc0ac6b4d6e9607",
+        "tool": "read",
+        "state": {
+          "status": "error",
+          "input": {
+            "path": "fixture.txt"
+          },
+          "error": "Blocked by configuration policy",
+          "metadata": {
+            "providerCall": {
+              "executed": false
+            },
+            "providerResult": {
+              "executed": false
+            },
+            "rawInput": "{\"path\": \"fixture.txt\"}"
+          },
+          "time": {
+            "start": 1792325391455,
+            "end": 1792325391857
+          }
+        }
+      }
+    }
+  ],
+  "opencode_version": "2.0.32",
+  "kind": "disposable read-only capability probe"
+}

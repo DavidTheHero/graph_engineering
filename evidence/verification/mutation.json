@@ -1,0 +1,16 @@
+{
+  "mutation": "Invert explicit repository-code trust gate",
+  "argv": [
+    "C:\\Users\\DavidDoo\\miniconda3\\python.exe",
+    "-m",
+    "unittest",
+    "tests.test_core.CoreTests.test_untrusted_code_is_never_executed",
+    "-v"
+  ],
+  "original_sha256": "5836b872119e59452ea79999e7f664cc14bea8fc1970136b4ea94b082e75c77d",
+  "restored_sha256": "5836b872119e59452ea79999e7f664cc14bea8fc1970136b4ea94b082e75c77d",
+  "mutant_returncode": 1,
+  "mutant_output": "test_untrusted_code_is_never_executed (tests.test_core.CoreTests) ... FAIL\n\n======================================================================\nFAIL: test_untrusted_code_is_never_executed (tests.test_core.CoreTests)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"D:\\git_code\\graph_engineering\\tests\\test_core.py\", line 105, in test_untrusted_code_is_never_executed\n    with self.assertRaises(PermissionError):\nAssertionError: PermissionError not raised\n\n----------------------------------------------------------------------\nRan 1 test in 0.056s\n\nFAILED (failures=1)\n",
+  "restored_returncode": 0,
+  "restored_output": "test_untrusted_code_is_never_executed (tests.test_core.CoreTests) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nOK\n"
+}

@@ -1,0 +1,19 @@
+{
+  "probe": "b_invalid_request",
+  "url": "http://192.168.0.62:18035/v1/chat/completions",
+  "request": {
+    "model": "huggingface.co/unsloth/qwen3.5-4b-gguf:UD-Q4_K_XL",
+    "messages": "must-be-array"
+  },
+  "auth": "absent",
+  "utc": "2026-10-18T12:11:10.468299+00:00",
+  "status": 400,
+  "body": {
+    "error": {
+      "code": 400,
+      "message": "Expected 'messages' to be an array",
+      "type": "invalid_request_error"
+    }
+  },
+  "latency_seconds": 0.406
+}

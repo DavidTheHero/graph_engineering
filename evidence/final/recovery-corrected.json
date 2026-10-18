@@ -1,0 +1,23 @@
+{
+  "child_exit_code": 23,
+  "intent_after_crash": {
+    "run_id": "crash_recovery",
+    "key": "issue",
+    "status": "intent",
+    "result": null
+  },
+  "observed_before_crash": {
+    "number": 5,
+    "url": "https://github.com/DavidTheHero/graph-engineering-public-fixture-20261018/issues/5",
+    "key": "controller-crash-recovery-20261018-corrected-01"
+  },
+  "reconciled_after_restart": {
+    "number": 5,
+    "url": "https://github.com/DavidTheHero/graph-engineering-public-fixture-20261018/issues/5",
+    "key": "controller-crash-recovery-20261018-corrected-01"
+  },
+  "matching_remote_issues": 1,
+  "duplicate_issues": 0,
+  "closed": true,
+  "backend": "LIVE GitHub"
+}

@@ -1,0 +1,23 @@
+{
+  "role": "review",
+  "prompt": "Review this actual supplied synthetic diff. Acceptance: add(2,3) equals 5 and tests must remain unchanged. Diff: arithmetic.py return a + b + 1 becomes return a + b. No other changes. Independently observed tests passed. Return approved true and findings array of strings. Evaluate only this diff; do not invent tests or findings.",
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "approved": {
+        "type": "boolean"
+      },
+      "findings": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "approved",
+      "findings"
+    ],
+    "additionalProperties": false
+  }
+}

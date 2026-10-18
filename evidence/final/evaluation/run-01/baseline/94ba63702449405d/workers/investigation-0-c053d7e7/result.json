@@ -1,0 +1,37 @@
+{
+  "metric": {
+    "model_key": "a",
+    "model_id": "qwen3.8-27b",
+    "role": "investigation",
+    "run_id": "94ba63702449405d",
+    "attempt": 0,
+    "success": true,
+    "tool_calls": 0,
+    "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\baseline\\controller\\workers\\94ba63702449405d\\investigation-0-c053d7e7\\result.json",
+    "input_bytes": 2598,
+    "utc": "2026-10-18T18:57:35.397654+00:00",
+    "opencode_version": "2.0.32",
+    "session_ids": [
+      "ses_eaf9f9f6affejrxNrTCgymby65"
+    ],
+    "latency_seconds": 7.594
+  },
+  "exit_code": 0,
+  "stdout": "{\"type\":\"step_start\",\"timestamp\":1792349858737,\"sessionID\":\"ses_eaf9f9f6affejrxNrTCgymby65\",\"part\":{\"id\":\"prt_150606bb1001R3ixrnu7fWXHpb\",\"sessionID\":\"ses_eaf9f9f6affejrxNrTCgymby65\",\"messageID\":\"msg_1506061e20016J69VqD03C0Hz0\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1792349862801,\"sessionID\":\"ses_eaf9f9f6affejrxNrTCgymby65\",\"part\":{\"id\":\"prt_1506061e20016J69VqD03C0Hz0_text-0\",\"sessionID\":\"ses_eaf9f9f6affejrxNrTCgymby65\",\"messageID\":\"msg_1506061e20016J69VqD03C0Hz0\",\"type\":\"text\",\"text\":\"{\\n  \\\"title\\\": \\\"discounted_total subtracts the discount percentage instead of the computed discount amount\\\",\\n  \\\"expected\\\": \\\"18000\\\",\\n  \\\"actual\\\": \\\"19990\\\",\\n  \\\"file\\\": \\\"invoice.py\\\",\\n  \\\"line\\\": 11,\\n  \\\"severity\\\": \\\"high\\\",\\n  \\\"confidence\\\": 0.99,\\n  \\\"category\\\": \\\"assertion\\\",\\n  \\\"acceptance\\\": [\\n    \\\"discounted_total(20000, 10) returns 18000\\\",\\n    \\\"discounted_total(2500, 0) returns 2500\\\",\\n    \\\"discounted_total(20000, 101) raises ValueError\\\"\\n  ]\\n}\",\"time\":{\"start\":1792349856233,\"end\":1792349862801}}}\n",
+  "stderr": "",
+  "content": {
+    "title": "discounted_total subtracts the discount percentage instead of the computed discount amount",
+    "expected": "18000",
+    "actual": "19990",
+    "file": "invoice.py",
+    "line": 11,
+    "severity": "high",
+    "confidence": 0.99,
+    "category": "assertion",
+    "acceptance": [
+      "discounted_total(20000, 10) returns 18000",
+      "discounted_total(2500, 0) returns 2500",
+      "discounted_total(20000, 101) raises ValueError"
+    ]
+  }
+}

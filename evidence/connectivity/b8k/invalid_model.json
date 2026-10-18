@@ -1,0 +1,7 @@
+{
+  "url": "http://192.168.0.62:18035/v1/chat/completions",
+  "auth": "absent",
+  "status": 404,
+  "body": "error while getting model: get model '\"graph-engineering-nonexistent-model\"': model not found\n",
+  "latency_seconds": 0.015
+}

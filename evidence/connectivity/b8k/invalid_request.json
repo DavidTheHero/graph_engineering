@@ -1,0 +1,13 @@
+{
+  "url": "http://192.168.0.62:18035/v1/chat/completions",
+  "auth": "absent",
+  "status": 400,
+  "body": {
+    "error": {
+      "code": 400,
+      "message": "Expected 'messages' to be an array",
+      "type": "invalid_request_error"
+    }
+  },
+  "latency_seconds": 0.032
+}

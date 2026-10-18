@@ -1,0 +1,7 @@
+{
+  "exit_code": 0,
+  "latency_seconds": 2.703,
+  "stdout": "{\"type\":\"step_start\",\"timestamp\":1792325206230,\"sessionID\":\"ses_eb117c412ffezJPts80Jmc6xN2\",\"part\":{\"id\":\"prt_14ee840d6001bGT3gQ66Y1hTB1\",\"sessionID\":\"ses_eb117c412ffezJPts80Jmc6xN2\",\"messageID\":\"msg_14ee83d750011ejuOorTuSoWKo\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1792325206859,\"sessionID\":\"ses_eb117c412ffezJPts80Jmc6xN2\",\"part\":{\"id\":\"prt_14ee83d750011ejuOorTuSoWKo_text-0\",\"sessionID\":\"ses_eb117c412ffezJPts80Jmc6xN2\",\"messageID\":\"msg_14ee83d750011ejuOorTuSoWKo\",\"type\":\"text\",\"text\":\"{\\n  \\\"language\\\": \\\"python\\\",\\n  \\\"test_command\\\": \\\"python -m unittest discover\\\"\\n}\",\"time\":{\"start\":1792325205372,\"end\":1792325206859}}}\n",
+  "stderr": "",
+  "command": "opencode run --standalone --model qwen_a/qwen3.8-27b --agent investigator --format json <bounded prompt>"
+}

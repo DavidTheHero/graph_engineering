@@ -1,0 +1,26 @@
+{
+  "metric": {
+    "model_key": "a",
+    "model_id": "qwen3.8-27b",
+    "role": "investigation",
+    "run_id": "connectivity",
+    "attempt": 0,
+    "success": true,
+    "tool_calls": 0,
+    "raw_path": "D:\\git_code\\graph_engineering\\evidence\\connectivity\\implemented-worker\\connectivity\\investigation-0-872a369a\\result.json",
+    "input_bytes": 94,
+    "utc": "2026-10-18T12:08:54.272485+00:00",
+    "opencode_version": "2.0.32",
+    "session_ids": [
+      "ses_eb115c909ffev9E42sryXrKoHv"
+    ],
+    "latency_seconds": 2.36
+  },
+  "exit_code": 0,
+  "stdout": "{\"type\":\"step_start\",\"timestamp\":1792325335909,\"sessionID\":\"ses_eb115c909ffev9E42sryXrKoHv\",\"part\":{\"id\":\"prt_14eea3b65001PaDs14TC97qySe\",\"sessionID\":\"ses_eb115c909ffev9E42sryXrKoHv\",\"messageID\":\"msg_14eea3856001KHjzt6E1dqulJI\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1792325336338,\"sessionID\":\"ses_eb115c909ffev9E42sryXrKoHv\",\"part\":{\"id\":\"prt_14eea3856001KHjzt6E1dqulJI_text-0\",\"sessionID\":\"ses_eb115c909ffev9E42sryXrKoHv\",\"messageID\":\"msg_14eea3856001KHjzt6E1dqulJI\",\"type\":\"text\",\"text\":\"{\\n  \\\"language\\\": \\\"python\\\",\\n  \\\"confidence\\\": 1\\n}\",\"time\":{\"start\":1792325335133,\"end\":1792325336338}}}\n",
+  "stderr": "",
+  "content": {
+    "language": "python",
+    "confidence": 1
+  }
+}

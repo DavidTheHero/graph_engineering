@@ -1,0 +1,75 @@
+{
+  "update": "disable",
+  "share": "disabled",
+  "snapshots": false,
+  "model": "local/qwen3.8-27b",
+  "default_agent": "capability_probe",
+  "permissions": [
+    {
+      "action": "*",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "fixture.txt",
+      "effect": "allow"
+    }
+  ],
+  "policies": [
+    {
+      "action": "tool.use",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "integration.use",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "tool.use",
+      "resource": "read:fixture.txt",
+      "effect": "allow"
+    }
+  ],
+  "agents": {
+    "capability_probe": {
+      "mode": "primary",
+      "steps": 3,
+      "system": "You are a tightly scoped capability probe. Use the read tool exactly once to read fixture.txt, then report its contents. No other tool or file access is allowed."
+    }
+  },
+  "providers": {
+    "local": {
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "http://192.168.0.60:18020/v1",
+        "timeout": 120000
+      },
+      "models": {
+        "qwen3.8-27b": {
+          "capabilities": {
+            "tools": true,
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "limit": {
+            "output": 512,
+            "context": 150000
+          },
+          "body": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "temperature": 0
+          }
+        }
+      }
+    }
+  }
+}

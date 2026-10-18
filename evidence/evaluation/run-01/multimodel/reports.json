@@ -1,0 +1,235 @@
+[
+  {
+    "run_id": "01c3cab2d8364a3a",
+    "mode": "multimodel",
+    "repository": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\repositories\\python-invoice",
+    "stack": "python",
+    "status": "escalated",
+    "node": "done",
+    "error": "Repair budget exhausted; supervisor intervention required",
+    "resolved": false,
+    "detection": {
+      "true_positive": 1,
+      "false_positive": 0,
+      "false_negative": 0
+    },
+    "regression": {
+      "before_failed": true,
+      "after_passed": true
+    },
+    "duration_seconds": 145.15699999999924,
+    "retries": 0,
+    "duplicate_issues": 0,
+    "duplicate_prs": 0,
+    "merge_policy_violations": 0,
+    "gate_demonstrations": [],
+    "model_invocations": [
+      {
+        "model_key": "b",
+        "model_id": "docker.io/local/qwen35-4b:8k",
+        "role": "investigation",
+        "run_id": "01c3cab2d8364a3a",
+        "attempt": 0,
+        "success": true,
+        "tool_calls": 0,
+        "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\investigation-0-c9d4be7a\\result.json",
+        "input_bytes": 2296,
+        "utc": "2026-10-18T18:54:58.365920+00:00",
+        "opencode_version": "2.0.32",
+        "session_ids": [
+          "ses_eafa203b7ffenE4wUqtn4xsWUd"
+        ],
+        "latency_seconds": 12.75,
+        "artifact": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\investigation-0-c9d4be7a\\result.json",
+        "selected_model": "b"
+      },
+      {
+        "model_key": "a",
+        "model_id": "qwen3.8-27b",
+        "role": "planning",
+        "run_id": "01c3cab2d8364a3a",
+        "attempt": 0,
+        "success": true,
+        "tool_calls": 0,
+        "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\planning-0-b671ba96\\result.json",
+        "input_bytes": 3115,
+        "utc": "2026-10-18T18:55:11.313210+00:00",
+        "opencode_version": "2.0.32",
+        "session_ids": [
+          "ses_eafa1d23bffeyP1aWS8OLLs8uR"
+        ],
+        "latency_seconds": 50.796,
+        "artifact": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\planning-0-b671ba96\\result.json",
+        "selected_model": "a"
+      },
+      {
+        "model_key": "a",
+        "model_id": "qwen3.8-27b",
+        "role": "implementation",
+        "run_id": "01c3cab2d8364a3a",
+        "attempt": 0,
+        "success": true,
+        "tool_calls": 0,
+        "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\implementation-0-994d349c\\result.json",
+        "input_bytes": 3454,
+        "utc": "2026-10-18T18:56:02.530694+00:00",
+        "opencode_version": "2.0.32",
+        "session_ids": [
+          "ses_eafa10a39ffeBZPoHHGSz9wYzZ"
+        ],
+        "latency_seconds": 6.188,
+        "artifact": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\implementation-0-994d349c\\result.json",
+        "selected_model": "a"
+      },
+      {
+        "model_key": "b",
+        "model_id": "docker.io/local/qwen35-4b:8k",
+        "role": "review",
+        "run_id": "01c3cab2d8364a3a",
+        "attempt": 0,
+        "success": true,
+        "tool_calls": 0,
+        "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\review-0-21aafd9c\\result.json",
+        "input_bytes": 2688,
+        "utc": "2026-10-18T18:56:09.347885+00:00",
+        "opencode_version": "2.0.32",
+        "session_ids": [
+          "ses_eafa0ef9dffeWW7LBhXIfDC4Il"
+        ],
+        "latency_seconds": 19.61,
+        "artifact": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\review-0-21aafd9c\\result.json",
+        "selected_model": "b"
+      },
+      {
+        "model_key": "a",
+        "model_id": "qwen3.8-27b",
+        "role": "implementation",
+        "run_id": "01c3cab2d8364a3a",
+        "attempt": 1,
+        "success": true,
+        "tool_calls": 0,
+        "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\implementation-1-9ccb6ce6\\result.json",
+        "input_bytes": 5486,
+        "utc": "2026-10-18T18:56:29.300703+00:00",
+        "opencode_version": "2.0.32",
+        "session_ids": [
+          "ses_eafa0a1a8ffewXj1GthZf4lkfm"
+        ],
+        "latency_seconds": 7.281,
+        "artifact": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\implementation-1-9ccb6ce6\\result.json",
+        "selected_model": "a"
+      },
+      {
+        "model_key": "b",
+        "model_id": "docker.io/local/qwen35-4b:8k",
+        "role": "review",
+        "run_id": "01c3cab2d8364a3a",
+        "attempt": 1,
+        "success": true,
+        "tool_calls": 0,
+        "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\review-1-aafa85f5\\result.json",
+        "input_bytes": 2688,
+        "utc": "2026-10-18T18:56:37.173135+00:00",
+        "opencode_version": "2.0.32",
+        "session_ids": [
+          "ses_eafa082c4ffeOYh6WEC61m1esy"
+        ],
+        "latency_seconds": 18.937,
+        "artifact": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\review-1-aafa85f5\\result.json",
+        "selected_model": "b"
+      },
+      {
+        "model_key": "a",
+        "model_id": "qwen3.8-27b",
+        "role": "implementation",
+        "run_id": "01c3cab2d8364a3a",
+        "attempt": 2,
+        "success": true,
+        "tool_calls": 0,
+        "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\implementation-2-0e9687b4\\result.json",
+        "input_bytes": 5486,
+        "utc": "2026-10-18T18:56:56.467890+00:00",
+        "opencode_version": "2.0.32",
+        "session_ids": [
+          "ses_eafa03794ffe3ECN681oFvsXiB"
+        ],
+        "latency_seconds": 6.125,
+        "artifact": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\implementation-2-0e9687b4\\result.json",
+        "selected_model": "a"
+      },
+      {
+        "model_key": "b",
+        "model_id": "docker.io/local/qwen35-4b:8k",
+        "role": "review",
+        "run_id": "01c3cab2d8364a3a",
+        "attempt": 2,
+        "success": true,
+        "tool_calls": 0,
+        "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\review-2-08538b89\\result.json",
+        "input_bytes": 2688,
+        "utc": "2026-10-18T18:57:03.250543+00:00",
+        "opencode_version": "2.0.32",
+        "session_ids": [
+          "ses_eafa01d1fffe9tcIGp7rMrkQ0t"
+        ],
+        "latency_seconds": 18.594,
+        "artifact": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\01c3cab2d8364a3a\\review-2-08538b89\\result.json",
+        "selected_model": "b"
+      }
+    ],
+    "actual_worker_tool_calls": 0,
+    "report": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\runs\\01c3cab2d8364a3a\\report.json"
+  },
+  {
+    "run_id": "9619f642e4f74081",
+    "mode": "multimodel",
+    "repository": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\repositories\\javascript-collections",
+    "stack": "javascript",
+    "status": "blocked",
+    "node": "issue_validation",
+    "error": {
+      "type": "ValueError",
+      "message": "Low-confidence/environment/speculative finding needs supervisor investigation",
+      "attempt": 2
+    },
+    "resolved": false,
+    "detection": {
+      "true_positive": 0,
+      "false_positive": 0,
+      "false_negative": 1
+    },
+    "regression": {
+      "before_failed": true,
+      "after_passed": false
+    },
+    "duration_seconds": 10.875,
+    "retries": 2,
+    "duplicate_issues": 0,
+    "duplicate_prs": 0,
+    "merge_policy_violations": 0,
+    "gate_demonstrations": [],
+    "model_invocations": [
+      {
+        "model_key": "b",
+        "model_id": "docker.io/local/qwen35-4b:8k",
+        "role": "investigation",
+        "run_id": "9619f642e4f74081",
+        "attempt": 0,
+        "success": true,
+        "tool_calls": 0,
+        "raw_path": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\9619f642e4f74081\\investigation-0-bb35310b\\result.json",
+        "input_bytes": 2186,
+        "utc": "2026-10-18T18:57:23.661129+00:00",
+        "opencode_version": "2.0.32",
+        "session_ids": [
+          "ses_eaf9fcd58ffeEhpJbi1TznUiW4"
+        ],
+        "latency_seconds": 9.031,
+        "artifact": "D:\\git_code\\graph_engineering\\evidence\\evaluation\\run-01\\multimodel\\controller\\workers\\9619f642e4f74081\\investigation-0-bb35310b\\result.json",
+        "selected_model": "b"
+      }
+    ],
+    "actual_worker_tool_calls": 0,
+    "report": null
+  }
+]

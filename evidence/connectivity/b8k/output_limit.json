@@ -1,0 +1,42 @@
+{
+  "url": "http://192.168.0.62:18035/v1/chat/completions",
+  "auth": "absent",
+  "status": 200,
+  "body": {
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "OK"
+        }
+      }
+    ],
+    "created": 1792349558,
+    "model": "/Users/daviddoan/.docker/models/bundles/sha256/a2a70b9006eca1978e883cffc1cd84a2fd2911e81b1384ec31dcac2bc05f3327/model/model.gguf",
+    "system_fingerprint": "b1-72874f5",
+    "object": "chat.completion",
+    "usage": {
+      "completion_tokens": 2,
+      "prompt_tokens": 14,
+      "total_tokens": 16,
+      "prompt_tokens_details": {
+        "cached_tokens": 8
+      }
+    },
+    "id": "chatcmpl-Kn3mCUVlJMvZ1MH8BJ4XhlMPNXStXaW6",
+    "timings": {
+      "cache_n": 8,
+      "prompt_n": 6,
+      "prompt_ms": 118.495,
+      "prompt_per_token_ms": 19.749166666666667,
+      "prompt_per_second": 50.63504789231613,
+      "predicted_n": 2,
+      "predicted_ms": 32.753,
+      "predicted_per_token_ms": 16.3765,
+      "predicted_per_second": 61.06310872286508
+    }
+  },
+  "latency_seconds": 0.187
+}

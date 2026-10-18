@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "workflow": {
+    "runs": 4,
+    "detection_counts": {
+      "true_positive": 2,
+      "false_positive": 0,
+      "true_negative": 2,
+      "false_negative": 0
+    },
+    "detection_precision": 1.0,
+    "false_positive_rate": 0.0,
+    "resolved_tasks": 2,
+    "resolved_task_rate": 1.0,
+    "regression_success_rate": 1.0,
+    "average_task_duration_seconds": 34.85150000000067,
+    "retries": 0,
+    "recovery_success_rate": 1.0,
+    "repository_count": 2,
+    "stacks": [
+      "javascript",
+      "python"
+    ],
+    "merge_policy_violations": 0,
+    "duplicate_issues": 0,
+    "duplicate_prs": 0,
+    "measurement_counts": {
+      "detection_precision": 2,
+      "false_positive_rate": 2,
+      "resolved": 2,
+      "regression": 2,
+      "duration": 2,
+      "retries": 2,
+      "recovery": 2,
+      "merge_policy_violations": 2,
+      "duplicate_issues": 2,
+      "duplicate_prs": 2
+    },
+    "tool_call_success_rate": null,
+    "models": {}
+  },
+  "baseline": {
+    "runs": 4,
+    "detection_counts": {
+      "true_positive": 2,
+      "false_positive": 0,
+      "true_negative": 2,
+      "false_negative": 0
+    },
+    "detection_precision": 1.0,
+    "false_positive_rate": 0.0,
+    "resolved_tasks": 2,
+    "resolved_task_rate": 1.0,
+    "regression_success_rate": 1.0,
+    "average_task_duration_seconds": 23.27299999999741,
+    "retries": 0,
+    "recovery_success_rate": 1.0,
+    "repository_count": 2,
+    "stacks": [
+      "javascript",
+      "python"
+    ],
+    "merge_policy_violations": 0,
+    "duplicate_issues": 0,
+    "duplicate_prs": 0,
+    "measurement_counts": {
+      "detection_precision": 2,
+      "false_positive_rate": 2,
+      "resolved": 2,
+      "regression": 2,
+      "duration": 2,
+      "retries": 2,
+      "recovery": 2,
+      "merge_policy_violations": 2,
+      "duplicate_issues": 2,
+      "duplicate_prs": 2
+    },
+    "tool_call_success_rate": null,
+    "models": {}
+  },
+  "comparison": {
+    "conclusion": "descriptive_only",
+    "duration_delta_seconds": 11.57850000000326,
+    "resolved_rate_delta": 0.0,
+    "precision_delta": 0.0
+  },
+  "model_invocations": {
+    "docker.io/local/qwen35-4b:8k": {
+      "calls": 4,
+      "successful_artifacts": 4,
+      "average_latency_seconds": 10.9805
+    },
+    "qwen3.8-27b": {
+      "calls": 12,
+      "successful_artifacts": 12,
+      "average_latency_seconds": 5.203083333333333
+    }
+  },
+  "scope": "Two controlled source-only seeded defects per mode plus fixed-repository negative scans; routing-only baseline. No statistical significance inferred."
+}

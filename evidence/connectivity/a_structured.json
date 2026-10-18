@@ -1,0 +1,94 @@
+{
+  "probe": "a_structured",
+  "url": "http://192.168.0.60:18020/v1/chat/completions",
+  "request": {
+    "model": "qwen3.8-27b",
+    "max_tokens": 256,
+    "temperature": 0,
+    "chat_template_kwargs": {
+      "enable_thinking": false
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": "Return a JSON object: language python, test_command python -m unittest discover."
+      }
+    ],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "repo",
+        "strict": true,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "language": {
+              "type": "string",
+              "enum": [
+                "python"
+              ]
+            },
+            "test_command": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "language",
+            "test_command"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "auth": "absent",
+  "utc": "2026-10-18T12:06:08.917627+00:00",
+  "status": 200,
+  "body": {
+    "id": "chatcmpl-b4067c599c0e20d8",
+    "object": "chat.completion",
+    "created": 1792325168,
+    "model": "qwen3.8-27b",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"language\": \"python\",\n  \"test_command\": \"python -m unittest discover\"\n}",
+          "refusal": null,
+          "annotations": null,
+          "audio": null,
+          "function_call": null,
+          "reasoning": null
+        },
+        "logprobs": null,
+        "finish_reason": "stop",
+        "stop_reason": null,
+        "token_ids": null,
+        "routed_experts": null
+      }
+    ],
+    "service_tier": null,
+    "system_fingerprint": "vllm-0.31.0-da5a7807",
+    "usage": {
+      "prompt_tokens": 28,
+      "total_tokens": 53,
+      "completion_tokens": 25,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "created_cache_tokens": 0,
+        "multimodal_tokens": null
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      }
+    },
+    "prompt_logprobs": null,
+    "prompt_token_ids": null,
+    "prompt_text": null,
+    "kv_transfer_params": null,
+    "ec_transfer_params": null,
+    "metrics": null
+  },
+  "latency_seconds": 1.234
+}

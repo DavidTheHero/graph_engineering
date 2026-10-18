@@ -215,7 +215,9 @@ The current scope is bounded source-only repair driven by existing failing tests
 Tests/manifests/instructions/CI/security files cannot be changed by workers.
 Dependency installation, new regression-test generation, broad vulnerability
 discovery, semantic issue deduplication, automatic rebasing, merge queues and
-distributed scheduling need further implementation. For unattended production,
-add real execution isolation, an authenticated approval service, storage access
+distributed scheduling need further implementation. Automated revisions after
+external GitHub review requests also need implementation; the current repair loop
+reviews and corrects changes before publication. For unattended production, add
+real execution isolation, an authenticated approval service, storage access
 controls/backups, broader workload evaluations and supported GitHub rules.
 See [security and operation limits](docs/OPERATIONS.md) and the [ADR](docs/ADR-001.md).

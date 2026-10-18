@@ -1,0 +1,52 @@
+{
+  "url": "http://192.168.0.62:18035/v1/chat/completions",
+  "auth": "absent",
+  "status": 200,
+  "body": {
+    "choices": [
+      {
+        "finish_reason": "tool_calls",
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "tool_calls": [
+            {
+              "type": "function",
+              "function": {
+                "name": "read_evidence",
+                "arguments": "{\"path\":\"test.log\"}"
+              },
+              "id": "bPkItZQWkAsB7Sj6EyQ3D1I8wCQBQTuZ"
+            }
+          ]
+        }
+      }
+    ],
+    "created": 1792349558,
+    "model": "/Users/daviddoan/.docker/models/bundles/sha256/a2a70b9006eca1978e883cffc1cd84a2fd2911e81b1384ec31dcac2bc05f3327/model/model.gguf",
+    "system_fingerprint": "b1-72874f5",
+    "object": "chat.completion",
+    "usage": {
+      "completion_tokens": 27,
+      "prompt_tokens": 280,
+      "total_tokens": 307,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    },
+    "id": "chatcmpl-bF0AY0WU6PLnsT9CvDl6MTFODwdvCb3y",
+    "timings": {
+      "cache_n": 0,
+      "prompt_n": 280,
+      "prompt_ms": 973.198,
+      "prompt_per_token_ms": 3.475707142857143,
+      "prompt_per_second": 287.7112365623439,
+      "predicted_n": 27,
+      "predicted_ms": 828.098,
+      "predicted_per_token_ms": 30.670296296296296,
+      "predicted_per_second": 32.60483662561678
+    }
+  },
+  "latency_seconds": 1.86
+}

@@ -212,6 +212,8 @@ manifest, dependency, CI/security and instruction edits are prohibited. New-test
 generation, dependency installation, broad security/build discovery, semantic issue
 deduplication, automatic rebasing, additional adapters/rules and automatic CI polling
 are not implemented. Pending/blocked checks need explicit resume.
+External GitHub review requests are escalated; the automatic repair loop currently
+runs before publication rather than updating an already published PR after external review.
 
 All coordinated controllers must use one home; multiple hosts/homes need shared
 leases/fencing and a transactional database migration. Worktrees and environment
