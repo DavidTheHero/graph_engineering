@@ -1,0 +1,1902 @@
+[
+  {
+    "name": "repository_discovery",
+    "inputs": {
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "repository": {
+        "type": "object"
+      },
+      "base_sha": {
+        "type": "string"
+      }
+    },
+    "responsible": "deterministic Git/adapters",
+    "permissions": "read Git/config",
+    "next": "evidence_collection",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "object"
+        },
+        "base_sha": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "base_sha"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "evidence_collection",
+      "blocked"
+    ]
+  },
+  {
+    "name": "evidence_collection",
+    "inputs": {
+      "repository": {
+        "type": "object"
+      },
+      "base_sha": {
+        "type": "string"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "baseline": {
+        "type": "object"
+      },
+      "baseline_path": {
+        "type": "string"
+      },
+      "bundle": {
+        "type": "object"
+      },
+      "frozen": {
+        "type": "object"
+      }
+    },
+    "responsible": "deterministic adapter",
+    "permissions": "trusted code execution in detached worktree",
+    "next": "issue_detection",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "object"
+        },
+        "base_sha": {
+          "type": "string"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "repository",
+        "base_sha",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "baseline": {
+          "type": "object"
+        },
+        "baseline_path": {
+          "type": "string"
+        },
+        "bundle": {
+          "type": "object"
+        },
+        "frozen": {
+          "type": "object"
+        },
+        "outcome": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "baseline",
+        "baseline_path",
+        "bundle",
+        "frozen"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "completion (clean suite)",
+      "issue_detection (failed reproducible check)"
+    ]
+  },
+  {
+    "name": "issue_detection",
+    "inputs": {
+      "baseline": {
+        "type": "object"
+      },
+      "bundle": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "candidate": {
+        "type": "object"
+      }
+    },
+    "responsible": "B investigation; measured fallback A",
+    "permissions": "proposal only",
+    "next": "issue_validation",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "baseline": {
+          "type": "object"
+        },
+        "bundle": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        },
+        "validation_feedback": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "baseline",
+        "bundle",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "candidate": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "candidate"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "issue_validation",
+      "blocked"
+    ]
+  },
+  {
+    "name": "issue_validation",
+    "inputs": {
+      "candidate": {
+        "type": "object"
+      },
+      "baseline": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      },
+      "baseline_path": {
+        "type": "string"
+      },
+      "repository": {
+        "type": "object"
+      },
+      "base_sha": {
+        "type": "string"
+      }
+    },
+    "outputs": {
+      "validation": {
+        "type": "object"
+      },
+      "fingerprint": {
+        "type": "string"
+      }
+    },
+    "responsible": "deterministic reproduction",
+    "permissions": "trusted regression process",
+    "next": "deduplication",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "candidate": {
+          "type": "object"
+        },
+        "baseline": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        },
+        "baseline_path": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "object"
+        },
+        "base_sha": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate",
+        "baseline",
+        "config",
+        "task_id",
+        "repairs",
+        "baseline_path",
+        "repository",
+        "base_sha"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "validation": {
+          "type": "object"
+        },
+        "fingerprint": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "validation",
+        "fingerprint"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "deduplication",
+      "blocked (unconfirmed/low confidence)"
+    ]
+  },
+  {
+    "name": "deduplication",
+    "inputs": {
+      "fingerprint": {
+        "type": "string"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "deduplicated": {
+        "type": "boolean"
+      }
+    },
+    "responsible": "SQLite uniqueness + remote markers",
+    "permissions": "local finding index",
+    "next": "ticket_creation",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "fingerprint": {
+          "type": "string"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "fingerprint",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "deduplicated": {
+          "type": "boolean"
+        },
+        "duplicate_of": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "deduplicated"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "ticket_creation",
+      "completion (already claimed)"
+    ]
+  },
+  {
+    "name": "ticket_creation",
+    "inputs": {
+      "candidate": {
+        "type": "object"
+      },
+      "fingerprint": {
+        "type": "string"
+      },
+      "validation": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      },
+      "base_sha": {
+        "type": "string"
+      }
+    },
+    "outputs": {
+      "issue": {
+        "type": "object"
+      }
+    },
+    "responsible": "deterministic backend",
+    "permissions": "issue write",
+    "next": "prioritisation",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "candidate": {
+          "type": "object"
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "validation": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        },
+        "base_sha": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate",
+        "fingerprint",
+        "validation",
+        "config",
+        "task_id",
+        "repairs",
+        "base_sha"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "issue": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "issue"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "prioritisation",
+      "blocked"
+    ]
+  },
+  {
+    "name": "prioritisation",
+    "inputs": {
+      "candidate": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "priority": {
+        "type": "string"
+      }
+    },
+    "responsible": "deterministic severity policy",
+    "permissions": "none",
+    "next": "task_planning",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "candidate": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "candidate",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "priority": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "priority"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "task_planning",
+      "blocked"
+    ]
+  },
+  {
+    "name": "task_planning",
+    "inputs": {
+      "candidate": {
+        "type": "object"
+      },
+      "bundle": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      },
+      "repository": {
+        "type": "object"
+      },
+      "frozen": {
+        "type": "object"
+      }
+    },
+    "outputs": {
+      "plan": {
+        "type": "object"
+      }
+    },
+    "responsible": "A planning",
+    "permissions": "proposal only",
+    "next": "model_selection",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "candidate": {
+          "type": "object"
+        },
+        "bundle": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        },
+        "repository": {
+          "type": "object"
+        },
+        "frozen": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "candidate",
+        "bundle",
+        "config",
+        "task_id",
+        "repairs",
+        "repository",
+        "frozen"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "plan": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "plan"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "model_selection",
+      "blocked"
+    ]
+  },
+  {
+    "name": "model_selection",
+    "inputs": {
+      "plan": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "implementation_model": {
+        "type": "string"
+      }
+    },
+    "responsible": "health/availability router",
+    "permissions": "model health read",
+    "next": "isolated_implementation",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "plan": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "plan",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "implementation_model": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "implementation_model"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "isolated_implementation",
+      "blocked"
+    ]
+  },
+  {
+    "name": "isolated_implementation",
+    "inputs": {
+      "plan": {
+        "type": "object"
+      },
+      "bundle": {
+        "type": "object"
+      },
+      "implementation_model": {
+        "type": "string"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      },
+      "repository": {
+        "type": "object"
+      },
+      "base_sha": {
+        "type": "string"
+      }
+    },
+    "outputs": {
+      "worktree": {
+        "type": "string"
+      },
+      "branch": {
+        "type": "string"
+      },
+      "patch": {
+        "type": "object"
+      }
+    },
+    "responsible": "A implementation",
+    "permissions": "validated source edits in isolated branch",
+    "next": "test_execution",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "plan": {
+          "type": "object"
+        },
+        "bundle": {
+          "type": "object"
+        },
+        "implementation_model": {
+          "type": "string"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        },
+        "repository": {
+          "type": "object"
+        },
+        "base_sha": {
+          "type": "string"
+        },
+        "verification": {
+          "type": "object"
+        },
+        "review": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "plan",
+        "bundle",
+        "implementation_model",
+        "config",
+        "task_id",
+        "repairs",
+        "repository",
+        "base_sha"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "worktree": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "patch": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "worktree",
+        "branch",
+        "patch"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "test_execution",
+      "blocked"
+    ]
+  },
+  {
+    "name": "test_execution",
+    "inputs": {
+      "worktree": {
+        "type": "string"
+      },
+      "frozen": {
+        "type": "object"
+      },
+      "patch": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      },
+      "plan": {
+        "type": "object"
+      },
+      "base_sha": {
+        "type": "string"
+      },
+      "branch": {
+        "type": "string"
+      }
+    },
+    "outputs": {
+      "verification": {
+        "type": "object"
+      },
+      "head": {
+        "type": "string"
+      },
+      "diff": {
+        "type": "string"
+      }
+    },
+    "responsible": "independent deterministic processes",
+    "permissions": "frozen test/build commands",
+    "next": "independent_review",
+    "failure": "repair",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "worktree": {
+          "type": "string"
+        },
+        "frozen": {
+          "type": "object"
+        },
+        "patch": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        },
+        "plan": {
+          "type": "object"
+        },
+        "base_sha": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "worktree",
+        "frozen",
+        "patch",
+        "config",
+        "task_id",
+        "repairs",
+        "plan",
+        "base_sha",
+        "branch"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "verification": {
+          "type": "object"
+        },
+        "head": {
+          "type": "string"
+        },
+        "diff": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "verification",
+        "head",
+        "diff"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "independent_review",
+      "repair"
+    ]
+  },
+  {
+    "name": "independent_review",
+    "inputs": {
+      "diff": {
+        "type": "string"
+      },
+      "verification": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      },
+      "baseline": {
+        "type": "object"
+      },
+      "candidate": {
+        "type": "object"
+      },
+      "implementation_model": {
+        "type": "string"
+      }
+    },
+    "outputs": {
+      "review": {
+        "type": "object"
+      }
+    },
+    "responsible": "B review or explicit A independent session",
+    "permissions": "proposal only actual diff",
+    "next": "pull_request_creation",
+    "failure": "repair",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "diff": {
+          "type": "string"
+        },
+        "verification": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        },
+        "baseline": {
+          "type": "object"
+        },
+        "candidate": {
+          "type": "object"
+        },
+        "implementation_model": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "diff",
+        "verification",
+        "config",
+        "task_id",
+        "repairs",
+        "baseline",
+        "candidate",
+        "implementation_model"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "review": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "review"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "pull_request_creation",
+      "repair"
+    ]
+  },
+  {
+    "name": "repair",
+    "inputs": {
+      "repairs": {
+        "type": "integer"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      }
+    },
+    "outputs": {
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "responsible": "bounded controller loop",
+    "permissions": "no publication",
+    "next": "isolated_implementation",
+    "failure": "escalation",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "repairs": {
+          "type": "integer"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repairs",
+        "config",
+        "task_id"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "isolated_implementation (budget remains)",
+      "escalation"
+    ]
+  },
+  {
+    "name": "escalation",
+    "inputs": {
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "outcome": {
+        "type": "string"
+      }
+    },
+    "responsible": "supervisor",
+    "permissions": "none",
+    "next": "completion",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "outcome"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "completion",
+      "blocked"
+    ]
+  },
+  {
+    "name": "pull_request_creation",
+    "inputs": {
+      "head": {
+        "type": "string"
+      },
+      "branch": {
+        "type": "string"
+      },
+      "review": {
+        "type": "object"
+      },
+      "issue": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      },
+      "patch": {
+        "type": "object"
+      },
+      "candidate": {
+        "type": "object"
+      },
+      "fingerprint": {
+        "type": "string"
+      },
+      "verification": {
+        "type": "object"
+      },
+      "base_sha": {
+        "type": "string"
+      }
+    },
+    "outputs": {
+      "pr": {
+        "type": "object"
+      }
+    },
+    "responsible": "deterministic backend",
+    "permissions": "push owned branch/create PR/comment",
+    "next": "ci_policy_verification",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "head": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "review": {
+          "type": "object"
+        },
+        "issue": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        },
+        "patch": {
+          "type": "object"
+        },
+        "candidate": {
+          "type": "object"
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "verification": {
+          "type": "object"
+        },
+        "base_sha": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "head",
+        "branch",
+        "review",
+        "issue",
+        "config",
+        "task_id",
+        "repairs",
+        "patch",
+        "candidate",
+        "fingerprint",
+        "verification",
+        "base_sha"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "pr": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "pr"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "ci_policy_verification",
+      "blocked"
+    ]
+  },
+  {
+    "name": "ci_policy_verification",
+    "inputs": {
+      "pr": {
+        "type": "object"
+      },
+      "head": {
+        "type": "string"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "policy_snapshot": {
+        "type": "object"
+      }
+    },
+    "responsible": "GitHub API/check receipts",
+    "permissions": "read checks, reviews, protections",
+    "next": "approval_gate",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "pr": {
+          "type": "object"
+        },
+        "head": {
+          "type": "string"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pr",
+        "head",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "policy_snapshot": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "policy_snapshot"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "approval_gate",
+      "blocked"
+    ]
+  },
+  {
+    "name": "approval_gate",
+    "inputs": {
+      "head": {
+        "type": "string"
+      },
+      "policy_snapshot": {
+        "type": "object"
+      },
+      "review": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      },
+      "verification": {
+        "type": "object"
+      },
+      "plan": {
+        "type": "object"
+      },
+      "diff": {
+        "type": "string"
+      },
+      "candidate": {
+        "type": "object"
+      },
+      "base_sha": {
+        "type": "string"
+      },
+      "pr": {
+        "type": "object"
+      }
+    },
+    "outputs": {
+      "gate": {
+        "type": "object"
+      }
+    },
+    "responsible": "deterministic head-bound policy",
+    "permissions": "read approval ledger",
+    "next": "merge",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "head": {
+          "type": "string"
+        },
+        "policy_snapshot": {
+          "type": "object"
+        },
+        "review": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        },
+        "verification": {
+          "type": "object"
+        },
+        "plan": {
+          "type": "object"
+        },
+        "diff": {
+          "type": "string"
+        },
+        "candidate": {
+          "type": "object"
+        },
+        "base_sha": {
+          "type": "string"
+        },
+        "pr": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "head",
+        "policy_snapshot",
+        "review",
+        "config",
+        "task_id",
+        "repairs",
+        "verification",
+        "plan",
+        "diff",
+        "candidate",
+        "base_sha",
+        "pr"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "gate": {
+          "type": "object"
+        },
+        "policy_snapshot": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "gate"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "merge",
+      "approval_gate (waiting_approval)",
+      "ci_policy_verification (blocked checks)"
+    ]
+  },
+  {
+    "name": "merge",
+    "inputs": {
+      "gate": {
+        "type": "object"
+      },
+      "head": {
+        "type": "string"
+      },
+      "pr": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      },
+      "worktree": {
+        "type": "string"
+      },
+      "frozen": {
+        "type": "object"
+      },
+      "plan": {
+        "type": "object"
+      },
+      "base_sha": {
+        "type": "string"
+      },
+      "verification": {
+        "type": "object"
+      },
+      "review": {
+        "type": "object"
+      },
+      "diff": {
+        "type": "string"
+      },
+      "candidate": {
+        "type": "object"
+      }
+    },
+    "outputs": {
+      "merge": {
+        "type": "object"
+      }
+    },
+    "responsible": "deterministic fresh policy recheck",
+    "permissions": "normal merge endpoint; no admin",
+    "next": "post_merge_verification",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "gate": {
+          "type": "object"
+        },
+        "head": {
+          "type": "string"
+        },
+        "pr": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        },
+        "worktree": {
+          "type": "string"
+        },
+        "frozen": {
+          "type": "object"
+        },
+        "plan": {
+          "type": "object"
+        },
+        "base_sha": {
+          "type": "string"
+        },
+        "verification": {
+          "type": "object"
+        },
+        "review": {
+          "type": "object"
+        },
+        "diff": {
+          "type": "string"
+        },
+        "candidate": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "gate",
+        "head",
+        "pr",
+        "config",
+        "task_id",
+        "repairs",
+        "worktree",
+        "frozen",
+        "plan",
+        "base_sha",
+        "verification",
+        "review",
+        "diff",
+        "candidate"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "merge": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "merge"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "post_merge_verification",
+      "blocked"
+    ]
+  },
+  {
+    "name": "post_merge_verification",
+    "inputs": {
+      "merge": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "postmerge": {
+        "type": "object"
+      }
+    },
+    "responsible": "deterministic adapter",
+    "permissions": "trusted execution at observed merged commit",
+    "next": "completion",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "merge": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "merge",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "postmerge": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "postmerge"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "completion",
+      "blocked"
+    ]
+  },
+  {
+    "name": "completion",
+    "inputs": {
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "outcome": {
+        "type": "string"
+      },
+      "report": {
+        "type": "string"
+      }
+    },
+    "responsible": "controller",
+    "permissions": "issue status/report write",
+    "next": "done",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "postmerge": {
+          "type": "object"
+        },
+        "issue": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "type": "string"
+        },
+        "report": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "outcome",
+        "report"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "done",
+      "blocked"
+    ]
+  }
+]
