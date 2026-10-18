@@ -2,5 +2,7 @@
   "files_inspected": 304,
   "invalid_json_or_hash": [],
   "suspect_secret_files": [],
-  "verified_raw_source_hashes": 13
+  "verified_raw_source_hashes": 13,
+  "format_check": "git diff --cached --check -- . :(exclude)evidence/research/**",
+  "raw_reference_exception": "Unmodified upstream reference bytes are checked against 13 SHA-256 records rather than reformatted; original trailing whitespace is retained."
 }
