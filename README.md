@@ -44,6 +44,32 @@ source without installation, set `PYTHONPATH` to this project's `src` directory
 and run `python -m graph_engineering`. Other OpenCode versions are rejected until
 their source/schema and real provider invocation have been verified.
 
+## Visual workflow dashboard
+
+```powershell
+.\.venv\Scripts\graph-engineering.exe ui
+```
+
+Open **[http://127.0.0.1:8765](http://127.0.0.1:8765)**. Select a run and click a
+graph step to inspect its status, worker, attempts, evidence and safety contract.
+The Evidence view shows regression output, the actual diff, independent reviews,
+model receipts and merge decisions. Activity shows the chronological audit trail.
+Search and filters help find completed, blocked or approval-waiting runs.
+
+The dashboard refreshes live controller state every three seconds. Historical
+demonstrations are explicitly labelled **Recorded**; local publication backends
+are labelled as simulated GitHub operations. To watch a different controller:
+
+```powershell
+.\.venv\Scripts\graph-engineering.exe --home 'D:\controllers\example' ui --port 8765
+```
+
+This is a read-only, loopback dashboard. Run management and approvals stay in the
+CLI. It needs no Node installation, frontend build, internet access or additional
+Python packages. See [dashboard operation and verification](docs/DASHBOARD.md).
+
+![Workflow graph with real execution evidence](evidence/ui/dashboard-1440.png)
+
 ## Connect a repository
 
 Start with a **clean, current base checkout**. Provision its dependencies yourself;

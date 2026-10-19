@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Workflow overview · Graph Engineering</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to workflow</a>
+  <aside class="sidebar" aria-label="Workflow runs">
+    <a class="brand" href="/" aria-label="Graph Engineering home">
+      <img src="/favicon.svg" width="34" height="34" alt="">
+      <span>graph<span class="brand-secondary">engineering</span></span>
+    </a>
+    <div class="navigation-title"><span class="nav-icon" aria-hidden="true">⌘</span> Workflow runs <span id="run-count" class="count">0</span></div>
+    <div class="filters">
+      <label for="source">Data source</label>
+      <select id="source" aria-label="Data source"><option value="all">All sources</option><option value="live">Live controller</option></select>
+      <label for="search">Find a run</label>
+      <input id="search" type="search" aria-label="Find a run" placeholder="Repository, issue or run ID" autocomplete="off">
+      <label class="sr-only" for="status-filter">Filter by run status</label>
+      <select id="status-filter" aria-label="Filter by run status"><option value="all">All statuses</option><option value="attention">Needs attention</option><option value="active">Active</option><option value="completed">Completed</option><option value="no_findings">No findings</option></select>
+    </div>
+    <nav id="run-list" class="run-list" aria-label="Select a workflow run"><p class="sidebar-empty">Loading recorded runs…</p></nav>
+    <footer class="sidebar-footer"><span class="local-dot" aria-hidden="true"></span> Local workspace <span class="read-only">Read only</span><p>Observe here. Manage runs with the CLI.</p></footer>
+  </aside>
+  <main id="main" tabindex="-1">
+    <header class="page-header">
+      <div><div class="eyebrow">GRAPH ENGINEERING / WORKSPACE</div><h1>Workflow overview</h1></div>
+      <div class="header-actions"><span id="connection" class="connection" role="status">Connecting…</span><button id="refresh" class="button secondary" type="button"><span aria-hidden="true">↻</span> Refresh</button></div>
+    </header>
+    <div id="error" class="error-banner" role="alert" hidden></div>
+    <div id="loading" class="loading" aria-busy="true"><div></div><div></div><div></div><p>Reading workflow evidence…</p></div>
+    <section id="empty" class="empty-state" hidden>
+      <span class="empty-icon" aria-hidden="true">⌘</span><h2>No workflows yet</h2>
+      <p>Start a run with the CLI, then follow its progress here. This dashboard watches the controller selected with <code>--home</code>.</p>
+      <pre>graph-engineering --home &lt;controller&gt; execute --config &lt;config.json&gt;</pre>
+      <p>Try another data source or clear your search to see more runs.</p>
+    </section>
+    <section id="workspace" hidden aria-label="Selected run">
+      <div class="run-heading"><div><div id="run-meta" class="run-meta"></div><h2 id="run-title"></h2><p id="run-repo" class="repository"></p></div><div id="publication-links" class="publication-links"></div></div>
+      <div id="snapshot-note" class="snapshot-note" hidden>Recorded demonstration · A historical execution snapshot. GitHub checks and model availability are shown as observed at the time.</div>
+      <div id="attention" class="attention" hidden><strong id="attention-title"></strong><p id="attention-message"></p></div>
+      <dl id="metrics" class="metrics"></dl>
+      <div class="tabs" role="tablist" aria-label="Run views">
+        <button type="button" id="tab-workflow" role="tab" aria-controls="panel-workflow" aria-selected="true">Workflow</button>
+        <button type="button" id="tab-evidence" role="tab" aria-controls="panel-evidence" aria-selected="false" tabindex="-1">Evidence</button>
+        <button type="button" id="tab-activity" role="tab" aria-controls="panel-activity" aria-selected="false" tabindex="-1">Activity <span id="event-count" class="tab-count"></span></button>
+      </div>
+      <section id="panel-workflow" role="tabpanel" aria-labelledby="tab-workflow">
+        <div class="workflow-layout">
+          <section class="graph-panel" aria-labelledby="graph-title">
+            <div class="panel-heading"><div><h3 id="graph-title">Execution graph</h3><p>Select a step to inspect its evidence.</p></div><label class="toggle"><input id="recovery" type="checkbox" checked> Recovery paths</label></div>
+            <div class="graph-scroll" tabindex="0" aria-label="Workflow graph. Scroll horizontally on small screens.">
+              <div id="graph" class="graph"><svg id="edges" class="edges" aria-hidden="true"></svg><div id="lanes" class="lanes"></div></div>
+            </div>
+            <div class="legend"><span><i class="legend-dot completed"></i>Completed</span><span><i class="legend-dot running"></i>Active</span><span><i class="legend-dot blocked"></i>Needs attention</span><span><i class="legend-dot not_run"></i>Not run</span><span class="legend-edge">┄ Conditional route</span></div>
+          </section>
+          <aside id="inspector" class="inspector" aria-label="Selected step details"></aside>
+        </div>
+        <section class="proof-strip" aria-labelledby="proof-title"><h3 id="proof-title">Evidence at a glance</h3><div id="proofs" class="proofs"></div></section>
+      </section>
+      <section id="panel-evidence" class="evidence-panel" role="tabpanel" aria-labelledby="tab-evidence" hidden></section>
+      <section id="panel-activity" class="activity-panel" role="tabpanel" aria-labelledby="tab-activity" hidden></section>
+    </section>
+    <footer class="page-footer"><span>Durable state. Observable decisions.</span><span id="updated"></span></footer>
+  </main>
+  <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+</body>
+</html>

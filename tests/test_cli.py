@@ -11,6 +11,22 @@ from graph_engineering.runtime import Store
 
 
 class CLITests(unittest.TestCase):
+    def test_ui_uses_selected_controller_without_creating_execution_state(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder) / "uninitialised"
+            with patch("graph_engineering.dashboard.serve_dashboard") as dashboard:
+                code, _, error = self.invoke("--home", str(home), "ui", "--port", "8766")
+            self.assertEqual(code, 0, error)
+            dashboard.assert_called_once_with(home.resolve(), 8766)
+            self.assertFalse(home.exists())
+
+    def test_ui_rejects_invalid_port(self):
+        with patch("graph_engineering.dashboard.serve_dashboard") as dashboard:
+            code, _, error = self.invoke("ui", "--port", "65536")
+        self.assertEqual(code, 1)
+        self.assertIn("port must be", error)
+        dashboard.assert_not_called()
+
     def test_enqueue_persists_ready_run_without_executing_it(self):
         from tests.test_core import make_repo
         from graph_engineering.workflow import initialise

@@ -3,6 +3,7 @@ __pycache__/
 *.egg-info/
 .venv/
 .env
+node_modules/
 .runtime/
 .runtime-*/
 evidence/connectivity/opencode-source/

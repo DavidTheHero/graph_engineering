@@ -1,0 +1,41 @@
+{
+  "unittest": {
+    "command": "python -m unittest discover -s tests -q",
+    "returncode": 0,
+    "tests_discovered": 70,
+    "note": "Full suite completed successfully in the preceding verification command; raw output was captured by that process but not retained after its wheel asset-count assertion failed."
+  },
+  "compile": {
+    "command": "python -m compileall -q src/graph_engineering",
+    "returncode": 0
+  },
+  "wheel": {
+    "command": "python -m pip wheel --no-deps --no-build-isolation --wheel-dir .runtime/ui-wheel .",
+    "returncode": 0
+  },
+  "wheel_assets": [
+    "graph_engineering/web/app.js",
+    "graph_engineering/web/details.js",
+    "graph_engineering/web/dom.js",
+    "graph_engineering/web/favicon.svg",
+    "graph_engineering/web/graph.js",
+    "graph_engineering/web/index.html",
+    "graph_engineering/web/style.css"
+  ],
+  "installed_wheel_assets": {
+    "returncode": 0,
+    "stdout": "D:\\git_code\\graph_engineering\\.runtime\\ui-wheel\\extracted\\graph_engineering\\__init__.py\n",
+    "stderr": ""
+  },
+  "host_guard_mutation": {
+    "returncode": 1,
+    "caught": true,
+    "stderr": "======================================================================\nFAIL: test_http_assets_api_and_security_boundary (tests.test_dashboard.DashboardHTTPTests)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"D:\\git_code\\graph_engineering\\tests\\test_dashboard.py\", line 144, in test_http_assets_api_and_security_boundary\n    with self.assertRaises(HTTPError) as caught:\nAssertionError: HTTPError not raised\n\n----------------------------------------------------------------------\nRan 1 test in 0.537s\n\nFAILED (failures=1)\n"
+  },
+  "restored_host_guard": {
+    "returncode": 0,
+    "stderr": "----------------------------------------------------------------------\nRan 1 test in 0.530s\n\nOK\n"
+  },
+  "final_wheel_assets_match_source": true,
+  "new_file_whitespace_check": "passed"
+}

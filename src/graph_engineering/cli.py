@@ -93,6 +93,8 @@ def parser() -> argparse.ArgumentParser:
     serve = commands.add_parser("serve", help="run a restartable foreground controller; external service manager optional")
     serve.add_argument("--poll", type=_poll, default=5)
     serve.add_argument("--once", action="store_true", help="process one sweep and return")
+    ui = commands.add_parser("ui", help="open a local, read-only workflow dashboard")
+    ui.add_argument("--port", type=int, default=8765, help="loopback HTTP port (default: 8765)")
     return result
 
 
@@ -197,6 +199,11 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
         elif args.command == "graph":
             _emit(_contracts())
+        elif args.command == "ui":
+            from .dashboard import serve_dashboard
+            if not 1 <= args.port <= 65535:
+                raise ValueError("port must be between 1 and 65535")
+            serve_dashboard(args.home, args.port)
         elif args.command == "seed":
             repositories = seed_repositories(args.output)
             _emit({"repositories": [str(repo) for repo in repositories],
