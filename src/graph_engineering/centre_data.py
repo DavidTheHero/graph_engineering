@@ -9,20 +9,32 @@ import time
 from .dashboard_data import Catalog, EVIDENCE, ROLE_NODES, bounded
 from .runtime import redact
 from .scheduling_policy import board_status, effective_rank
-from .scheduler import required_model
+from .scheduler import required_model, ROLES
 from .tickets import Tickets, QUEUES
 from .workflow import graph_contracts
 from .control_repositories import repositories
 
 
 CLUSTERS = {
- 'ingestion':('Ingestion',['repository_discovery','evidence_collection','issue_detection']),
- 'classification':('Classification & queues',['issue_validation','deduplication','ticket_creation','prioritisation']),
- 'planning':('Investigation & planning',['repository_investigation','task_planning','model_selection']),
+ 'ingestion':('Ingestion',['manual_intake','repository_discovery','evidence_collection','issue_detection']),
+ 'classification':('Classification & queues',['request_triage','request_duplicate_check','issue_validation','deduplication','ticket_creation','prioritisation']),
+ 'planning':('Investigation & planning',['repository_search','problem_investigation','ticket_enhancement','repository_investigation','task_planning','model_selection']),
  'engineering':('Engineering workers',['isolated_implementation']),
- 'quality':('Quality & review',['test_execution','independent_review']),
- 'delivery':('Delivery',['pull_request_creation','ci_policy_verification','approval_gate','merge','post_merge_verification','completion']),
+ 'quality':('Quality & review',['reproduction_check','finding_validation','test_execution','independent_review']),
+ 'delivery':('Delivery',['ticket_finalisation','ticket_publication','development_admission','pull_request_creation','ci_policy_verification','approval_gate','merge','post_merge_verification','completion']),
  'recovery':('Recovery',['repair','escalation'])}
+
+
+def intake_lifecycle(ticket):
+    statuses={'ready_for_review':'Ready for Review','needs_information':'Needs Information',
+        'duplicate_review':'Possible Duplicate','ready_for_development':'Ready for Development',
+        'development_queued':'Development Queued','enhancement_rejected':'Enhancement Rejected',
+        'blocked':'Investigation Failed','cancelled':'Cancelled'}
+    if ticket['status'] in statuses:return statuses[ticket['status']]
+    return {'manual_intake':'New / Queued for Investigation','request_triage':'Classifying',
+        'request_duplicate_check':'Classifying','repository_search':'Investigating','problem_investigation':'Investigating',
+        'ticket_enhancement':'Enhancing','reproduction_check':'Validating','finding_validation':'Validating',
+        'ticket_publication':'Publishing approved ticket'}.get(ticket['node'],'Development / '+ticket['node'].replace('_',' '))
 
 
 def topology():
@@ -85,14 +97,18 @@ def snapshot(home):
             if queue in ('high','normal','low') and ticket['last_reason']:
                 queue,reason = 'resource',ticket['last_reason']
             candidate = state.get('candidate',{})
+            manual=tickets.db.execute('SELECT original FROM ticket_reports WHERE ticket_id=?',(ticket['id'],)).fetchone()
+            enhanced=state.get('enhanced',{})
             assigned = tickets.db.execute("SELECT data,at FROM events WHERE run_id=? AND kind='model_assigned' ORDER BY seq DESC LIMIT 1",(ticket['run_id'],)).fetchone()
             assignment = json.loads(assigned[0]) if assigned else {}
-            role = {'issue_detection':'investigation','repository_investigation':'investigation','task_planning':'planning','isolated_implementation':'implementation','independent_review':'review'}.get(ticket['node'])
+            role = ROLES.get(ticket['node'],(None,None))[0]
             current_model = assignment.get('model_id') if ticket['lease_owner'] and assignment.get('role') == role else None
             position = ticket['node'] if queue in ('active','done') else 'queue:'+queue
             result.append(bounded({
-                'id':ticket['id'],'run_id':ticket['run_id'],'title':candidate.get('title') or ('Source investigation' if config.get('inspect_with_model') else 'Repository scan'),
-                'description':candidate.get('actual') or state.get('investigation',{}).get('summary') or 'Inspect repository evidence and validate actionable findings.',
+                'id':ticket['id'],'run_id':ticket['run_id'],'title':enhanced.get('title') or state.get('triage',{}).get('title') or candidate.get('title') or (manual['original'].strip()[:120] if manual else 'Source investigation' if config.get('inspect_with_model') else 'Repository scan'),
+                'description':enhanced.get('problem_statement') or (manual['original'] if manual else None) or candidate.get('actual') or state.get('investigation',{}).get('summary') or 'Inspect repository evidence and validate actionable findings.',
+                'intake':bool(manual),'lifecycle':intake_lifecycle(ticket) if manual else None,
+                'enhancement_revision':state.get('revision'),'accepted_revision':state.get('accepted_revision'),
                 'repository':config.get('source_repo',ticket['repo']),'repository_name':Path(config.get('source_repo',ticket['repo'])).name,
                 'revision':state.get('base_sha'),'category':ticket['category'],'labels':ticket['labels'],
                 'severity':ticket['severity'],'confidence':ticket['confidence'],'priority':ticket['priority'],
@@ -139,6 +155,10 @@ def ticket_detail(home, ticket_id):
         ticket = tickets.get(ticket_id)
         detail = Catalog(home).detail('live',ticket['run_id'])
         detail['ticket_id'] = ticket_id
+        from .report_store import report
+        detail['intake_report']=report(tickets.db,ticket_id)
+        detail['investigation']={key:ticket['state'][key] for key in ('triage','retrieved','enhanced',
+            'finding_validation','reproduction','duplicate_candidates','revision','accepted_revision','clarifications') if key in ticket['state']}
         detail['timeline'] = events(tickets,limit=2000,ticket_id=ticket_id)
         detail['worker_artifacts'] = []
         for call in detail['model_calls'][-12:]:

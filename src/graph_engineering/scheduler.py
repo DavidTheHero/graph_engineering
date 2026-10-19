@@ -18,6 +18,7 @@ from .workflow import Workflow
 
 
 ROLES = {'issue_detection':('investigation','b'), 'task_planning':('planning','a'),
+         'request_triage':('classification','b'),'problem_investigation':('root_investigation','a'),
          'repository_investigation':('investigation','b'),
          'isolated_implementation':('implementation','a'), 'independent_review':('review','b')}
 
@@ -55,7 +56,7 @@ def claim(tickets: Tickets, workers=2):
         if len(active) >= workers or tickets.setting('paused', False):
             db.rollback(); return None
         capacity = tickets.setting('model_capacity', {'a':1,'b':1})
-        eligible = [t for t in rows if not t.get('cancel') and tickets.queue(t,lookup)[0] in ('high','normal','low')]
+        eligible = [t for t in rows if not t.get('cancel') and tickets.queue(t,lookup)[0] in ('high','normal','low','intake')]
         eligible.sort(key=lambda t:(effective_rank(t['priority'],t['created'],time.time()),t['created'],t['id']))
         for ticket in eligible:
             model = required_model(ticket)

@@ -1,0 +1,208 @@
+{
+  "triage": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string",
+        "maxLength": 180
+      },
+      "category": {
+        "type": "string",
+        "enum": [
+          "bug",
+          "feature",
+          "performance",
+          "security",
+          "reliability",
+          "test_coverage",
+          "refactoring",
+          "documentation",
+          "architecture_investigation"
+        ]
+      },
+      "keywords": {
+        "type": "array",
+        "maxItems": 8,
+        "items": {
+          "type": "string",
+          "maxLength": 80
+        }
+      },
+      "components": {
+        "type": "array",
+        "maxItems": 8,
+        "items": {
+          "type": "string",
+          "maxLength": 80
+        }
+      },
+      "missing_information": {
+        "type": "array",
+        "maxItems": 8,
+        "items": {
+          "type": "string",
+          "maxLength": 80
+        }
+      },
+      "suggested_priority": {
+        "type": "string",
+        "enum": [
+          "P0",
+          "P1",
+          "P2",
+          "P3"
+        ]
+      }
+    },
+    "required": [
+      "title",
+      "category",
+      "keywords",
+      "components",
+      "missing_information",
+      "suggested_priority"
+    ],
+    "additionalProperties": false
+  },
+  "technical_proposal": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string",
+        "maxLength": 180
+      },
+      "problem_statement": {
+        "type": "string",
+        "maxLength": 2500
+      },
+      "expected_behaviour": {
+        "type": "string",
+        "maxLength": 2500
+      },
+      "observed_behaviour": {
+        "type": "string",
+        "maxLength": 2500
+      },
+      "findings": {
+        "type": "array",
+        "maxItems": 6,
+        "items": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "maxLength": 240
+            },
+            "line": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "quote": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "observation": {
+              "type": "string",
+              "maxLength": 2500
+            }
+          },
+          "required": [
+            "file",
+            "line",
+            "quote",
+            "observation"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "root_cause_hypothesis": {
+        "type": "string",
+        "maxLength": 2500
+      },
+      "reproduction_steps": {
+        "type": "array",
+        "maxItems": 8,
+        "items": {
+          "type": "string",
+          "maxLength": 800
+        }
+      },
+      "proposed_solution": {
+        "type": "string",
+        "maxLength": 2500
+      },
+      "acceptance_criteria": {
+        "type": "array",
+        "maxItems": 8,
+        "items": {
+          "type": "string",
+          "maxLength": 800
+        }
+      },
+      "validation_plan": {
+        "type": "array",
+        "maxItems": 8,
+        "items": {
+          "type": "string",
+          "maxLength": 800
+        }
+      },
+      "limitations": {
+        "type": "array",
+        "maxItems": 8,
+        "items": {
+          "type": "string",
+          "maxLength": 800
+        }
+      },
+      "questions": {
+        "type": "array",
+        "maxItems": 8,
+        "items": {
+          "type": "string",
+          "maxLength": 800
+        }
+      },
+      "search_terms": {
+        "type": "array",
+        "maxItems": 8,
+        "items": {
+          "type": "string",
+          "maxLength": 80
+        }
+      },
+      "next_action": {
+        "type": "string",
+        "enum": [
+          "enhance",
+          "additional_search",
+          "clarification"
+        ]
+      },
+      "confidence": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      }
+    },
+    "required": [
+      "title",
+      "problem_statement",
+      "expected_behaviour",
+      "observed_behaviour",
+      "findings",
+      "root_cause_hypothesis",
+      "reproduction_steps",
+      "proposed_solution",
+      "acceptance_criteria",
+      "validation_plan",
+      "limitations",
+      "questions",
+      "search_terms",
+      "next_action",
+      "confidence"
+    ],
+    "additionalProperties": false
+  }
+}

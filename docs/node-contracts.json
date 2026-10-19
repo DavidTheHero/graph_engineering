@@ -1986,5 +1986,978 @@
       "done",
       "blocked"
     ]
+  },
+  {
+    "name": "manual_intake",
+    "inputs": {
+      "intake": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "repository": {
+        "type": "object"
+      },
+      "base_sha": {
+        "type": "string"
+      }
+    },
+    "responsible": "deterministic Git metadata",
+    "permissions": "read committed evidence; proposal only; execution/publication require explicit recorded approval",
+    "next": "request_triage",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "intake": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "intake",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "object"
+        },
+        "base_sha": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "base_sha"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "request_triage",
+      "blocked"
+    ]
+  },
+  {
+    "name": "request_triage",
+    "inputs": {
+      "intake": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "triage": {
+        "type": "object"
+      }
+    },
+    "responsible": "Qwen 4B classification",
+    "permissions": "read committed evidence; proposal only; execution/publication require explicit recorded approval",
+    "next": "request_duplicate_check",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "intake": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "intake",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "triage": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "triage"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "request_duplicate_check",
+      "blocked"
+    ]
+  },
+  {
+    "name": "request_duplicate_check",
+    "inputs": {
+      "intake": {
+        "type": "object"
+      },
+      "triage": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "duplicate_candidates": {
+        "type": "array"
+      }
+    },
+    "responsible": "deterministic local comparison",
+    "permissions": "read committed evidence; proposal only; execution/publication require explicit recorded approval",
+    "next": "repository_search",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "intake": {
+          "type": "object"
+        },
+        "triage": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "intake",
+        "triage",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "duplicate_candidates": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "duplicate_candidates"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "repository_search",
+      "request_duplicate_check (human duplicate review)"
+    ]
+  },
+  {
+    "name": "repository_search",
+    "inputs": {
+      "intake": {
+        "type": "object"
+      },
+      "base_sha": {
+        "type": "string"
+      },
+      "triage": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "retrieved": {
+        "type": "object"
+      },
+      "search_round": {
+        "type": "integer"
+      }
+    },
+    "responsible": "deterministic bounded Git search",
+    "permissions": "read committed evidence; proposal only; execution/publication require explicit recorded approval",
+    "next": "problem_investigation",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "intake": {
+          "type": "object"
+        },
+        "base_sha": {
+          "type": "string"
+        },
+        "triage": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "intake",
+        "base_sha",
+        "triage",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "retrieved": {
+          "type": "object"
+        },
+        "search_round": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "retrieved",
+        "search_round"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "problem_investigation",
+      "blocked"
+    ]
+  },
+  {
+    "name": "problem_investigation",
+    "inputs": {
+      "intake": {
+        "type": "object"
+      },
+      "retrieved": {
+        "type": "object"
+      },
+      "triage": {
+        "type": "object"
+      },
+      "base_sha": {
+        "type": "string"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "investigation_result": {
+        "type": "object"
+      }
+    },
+    "responsible": "Qwen 27B investigation",
+    "permissions": "read committed evidence; proposal only; execution/publication require explicit recorded approval",
+    "next": "ticket_enhancement",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "intake": {
+          "type": "object"
+        },
+        "retrieved": {
+          "type": "object"
+        },
+        "triage": {
+          "type": "object"
+        },
+        "base_sha": {
+          "type": "string"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "intake",
+        "retrieved",
+        "triage",
+        "base_sha",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "investigation_result": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "investigation_result"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "repository_search (bounded additional search)",
+      "ticket_enhancement"
+    ]
+  },
+  {
+    "name": "ticket_enhancement",
+    "inputs": {
+      "intake": {
+        "type": "object"
+      },
+      "investigation_result": {
+        "type": "object"
+      },
+      "retrieved": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "enhanced": {
+        "type": "object"
+      },
+      "revision": {
+        "type": "integer"
+      }
+    },
+    "responsible": "deterministic technical ticket assembly",
+    "permissions": "read committed evidence; proposal only; execution/publication require explicit recorded approval",
+    "next": "reproduction_check",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "intake": {
+          "type": "object"
+        },
+        "investigation_result": {
+          "type": "object"
+        },
+        "retrieved": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "intake",
+        "investigation_result",
+        "retrieved",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "enhanced": {
+          "type": "object"
+        },
+        "revision": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "enhanced",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "reproduction_check",
+      "blocked"
+    ]
+  },
+  {
+    "name": "reproduction_check",
+    "inputs": {
+      "intake": {
+        "type": "object"
+      },
+      "base_sha": {
+        "type": "string"
+      },
+      "enhanced": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "reproduction": {
+        "type": "object"
+      }
+    },
+    "responsible": "authorised isolated test runner or read-only skip",
+    "permissions": "read committed evidence; proposal only; execution/publication require explicit recorded approval",
+    "next": "finding_validation",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "intake": {
+          "type": "object"
+        },
+        "base_sha": {
+          "type": "string"
+        },
+        "enhanced": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "intake",
+        "base_sha",
+        "enhanced",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "reproduction": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "reproduction"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "finding_validation",
+      "blocked"
+    ]
+  },
+  {
+    "name": "finding_validation",
+    "inputs": {
+      "intake": {
+        "type": "object"
+      },
+      "enhanced": {
+        "type": "object"
+      },
+      "retrieved": {
+        "type": "object"
+      },
+      "revision": {
+        "type": "integer"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "finding_validation": {
+        "type": "object"
+      },
+      "validation_round": {
+        "type": "integer"
+      },
+      "enhanced": {
+        "type": "object"
+      },
+      "revision": {
+        "type": "integer"
+      }
+    },
+    "responsible": "deterministic file/line/quote checks",
+    "permissions": "read committed evidence; proposal only; execution/publication require explicit recorded approval",
+    "next": "ticket_finalisation",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "intake": {
+          "type": "object"
+        },
+        "enhanced": {
+          "type": "object"
+        },
+        "retrieved": {
+          "type": "object"
+        },
+        "revision": {
+          "type": "integer"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "intake",
+        "enhanced",
+        "retrieved",
+        "revision",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "finding_validation": {
+          "type": "object"
+        },
+        "validation_round": {
+          "type": "integer"
+        },
+        "enhanced": {
+          "type": "object"
+        },
+        "revision": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "finding_validation",
+        "validation_round",
+        "enhanced",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "problem_investigation (invalid references; bounded retry)",
+      "ticket_finalisation"
+    ]
+  },
+  {
+    "name": "ticket_finalisation",
+    "inputs": {
+      "intake": {
+        "type": "object"
+      },
+      "finding_validation": {
+        "type": "object"
+      },
+      "enhanced": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "intake_phase": {
+        "type": "string"
+      }
+    },
+    "responsible": "deterministic evidence/review gate",
+    "permissions": "read committed evidence; proposal only; execution/publication require explicit recorded approval",
+    "next": "development_admission",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "intake": {
+          "type": "object"
+        },
+        "finding_validation": {
+          "type": "object"
+        },
+        "enhanced": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "intake",
+        "finding_validation",
+        "enhanced",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "intake_phase": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "intake_phase"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "ticket_finalisation (review or clarification wait)",
+      "repository_search (operator follow-up)",
+      "development_admission (accepted revision)",
+      "ticket_publication (explicit approval)"
+    ]
+  },
+  {
+    "name": "ticket_publication",
+    "inputs": {
+      "intake": {
+        "type": "object"
+      },
+      "enhanced": {
+        "type": "object"
+      },
+      "revision": {
+        "type": "integer"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "issue": {
+        "type": "object"
+      }
+    },
+    "responsible": "deterministic approved publication",
+    "permissions": "read committed evidence; proposal only; execution/publication require explicit recorded approval",
+    "next": "ticket_finalisation",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "intake": {
+          "type": "object"
+        },
+        "enhanced": {
+          "type": "object"
+        },
+        "revision": {
+          "type": "integer"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "intake",
+        "enhanced",
+        "revision",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "issue": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "issue"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "ticket_finalisation",
+      "blocked"
+    ]
+  },
+  {
+    "name": "development_admission",
+    "inputs": {
+      "intake": {
+        "type": "object"
+      },
+      "enhanced": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "development": {
+        "type": "object"
+      }
+    },
+    "responsible": "explicit human development gate",
+    "permissions": "read committed evidence; proposal only; execution/publication require explicit recorded approval",
+    "next": "development_admission",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "intake": {
+          "type": "object"
+        },
+        "enhanced": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "intake",
+        "enhanced",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "development": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "development"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "development_admission",
+      "blocked"
+    ]
   }
 ]

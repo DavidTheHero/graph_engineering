@@ -12,6 +12,12 @@ from .runtime import digest
 def operate(home, path, data, key):
     tickets = Tickets(home)
     try:
+        if path == '/api/centre/create-ticket':
+            from .report_store import create
+            return create(tickets,data,key)
+        if path == '/api/centre/intake-action':
+            from .report_commands import act
+            return act(tickets,data,key)
         if path == '/api/centre/register':
             if not isinstance(data.get('path'),str) or len(data['path']) > 2000: raise ValueError('Supply a repository root path')
             return register(tickets,data['path'])

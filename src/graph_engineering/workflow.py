@@ -14,6 +14,7 @@ from .models import ModelClient, ModelError, OpenCodeWorker, default_models, val
 from .publication import GitHubBackend, LocalBackend, merge_gate
 from .repository import Cancelled, Worktree, discover, git, run_check, source_bundle, tracked, validate_edits
 from .runtime import BusyError, RepoLock, Store, digest, redact, NODE_DEADLINE
+from .investigation import InvestigationNodes, INVESTIGATION_CONTRACTS
 
 
 def obj(properties: dict, required: list[str] | None = None) -> dict:
@@ -90,6 +91,7 @@ NODES = [
     Node("post_merge_verification", {"merge": DICT}, {"postmerge": DICT}, "deterministic adapter", "trusted execution at observed merged commit", "completion"),
     Node("completion", {"config": DICT}, {"outcome": STR, "report": STR}, "controller", "issue status/report write", "done"),
 ]
+NODES.extend(Node(**contract) for contract in INVESTIGATION_CONTRACTS)
 REQUIRED_INPUTS = {
     "issue_validation": {"baseline_path": STR, "repository": DICT, "base_sha": STR},
     "ticket_creation": {"base_sha": STR},
@@ -121,6 +123,11 @@ def graph_contracts() -> list[dict]:
         contract["output_schema"] = obj(node.outputs | OPTIONAL_OUTPUTS.get(node.name, {}), list(node.outputs))
         contract["checkpoint"] = "before attempt and after validated output; interrupted effects reconciled"
         contract["conditional_edges"] = {
+            'request_duplicate_check':['repository_search','request_duplicate_check (human duplicate review)'],
+            'problem_investigation':['repository_search (bounded additional search)','ticket_enhancement'],
+            'finding_validation':['problem_investigation (invalid references; bounded retry)','ticket_finalisation'],
+            'ticket_finalisation':['ticket_finalisation (review or clarification wait)','repository_search (operator follow-up)',
+                                    'development_admission (accepted revision)','ticket_publication (explicit approval)'],
             "evidence_collection": ["completion (clean suite)", "issue_detection (failed reproducible check)",
                                     "repository_investigation (explicit read-only model inspection)"],
             "issue_validation": ["deduplication", "blocked (unconfirmed/low confidence)"],
@@ -174,7 +181,7 @@ def initialise(repo: Path, root: Path, backend: str = "local", trusted_local: bo
     return path
 
 
-class Workflow:
+class Workflow(InvestigationNodes):
     def __init__(self, root: Path):
         self.store = Store(root)
         self.root = self.store.root
@@ -216,6 +223,9 @@ class Workflow:
             return run
         self.run_id = run_id
         config = run["state"]["config"]
+        if config.get('run_mode')=='intake' and run['status'] in ('needs_information','duplicate_review',
+            'ready_for_review','ready_for_development','development_queued','enhancement_rejected'):
+            return run
         if self.worker is None or isinstance(self.worker, OpenCodeWorker):
             self.worker = OpenCodeWorker(self.root / "workers", config["models"])
         with RepoLock(self.root, str(Path(config["repo"]).resolve()).casefold()):
@@ -235,6 +245,8 @@ class Workflow:
                 inputs = {key: state[key] for key in input_fields if key in state}
                 validate_artifact(inputs, obj(input_fields, list(spec.inputs)))
                 key = f"{node_name}:{state['repairs']}"
+                if config.get('run_mode')=='intake':
+                    key+=f":g{state['intake'].get('generation',0)}:s{state.get('search_round',0)}:v{state.get('validation_round',0)}"
                 attempts = state["attempts"].copy()
                 attempts[key] = attempts.get(key, 0) + 1
                 limit = min(config["max_node_attempts"], spec.max_attempts)
@@ -323,6 +335,7 @@ class Workflow:
                     "operation": "OpenCode structured proposal", "request_sha256": digest(prompt)})
                 result = self.worker.invoke(role, encoded, schema, model,
                                         self.run_id, attempt=state["repairs"], cancelled=self.cancelled)
+                validate_artifact(result['content'],schema)
         except BusyError as exc:
             self.store.event(self.run_id,role,'model_capacity_wait',{'model_key':model,
                 'graph_node':self.store.get(self.run_id)['node'],'status':'waiting'})
@@ -331,7 +344,7 @@ class Workflow:
             if self.cancelled():
                 raise Cancelled("Cancelled during worker invocation")
             if self.worker.metrics:
-                self.store.event(self.run_id, role, "model_call", self.worker.metrics[-1] | {
+                self.store.event(self.run_id, role, "model_call", self.worker.metrics[-1] | {'success':False,
                     'graph_node':self.store.get(self.run_id)['node']})
             raise
         self.store.event(self.run_id, role, "model_call", result["metrics"] | {"artifact": result["raw_path"], "selected_model": model,

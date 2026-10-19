@@ -64,6 +64,17 @@ class ControlAPITests(unittest.TestCase):
         self.assertEqual(event['source_node'],'repository_discovery')
         self.assertEqual(event['event_type'],'started')
 
+    def test_unicode_intake_fits_its_documented_limits_and_returns_persistent_original(self):
+        repo=make_repo(self.root)
+        registered=self.post('/api/centre/register',{'path':str(repo)},'unicode-register-1')
+        original='\U0001f41b'*6000
+        data={'repository_id':registered['id'],'description':original}
+        result=self.post('/api/centre/create-ticket',data,'unicode-create-1')
+        self.assertEqual(result,self.post('/api/centre/create-ticket',data,'unicode-create-1'))
+        detail=json.load(urlopen(self.url+'/api/centre/ticket?id='+result['ticket_id']))
+        self.assertEqual(detail['intake_report']['original'],original)
+        self.assertEqual(detail['model_calls'],[])
+
     def test_attached_ui_does_not_launch_or_own_another_controller(self):
         with patch.object(DashboardServer,'serve_forever',return_value=None), \
              patch('graph_engineering.dashboard.subprocess.Popen') as launch, \

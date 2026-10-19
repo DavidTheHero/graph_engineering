@@ -12,10 +12,12 @@ from .scheduling_policy import retry_delay
 
 
 QUEUES = {'high': 'Critical / High Priority', 'normal': 'Normal Priority', 'low': 'Low Priority',
+          'intake':'New / Queued for Investigation','clarification':'Waiting for User Input',
+          'intake_review':'Ticket Review','development':'Development Queue',
           'investigation': 'Needs Investigation', 'dependency': 'Waiting for Dependency',
           'retry': 'Retry Queue', 'approval': 'Human Approval Queue', 'dead': 'Dead Letter',
           'paused': 'Paused', 'resource': 'Waiting for Resource', 'active': 'Executing', 'done': 'History'}
-CATEGORIES = ('bug', 'security', 'performance', 'refactoring', 'test_coverage', 'technical_debt',
+CATEGORIES = ('bug', 'security', 'performance', 'reliability', 'refactoring', 'test_coverage', 'technical_debt',
               'documentation', 'feature', 'build_ci', 'architecture_investigation')
 TERMINAL = {'completed', 'no_findings', 'duplicate'}
 
@@ -49,6 +51,8 @@ class Tickets:
         if 'triaged' not in {r['name'] for r in self.db.execute('PRAGMA table_info(tickets)')}:
             self.db.execute('ALTER TABLE tickets ADD COLUMN triaged INTEGER DEFAULT 0')
             self.db.commit()
+        from .report_store import migrate
+        migrate(self.db)
 
     def _decode(self, row):
         value = dict(row)
@@ -122,9 +126,16 @@ class Tickets:
         if status in TERMINAL: return 'done', 'Execution completed; retained in history'
         if ticket['lease_owner']: return 'active', 'Worker owns a durable execution lease'
         if ticket.get('cancel'): return 'investigation', 'Cancellation requested; explicit retry is required to continue'
-        if status in ('failed', 'escalated') or ticket['retries'] >= ticket['max_retries']:
+        if status in ('failed', 'escalated') or status in ('blocked','cancelled') and ticket['retries'] >= ticket['max_retries']:
             return 'dead', 'Retry budget exhausted; human intervention required'
         if ticket['paused'] or self.setting('paused', False): return 'paused', 'Admission paused; active steps finish at their checkpoint'
+        if ticket['state']['config'].get('run_mode')=='intake':
+            if status=='needs_information':return 'clarification','Investigation needs evidence or clarification; the original report is preserved'
+            if status=='duplicate_review':return 'intake_review','Possible duplicate requires explicit review; no ticket was discarded'
+            if status=='ready_for_review':return 'intake_review','Review the enhanced revision; source references do not prove runtime causality'
+            if status in ('ready_for_development','development_queued'):return 'development','Accepted ticket; implementation has not been authorised'
+            if status=='enhancement_rejected':return 'investigation','Enhancement rejected; edit or request another investigation'
+            if status=='ready' and ticket['node']=='manual_intake':return 'intake','Original report saved; queued for investigation'
         if status == 'waiting_approval' and self.store.approved_head(ticket['run_id']) != ticket['state'].get('head'):
             return 'approval', 'Exact tested commit needs human approval'
         if status in ('blocked', 'cancelled'): return 'investigation', str(ticket['state'].get('error') or status)
@@ -164,6 +175,8 @@ class Tickets:
                 if ticket['retries'] >= ticket['max_retries']: raise ValueError('Retry budget exhausted')
                 state = ticket['state']; state.pop('error', None)
                 state.setdefault('attempts', {})[f"{ticket['node']}:{state.get('repairs',0)}"] = 0
+                if state['config'].get('run_mode')=='intake':
+                    state['attempts']={key:0 if key.startswith(ticket['node']+':') else count for key,count in state['attempts'].items()}
                 self.db.execute('UPDATE runs SET status=?,cancel=0,state=? WHERE id=?', ('ready',json.dumps(state),run_id))
                 updates = {'retries':ticket['retries']+1, 'paused':False,
                            'not_before':time.time()+retry_delay(ticket['retries']+1)}
@@ -190,9 +203,9 @@ class Tickets:
             elif action == 'reassign':
                 if ticket['lease_owner']: raise ValueError('Pause and wait for the active step before reassignment')
                 role, model = data.get('role'), data.get('model')
-                if role not in ('investigation','planning','implementation','review') or model not in ('a','b'):
+                if role not in ('classification','root_investigation','investigation','planning','implementation','review') or model not in ('a','b'):
                     raise ValueError('Invalid role/model assignment')
-                if role in ('planning','implementation') and model != 'a': raise ValueError('Complex engineering roles require model A')
+                if role in ('root_investigation','planning','implementation') and model != 'a': raise ValueError('Complex engineering roles require model A')
                 state = ticket['state']; state['config'].setdefault('model_overrides',{})[role] = model
                 self.db.execute('UPDATE runs SET state=? WHERE id=?', (json.dumps(state),run_id))
             else: raise ValueError('Unsupported ticket command')
