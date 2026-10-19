@@ -63,6 +63,13 @@ processes to the service lifetime, including on forced task termination. Logs ap
 `.runtime/general-ai-agent/controller-service.log`. The task requires a logged-in
 user and is not an unattended boot service.
 
+Repository commands, Git, OpenCode, GitHub CLI and cancellation helpers use hidden
+Windows launch settings. Commands have a private hidden console that npm/Git child
+processes can inherit; making only the controller windowless is insufficient.
+Output remains captured in the dashboard and retained execution logs. A regression
+test checks console visibility for an actual parent/child command and verifies
+that cancellation still terminates the process tree.
+
 Use the dashboard to pause admission and wait for active steps to checkpoint
 before maintenance. `Stop-ScheduledTask -TaskName GraphEngineeringController-8771`
 stops that controller; `Start-ScheduledTask` restarts it. Existing kernel locks and

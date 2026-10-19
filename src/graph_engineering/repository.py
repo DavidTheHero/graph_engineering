@@ -15,6 +15,7 @@ import time
 from typing import Callable, Protocol
 
 from .runtime import digest, redact, remaining_timeout
+from .processes import background_options
 
 
 class Cancelled(RuntimeError):
@@ -34,7 +35,7 @@ def kill_tree(process: subprocess.Popen):
     if process.poll() is not None:
         return
     if os.name == "nt":
-        subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, timeout=10)
+        subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, timeout=10,**background_options())
     else:
         try:
             os.killpg(process.pid, signal.SIGKILL)
@@ -50,7 +51,7 @@ def command(argv: list[str], cwd: Path, timeout: float = 60,
     started = time.monotonic()
     timeout = remaining_timeout(timeout)
     with tempfile.TemporaryFile() as output:
-        kwargs = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
+        kwargs = background_options(new_session=True)
         process = subprocess.Popen(argv, cwd=str(cwd), env=env if env is not None else clean_environment(),
                                    stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT, **kwargs)
         timed_out = False
@@ -86,7 +87,7 @@ def git(repo: Path, *args: str, check: bool = True) -> str:
             env[key] = os.environ[key]
     result = subprocess.run(["git", "-c", f"core.hooksPath={os.devnull}", "-c", "core.fsmonitor=false",
                       "-c", "commit.gpgsign=false", "-c", "protocol.ext.allow=never", "-C", str(repo), *args],
-                      cwd=repo, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=remaining_timeout(60))
+                      cwd=repo, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=remaining_timeout(60),**background_options())
     if check and result.returncode:
         raise RuntimeError(f"git {' '.join(args[:2])} failed: {result.stderr[-3000:]}")
     if len(result.stdout) > 8_000_000:

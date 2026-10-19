@@ -13,6 +13,7 @@ import subprocess
 from pathlib import Path
 from urllib.parse import quote
 from .runtime import remaining_timeout
+from .processes import background_options
 
 
 class PublicationError(RuntimeError):
@@ -95,7 +96,7 @@ def _git(repo: Path, *args: str) -> str:
             env[key] = os.environ[key]
     try:
         process = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace",
-                                 capture_output=True, timeout=remaining_timeout(90), check=False, env=env)
+                                 capture_output=True, timeout=remaining_timeout(90), check=False, env=env,**background_options())
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise PublicationError(f"Git execution failed: {type(exc).__name__}") from exc
     if process.returncode:
@@ -311,7 +312,7 @@ class GitHubBackend:
         try:
             result = subprocess.run(cmd, input=json.dumps(payload) if payload is not None else None,
                                     text=True, encoding="utf-8", errors="replace", capture_output=True,
-                                    timeout=remaining_timeout(60), check=False)
+                                    timeout=remaining_timeout(60), check=False,**background_options())
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise PublicationError(f"GitHub API unavailable: {type(exc).__name__}") from exc
         if result.returncode:
@@ -435,7 +436,7 @@ class GitHubBackend:
             raise PublicationError("origin does not match the configured GitHub repository")
         # Refuse URL rewriting; never let origin.pushurl redirect a privileged push.
         rewrites = subprocess.run(["git", "-C", str(self.repo), "config", "--get-regexp",
-                                  r"^url\..*\.(insteadof|pushinsteadof)$"], capture_output=True, text=True, timeout=10)
+                                  r"^url\..*\.(insteadof|pushinsteadof)$"], capture_output=True, text=True, timeout=10,**background_options())
         if rewrites.returncode not in (0, 1) or rewrites.stdout.strip():
             raise PublicationError("Git URL rewrite configuration requires manual publication")
         _git(self.repo, "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential",

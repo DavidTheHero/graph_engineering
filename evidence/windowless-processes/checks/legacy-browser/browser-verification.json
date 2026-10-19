@@ -1,0 +1,93 @@
+{
+  "at": "2026-10-19T17:58:47.323Z",
+  "checks": [
+    {
+      "name": "Observed public run, 20-step graph and real PR link",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Step selection, shareable URL and recovery-edge toggle",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Responsive layout at 320, 768, 1024, 1440 and 1600 pixels",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Actual diff, three test receipts, five worker calls and 57 audit events",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Keyboard tab navigation and stable focus across polling",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Blocked policy run exposes actual failure and blocks success presentation",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Live SQLite checkpoint polling and visible missing-approval gate",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Search, source/status filters and empty-state recovery",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Out-of-order reads cannot overwrite newer run data",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Injected repository HTML and javascript links render as inert text",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Outage displays stale-data warning and recovers on refresh",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "No browser runtime or unexpected console errors",
+      "passed": true,
+      "details": ""
+    }
+  ],
+  "console_errors": [],
+  "accessibility": [
+    {
+      "view": "workflow-desktop",
+      "violations": []
+    },
+    {
+      "view": "workflow-mobile",
+      "violations": []
+    },
+    {
+      "view": "evidence",
+      "violations": []
+    },
+    {
+      "view": "activity",
+      "violations": []
+    }
+  ],
+  "screenshots": [
+    "dashboard-1600.png",
+    "dashboard-1440.png",
+    "dashboard-1024.png",
+    "dashboard-768.png",
+    "dashboard-320.png"
+  ],
+  "browser": "155.0.4283.62",
+  "passed": true
+}

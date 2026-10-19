@@ -1,0 +1,11 @@
+{
+  "check": "intake-browser",
+  "argv": [
+    "node",
+    "intake.cjs"
+  ],
+  "returncode": 0,
+  "duration_seconds": 8.405999999999949,
+  "stdout": "PASS Plain-English form returns a durable ticket before inference; exact original preserved\nPASS Actual graph dispatch, source validation and original/enhanced comparison synchronise\nPASS Editing appends a revision; acceptance and development admission do not implement code\nPASS Reload restores accepted content and authoritative development queue\nPASS Ambiguous reports persist, request clarification and re-enter investigation\nPASS Repository autonomy consent persists through the real API and browser reload\nPASS Cancellation remains distinct and cannot accidentally resume or admit development\nPASS Mobile layout and accessibility remain valid\nPASS No browser warnings or runtime errors\n",
+  "stderr": ""
+}

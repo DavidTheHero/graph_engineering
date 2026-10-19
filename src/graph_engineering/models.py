@@ -21,6 +21,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from .runtime import remaining_timeout
+from .processes import background_options
 
 
 class ModelError(RuntimeError):
@@ -199,7 +200,7 @@ def detect_opencode() -> tuple[str, str]:
             executable = str(candidate)
     if not executable:
         raise ModelError("OpenCode executable not found")
-    result = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=10)
+    result = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=10,**background_options())
     found = re.search(r"(?<!\d)(\d+\.\d+\.\d+)\b", result.stdout)
     if result.returncode or not found or found.group(1) != "2.0.32":
         raise ModelError("This provider configuration is verified for OpenCode 2.0.32; found " + result.stdout.strip())
@@ -291,7 +292,7 @@ def validate_artifact(value: Any, schema: dict, path: str = "$") -> None:
 
 def _run_opencode(command: list[str], cwd: Path, env: dict, timeout: int,
                   input_text: str | None = None, cancelled: Callable[[], bool] | None = None) -> tuple[int, str, str]:
-    kwargs = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
+    kwargs = background_options(new_session=True)
     proc = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", **kwargs)
     deadline = time.monotonic() + timeout
     try:
@@ -308,7 +309,7 @@ def _run_opencode(command: list[str], cwd: Path, env: dict, timeout: int,
                 input_text = None
     except BaseException:
         if os.name == "nt":
-            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, timeout=10)
+            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, timeout=10,**background_options())
         else:
             import signal
             os.killpg(proc.pid, signal.SIGKILL)
