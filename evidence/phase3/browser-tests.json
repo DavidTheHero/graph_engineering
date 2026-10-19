@@ -1,6 +1,6 @@
 {
   "kind": "browser-acceptance-with-scripted-inference",
-  "at": "2026-10-19T12:25:17.069Z",
+  "at": "2026-10-19T22:37:42.855Z",
   "checks": [
     {
       "name": "Plain-English form returns a durable ticket before inference; exact original preserved",
@@ -23,6 +23,18 @@
       "passed": true
     },
     {
+      "name": "Repository autonomy consent persists through the real API and browser reload",
+      "passed": true
+    },
+    {
+      "name": "Blocked development uses Qwen 4B through the real graph action while preserving acceptance and both retry limits",
+      "passed": true
+    },
+    {
+      "name": "Cancellation remains distinct and cannot accidentally resume or admit development",
+      "passed": true
+    },
+    {
       "name": "Mobile layout and accessibility remain valid",
       "passed": true
     },
@@ -38,6 +50,14 @@
     },
     {
       "view": "enhanced-ticket",
+      "violations": []
+    },
+    {
+      "view": "autonomy-policy",
+      "violations": []
+    },
+    {
+      "view": "blocked-development",
       "violations": []
     },
     {

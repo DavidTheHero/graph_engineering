@@ -18,12 +18,16 @@ from tests.test_workflow import WorkerDouble
 
 class DevelopmentDouble(WorkerDouble):
     def invoke(self,role,*args,**kwargs):
-        if role=='regression_test':
+        if role=='question_answering':
+            content={'answers':[{'question':'Which inputs reproduce the failure?','answer':'Use the operator-provided values 9 and 6.',
+                'status':'answered_from_operator','basis':['Troubleshooting note: Use real input values 9 and 6.']}],
+                'summary':'One question was answered from recorded operator information.'}
+        elif role=='regression_test':
             content={'content':'import unittest\nfrom calc import add\nclass Regression(unittest.TestCase):\n def test_accepted_requirement(self): self.assertEqual(add(9,6),15)\n','rationale':'Direct accepted addition criterion'}
         elif role=='implementation':
             content={'summary':'Restore addition','edits':[{'path':'calc.py','old':'return a-b','new':'return a+b'}]}
         else:return super().invoke(role,*args,**kwargs)
-        metric={'role':role,'success':True,'model_key':'a','model_id':'explicit-development-double','latency_seconds':0}
+        metric={'role':role,'success':True,'model_key':args[2] if len(args)>2 else 'a','model_id':'explicit-development-double','latency_seconds':0}
         self.metrics.append(metric);return {'content':content,'metrics':metric,'raw_path':'explicit-development-double'}
 
 
@@ -86,6 +90,33 @@ class DevelopmentHandoffTests(unittest.TestCase):
         self.assertEqual(len(state['development_information']),1)
         self.assertEqual(state['development_information'][0]['text'],request['text'])
         with self.assertRaises(ValueError):act(self.tickets,self.base|{'action':'edit_enhancement','changes':{'title':'Different scope'}},'context-change-scope')
+
+    @patch('graph_engineering.workflow.ModelClient.health',return_value={'available':True})
+    def test_qwen_4b_answers_blocked_questions_without_spending_a_retry(self,_):
+        act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'questions-start-1')
+        state=self.tickets.get(self.ticket['ticket_id'])['state']
+        state['config']['routing']='multimodel'
+        state['enhanced']['questions']=['Which inputs reproduce the failure?']
+        state['development_information']=[{'text':'Use real input values 9 and 6.','actor':'test-operator','at':1}]
+        self.tickets.store.checkpoint(self.run['id'],'regression_review',
+            {'attempts':{'regression_review:0':2},'error':'Attempt budget exhausted',**{k:v for k,v in state.items() if k in ('config','enhanced','development_information')}},
+            'regression_review','blocked')
+        request=self.base|{'action':'answer_questions'}
+        first=act(self.tickets,request,'questions-answer-1')
+        self.assertEqual(first,act(self.tickets,request,'questions-answer-1'))
+        queued=self.tickets.get(self.ticket['ticket_id'])
+        self.assertEqual((queued['node'],queued['status']),('question_answering','ready'))
+        flow=Workflow(self.home);worker=DevelopmentDouble();flow.worker=worker
+        try:
+            answered=flow.execute(self.run['id'])
+            self.assertEqual((answered['node'],answered['status']),('regression_review','blocked'))
+            self.assertEqual(answered['state']['error'],'Attempt budget exhausted')
+            self.assertEqual(answered['state']['accepted_revision'],1)
+            self.assertEqual(self.tickets.get(self.ticket['ticket_id'])['retries'],0)
+            self.assertEqual(answered['state']['question_answers']['answers'][0]['status'],'answered_from_operator')
+            call=next(metric for metric in worker.metrics if metric.get('role')=='question_answering')
+            self.assertEqual(call['model_key'],'b')
+        finally:flow.store.close()
 
     def test_exhaustion_projection_explains_both_retry_limits(self):
         from graph_engineering.scheduling_policy import execution_limits

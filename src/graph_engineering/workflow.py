@@ -16,6 +16,7 @@ from .repository import Cancelled, Worktree, discover, git, run_check, source_bu
 from .runtime import BusyError, RepoLock, Store, digest, redact, NODE_DEADLINE
 from .investigation import InvestigationNodes, INVESTIGATION_CONTRACTS
 from .accepted_development import AcceptedDevelopmentNodes,CONTRACTS as DEVELOPMENT_CONTRACTS,HUNK_SCHEMA,install_regression,materialize_hunks,prepare_dependencies,troubleshooting_context
+from .question_answering import QuestionAnsweringNodes,CONTRACT as QUESTION_ANSWER_CONTRACT
 
 
 def obj(properties: dict, required: list[str] | None = None) -> dict:
@@ -94,6 +95,7 @@ NODES = [
 ]
 NODES.extend(Node(**contract) for contract in INVESTIGATION_CONTRACTS)
 NODES.extend(Node(**contract) for contract in DEVELOPMENT_CONTRACTS)
+NODES.append(Node(**QUESTION_ANSWER_CONTRACT))
 REQUIRED_INPUTS = {
     "issue_validation": {"baseline_path": STR, "repository": DICT, "base_sha": STR},
     "ticket_creation": {"base_sha": STR},
@@ -136,6 +138,10 @@ def graph_contracts() -> list[dict]:
             'independent_review':['pull_request_creation','development_delivery (accepted ticket publication approval)','repair'],
             'ticket_finalisation':['ticket_finalisation (review or clarification wait)','repository_search (operator follow-up)',
                                     'development_admission (accepted revision)','ticket_publication (explicit approval)'],
+            'question_answering':['problem_investigation','finding_validation','ticket_finalisation','regression_authoring',
+                                  'regression_review','regression_validation','task_planning','isolated_implementation',
+                                  'test_execution','independent_review','development_delivery','pull_request_creation',
+                                  'ci_policy_verification','approval_gate','merge'],
             "evidence_collection": ["completion (clean suite)", "issue_detection (failed reproducible check)",
                                     "repository_investigation (explicit read-only model inspection)"],
             "issue_validation": ["deduplication", "blocked (unconfirmed/low confidence)"],
@@ -188,7 +194,7 @@ def initialise(repo: Path, root: Path, backend: str = "local", trusted_local: bo
     return path
 
 
-class Workflow(InvestigationNodes,AcceptedDevelopmentNodes):
+class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNodes):
     def __init__(self, root: Path):
         self.store = Store(root)
         self.root = self.store.root

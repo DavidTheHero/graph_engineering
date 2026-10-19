@@ -3509,5 +3509,98 @@
       "pull_request_creation",
       "blocked"
     ]
+  },
+  {
+    "name": "question_answering",
+    "inputs": {
+      "enhanced": {
+        "type": "object"
+      },
+      "question_answer_request": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "question_answers": {
+        "type": "object"
+      }
+    },
+    "responsible": "Qwen 4B through OpenCode",
+    "permissions": "read persisted ticket, operator notes and bounded committed-source evidence; proposal only",
+    "next": "regression_review",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Blocked ticket has persisted unresolved questions and no active worker",
+    "postcondition": "Structured answers are persisted and execution returns to the recorded blocked node",
+    "evidence": "OpenCode request/response receipt, model assignment, answer artifact and transition events",
+    "escalation": "Unavailable model, invalid structured response or question mismatch",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "enhanced": {
+          "type": "object"
+        },
+        "question_answer_request": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "enhanced",
+        "question_answer_request",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "question_answers": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "question_answers"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "problem_investigation",
+      "finding_validation",
+      "ticket_finalisation",
+      "regression_authoring",
+      "regression_review",
+      "regression_validation",
+      "task_planning",
+      "isolated_implementation",
+      "test_execution",
+      "independent_review",
+      "development_delivery",
+      "pull_request_creation",
+      "ci_policy_verification",
+      "approval_gate",
+      "merge"
+    ]
   }
 ]

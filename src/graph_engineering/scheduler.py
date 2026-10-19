@@ -19,6 +19,7 @@ from .workflow import Workflow
 
 ROLES = {'issue_detection':('investigation','b'), 'task_planning':('planning','a'),
          'request_triage':('classification','b'),'problem_investigation':('root_investigation','a'),
+         'question_answering':('question_answering','b'),
          'regression_authoring':('regression_test','a'),'regression_review':('regression_review','b'),
          'repository_investigation':('investigation','b'),
          'isolated_implementation':('implementation','a'), 'independent_review':('review','b')}
@@ -32,6 +33,8 @@ def required_model(ticket):
         from .accepted_development import regression_review_model
         model=regression_review_model(ticket['state'])
     config = ticket['state']['config']
+    if ticket['node']=='question_answering':
+        return config.get('model_overrides',{}).get(name) or 'b'
     return config.get('model_overrides',{}).get(name) or ('a' if config.get('routing') == 'baseline' else model)
 
 

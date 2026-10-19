@@ -18,7 +18,7 @@ from .control_repositories import repositories
 CLUSTERS = {
  'ingestion':('Ingestion',['manual_intake','repository_discovery','evidence_collection','issue_detection']),
  'classification':('Classification & queues',['request_triage','request_duplicate_check','issue_validation','deduplication','ticket_creation','prioritisation']),
- 'planning':('Investigation & planning',['development_setup','repository_search','problem_investigation','ticket_enhancement','repository_investigation','task_planning','model_selection']),
+ 'planning':('Investigation & planning',['development_setup','repository_search','problem_investigation','ticket_enhancement','repository_investigation','question_answering','task_planning','model_selection']),
  'engineering':('Engineering workers',['isolated_implementation']),
  'quality':('Quality & review',['regression_authoring','regression_review','regression_validation','reproduction_check','finding_validation','test_execution','independent_review']),
  'delivery':('Delivery',['development_delivery','ticket_finalisation','ticket_publication','development_admission','pull_request_creation','ci_policy_verification','approval_gate','merge','post_merge_verification','completion']),
@@ -159,7 +159,7 @@ def ticket_detail(home, ticket_id):
         from .report_store import report
         detail['intake_report']=report(tickets.db,ticket_id)
         detail['investigation']={key:ticket['state'][key] for key in ('triage','retrieved','enhanced',
-            'finding_validation','reproduction','duplicate_candidates','revision','accepted_revision','published_revision','clarifications','development','development_information','regression','regression_review','regression_baseline') if key in ticket['state']}
+            'finding_validation','reproduction','duplicate_candidates','revision','accepted_revision','published_revision','clarifications','development','development_information','question_answers','question_answer_request','regression','regression_review','regression_baseline') if key in ticket['state']}
         detail['timeline'] = events(tickets,limit=2000,ticket_id=ticket_id)
         detail['worker_artifacts'] = []
         for call in detail['model_calls'][-12:]:

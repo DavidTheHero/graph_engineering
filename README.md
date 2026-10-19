@@ -53,6 +53,9 @@ Compare the original and enhanced ticket, inspect evidence, follow its live grap
 journey, request clarification, and approve the current revision for development
 queue admission or issue publication. Opt-in repository autonomy can dispatch
 accepted revisions through regression, implementation, review and delivery.
+For a blocked ticket with persisted unresolved questions, **Ask Qwen 4B** runs a
+bounded OpenCode worker and records evidence-labelled proposed answers before
+returning the ticket to the same blocked execution step without spending a retry.
 See the [ticket investigation guide](docs/TICKET-INVESTIGATION.md) and
 [actual Phase 3 results](docs/PHASE3-RESULTS.md).
 

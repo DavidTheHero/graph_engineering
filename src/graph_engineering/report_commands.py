@@ -21,11 +21,19 @@ def act(tickets,data,key):
         if type(data.get('revision')) is not int or data['revision']!=current:raise ValueError('Ticket revision changed; reload before acting')
         action=data.get('action');actor=data.get('actor','')
         if ticket.get('cancel') or ticket['status']=='cancelled':raise ValueError('Ticket is cancelled. Use Retry with backoff explicitly before another action.')
-        if state['config'].get('run_mode')=='accepted_development' and action not in ('publish_development','development_information'):raise ValueError('Development has started with a frozen accepted revision; add troubleshooting information or use pause, cancel or retry to control execution.')
+        if state['config'].get('run_mode')=='accepted_development' and action not in ('publish_development','development_information','answer_questions'):raise ValueError('Development has started with a frozen accepted revision; add troubleshooting information, ask Qwen 4B, or use pause, cancel or retry to control execution.')
         if not isinstance(actor,str) or not actor.strip() or len(actor)>120:raise ValueError('A named operator is required')
         actor=actor.strip()
         node=ticket['node'];status=ticket['status']
-        if action=='development_information':
+        if action=='answer_questions':
+            questions=state.get('enhanced',{}).get('questions',[])
+            if status!='blocked':raise ValueError('Qwen 4B question answering requires a blocked ticket at a safe checkpoint')
+            if not isinstance(questions,list) or not questions:raise ValueError('This ticket has no persisted unresolved questions')
+            state['question_answer_request']={'return_node':node,'return_error':state.get('error'),
+                'requested_by':actor,'requested_at':now(),'questions_hash':digest(questions)}
+            state['attempts']={k:v for k,v in state.get('attempts',{}).items() if not k.startswith('question_answering:')}
+            node,status='question_answering','ready'
+        elif action=='development_information':
             if state['config'].get('run_mode')!='accepted_development' or status!='blocked':raise ValueError('Troubleshooting information requires a blocked development ticket at a safe checkpoint')
             text=data.get('text');notes=state.get('development_information',[])
             if not isinstance(text,str) or not text.strip() or len(text)>4000:raise ValueError('Provide troubleshooting information in 1–4000 characters')

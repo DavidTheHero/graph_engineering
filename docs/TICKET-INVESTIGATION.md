@@ -125,9 +125,22 @@ Actions are `accept`, `edit_enhancement` (`changes`), `clarify`/`reinvestigate`
 `send_development`, `start_development` (`trust_execution: true`),
 `development_information` (non-empty `text`, at most 4,000 characters and five
 stored notes on a blocked accepted-development ticket),
+`answer_questions` (queues the blocked ticket's persisted unresolved questions for
+Qwen 4B through OpenCode),
 `publish_development` (`approve_publication: true`), and `publish` (`approve_publication: true`; also
 `simulation: true` for the local backend). Reusing a key with different content
 is rejected. Active worker leases prevent concurrent editing/review.
+
+**Ask Qwen 4B** is available on a blocked ticket that has unresolved questions.
+It creates a real `question_answering` graph execution, reads only the immutable
+report, recorded operator notes and bounded committed-source excerpts, and stores
+one structured answer per original question. Every answer says whether its basis
+is an operator statement, repository evidence, partial evidence, or still
+unresolved. The model cannot silently invent missing product intent: unsupported
+questions remain marked `still_unresolved`. After a successful call, the ticket
+returns to the exact blocked node and error. This action does not change the
+accepted revision or consume a ticket retry; model-call receipts and answers are
+available in the ticket timeline and worker artifacts.
 
 `ticket_reports` stores the immutable original and optional context;
 `ticket_revisions` stores append-only numbered content/evidence revisions. Existing
