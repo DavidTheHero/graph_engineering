@@ -32,6 +32,8 @@ def repositories(tickets):
     result = []
     for row in tickets.db.execute('SELECT * FROM registered_repositories ORDER BY label'):
         value = dict(row)
+        from .autonomy import policy
+        value['autonomy']=policy(tickets,row['id'])
         config = json.loads(Path(row['config_path']).read_text(encoding='utf-8-sig'))
         value.update({'trusted':config.get('trusted_local',False),'backend':config['backend'],
                       'routing':config.get('routing','baseline'),'auto_merge':config.get('auto_merge',False)})

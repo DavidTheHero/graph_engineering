@@ -17,6 +17,7 @@ QUEUES = {'high': 'Critical / High Priority', 'normal': 'Normal Priority', 'low'
           'investigation': 'Needs Investigation', 'dependency': 'Waiting for Dependency',
           'retry': 'Retry Queue', 'approval': 'Human Approval Queue', 'dead': 'Dead Letter',
           'paused': 'Paused', 'resource': 'Waiting for Resource', 'active': 'Executing', 'done': 'History'}
+QUEUES['cancelled']='Cancelled / stopped'
 CATEGORIES = ('bug', 'security', 'performance', 'reliability', 'refactoring', 'test_coverage', 'technical_debt',
               'documentation', 'feature', 'build_ci', 'architecture_investigation')
 TERMINAL = {'completed', 'no_findings', 'duplicate'}
@@ -125,10 +126,11 @@ class Tickets:
         status = ticket['status']
         if status in TERMINAL: return 'done', 'Execution completed; retained in history'
         if ticket['lease_owner']: return 'active', 'Worker owns a durable execution lease'
-        if ticket.get('cancel'): return 'investigation', 'Cancellation requested; explicit retry is required to continue'
+        if ticket.get('cancel') or status=='cancelled': return 'cancelled', 'Cancelled; no further work will be dispatched. Retry explicitly to restart.'
         if status in ('failed', 'escalated') or status in ('blocked','cancelled') and ticket['retries'] >= ticket['max_retries']:
             return 'dead', 'Retry budget exhausted; human intervention required'
         if ticket['paused'] or self.setting('paused', False): return 'paused', 'Admission paused; active steps finish at their checkpoint'
+        if status=='ready_for_delivery':return 'approval','Implementation and independent review passed; approve issue/PR publication to continue'
         if ticket['state']['config'].get('run_mode')=='intake':
             if status=='needs_information':return 'clarification','Investigation needs evidence or clarification; the original report is preserved'
             if status=='duplicate_review':return 'intake_review','Possible duplicate requires explicit review; no ticket was discarded'
@@ -163,6 +165,7 @@ class Tickets:
             run_id = ticket['run_id']
             updates = {}
             if action in ('pause', 'resume'):
+                if action=='resume' and (ticket.get('cancel') or ticket['status']=='cancelled'):raise ValueError('Cancelled tickets require explicit Retry with backoff')
                 updates['paused'] = action == 'pause'
             elif action == 'cancel':
                 self.db.execute('UPDATE runs SET cancel=1 WHERE id=?', (run_id,))

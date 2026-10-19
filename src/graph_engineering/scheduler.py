@@ -19,6 +19,7 @@ from .workflow import Workflow
 
 ROLES = {'issue_detection':('investigation','b'), 'task_planning':('planning','a'),
          'request_triage':('classification','b'),'problem_investigation':('root_investigation','a'),
+         'regression_authoring':('regression_test','a'),'regression_review':('regression_review','b'),
          'repository_investigation':('investigation','b'),
          'isolated_implementation':('implementation','a'), 'independent_review':('review','b')}
 
@@ -27,6 +28,9 @@ def required_model(ticket):
     role = ROLES.get(ticket['node'])
     if not role: return None
     name, model = role
+    if ticket['node']=='regression_review':
+        from .accepted_development import regression_review_model
+        model=regression_review_model(ticket['state'])
     config = ticket['state']['config']
     return config.get('model_overrides',{}).get(name) or ('a' if config.get('routing') == 'baseline' else model)
 
@@ -161,6 +165,8 @@ def serve_scheduler(home, workers=2, once=False, poll=.5):
                 tickets.set_setting('worker_service',{'pid':os.getpid(),'observed':time.time()})
                 children = [p for p in children if p.poll() is None]
                 recover(tickets, {p.pid for p in children})
+                from .autonomy import dispatch
+                if not tickets.setting('paused',False):dispatch(tickets)
                 if time.time() - last_health > 30:
                     observe_models(tickets); last_health = time.time()
                 while True:

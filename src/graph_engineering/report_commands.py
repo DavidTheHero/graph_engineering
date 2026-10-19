@@ -20,6 +20,8 @@ def act(tickets,data,key):
         current=state.get('revision',0)
         if type(data.get('revision')) is not int or data['revision']!=current:raise ValueError('Ticket revision changed; reload before acting')
         action=data.get('action');actor=data.get('actor','')
+        if ticket.get('cancel') or ticket['status']=='cancelled':raise ValueError('Ticket is cancelled. Use Retry with backoff explicitly before another action.')
+        if state['config'].get('run_mode')=='accepted_development' and action!='publish_development':raise ValueError('Development has started with a frozen accepted revision; use pause, cancel or retry to control execution.')
         if not isinstance(actor,str) or not actor.strip() or len(actor)>120:raise ValueError('A named operator is required')
         actor=actor.strip()
         node=ticket['node'];status=ticket['status']
@@ -61,6 +63,21 @@ def act(tickets,data,key):
             if not current or state.get('accepted_revision')!=current:raise ValueError('Accept the current enhanced revision first')
             state.update(intake_phase='Development Queued',development={'admitted':True,'actor':actor,'revision':current,'implementation_started':False})
             node,status='development_admission','development_queued'
+        elif action=='start_development':
+            if 'autonomy_policy_updated' in data:
+                from .autonomy import policy
+                setting=policy(tickets,original['repository_id'])
+                if not setting['development'] or setting.get('updated')!=data['autonomy_policy_updated']:
+                    raise ValueError('Repository autonomy policy changed before admission')
+            if status not in ('ready_for_development','development_queued') or state.get('accepted_revision')!=current or data.get('trust_execution') is not True:
+                raise ValueError('Accept the current revision and explicitly authorise isolated repository code execution first')
+            state['development']={'admitted':True,'authorised_revision':current,'actor':actor,'implementation_started':True}
+            state['config'].update(run_mode='accepted_development',trusted_local=True,auto_merge=False)
+            state.pop('error',None);node,status='development_setup','ready'
+        elif action=='publish_development':
+            if status!='ready_for_delivery' or data.get('approve_publication') is not True or state.get('accepted_revision')!=state['development']['authorised_revision']:
+                raise ValueError('Reviewed, tested accepted revision and explicit delivery approval required')
+            state['delivery_revision']=state['accepted_revision'];node,status='development_delivery','ready'
         elif action=='publish':
             if not current or state.get('accepted_revision')!=current or data.get('approve_publication') is not True:
                 raise ValueError('Explicit publication approval of the accepted current revision is required')

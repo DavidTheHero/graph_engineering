@@ -12,6 +12,9 @@ from .runtime import digest
 def operate(home, path, data, key):
     tickets = Tickets(home)
     try:
+        if path=='/api/centre/repository-policy':
+            from .autonomy import configure
+            return configure(tickets,data,key)
         if path == '/api/centre/create-ticket':
             from .report_store import create
             return create(tickets,data,key)

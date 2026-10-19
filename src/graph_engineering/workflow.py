@@ -15,6 +15,7 @@ from .publication import GitHubBackend, LocalBackend, merge_gate
 from .repository import Cancelled, Worktree, discover, git, run_check, source_bundle, tracked, validate_edits
 from .runtime import BusyError, RepoLock, Store, digest, redact, NODE_DEADLINE
 from .investigation import InvestigationNodes, INVESTIGATION_CONTRACTS
+from .accepted_development import AcceptedDevelopmentNodes,CONTRACTS as DEVELOPMENT_CONTRACTS,HUNK_SCHEMA,install_regression,materialize_hunks,prepare_dependencies
 
 
 def obj(properties: dict, required: list[str] | None = None) -> dict:
@@ -92,6 +93,7 @@ NODES = [
     Node("completion", {"config": DICT}, {"outcome": STR, "report": STR}, "controller", "issue status/report write", "done"),
 ]
 NODES.extend(Node(**contract) for contract in INVESTIGATION_CONTRACTS)
+NODES.extend(Node(**contract) for contract in DEVELOPMENT_CONTRACTS)
 REQUIRED_INPUTS = {
     "issue_validation": {"baseline_path": STR, "repository": DICT, "base_sha": STR},
     "ticket_creation": {"base_sha": STR},
@@ -107,6 +109,7 @@ OPTIONAL_INPUTS = {"issue_detection": {"validation_feedback": STR},
                    "isolated_implementation": {"verification": DICT, "review": DICT},
                    "completion": {"outcome": STR, "postmerge": DICT, "issue": DICT}}
 OPTIONAL_OUTPUTS = {"evidence_collection": {"outcome": STR},
+                    'regression_validation':{k:STR if k=='fingerprint' else DICT for k in ('regression_baseline','baseline','validation','candidate','fingerprint','frozen','bundle')},
                     "deduplication": {"duplicate_of": STR, "outcome": STR},
                     "escalation": {"error": STR}, "approval_gate": {"policy_snapshot": DICT}}
 for node_contract in NODES:
@@ -126,6 +129,11 @@ def graph_contracts() -> list[dict]:
             'request_duplicate_check':['repository_search','request_duplicate_check (human duplicate review)'],
             'problem_investigation':['repository_search (bounded additional search)','ticket_enhancement'],
             'finding_validation':['problem_investigation (invalid references; bounded retry)','ticket_finalisation'],
+            'development_admission':['development_admission (waiting for explicit execution approval)','development_setup (operator start)'],
+            'regression_review':['regression_validation','regression_authoring (bounded correction)'],
+            'regression_authoring':['regression_authoring (invalid executable test; bounded correction)','regression_review'],
+            'regression_validation':['regression_authoring (invalid reproduction; bounded correction)','task_planning'],
+            'independent_review':['pull_request_creation','development_delivery (accepted ticket publication approval)','repair'],
             'ticket_finalisation':['ticket_finalisation (review or clarification wait)','repository_search (operator follow-up)',
                                     'development_admission (accepted revision)','ticket_publication (explicit approval)'],
             "evidence_collection": ["completion (clean suite)", "issue_detection (failed reproducible check)",
@@ -133,7 +141,6 @@ def graph_contracts() -> list[dict]:
             "issue_validation": ["deduplication", "blocked (unconfirmed/low confidence)"],
             "deduplication": ["ticket_creation", "completion (already claimed)"],
             "test_execution": ["independent_review", "repair"],
-            "independent_review": ["pull_request_creation", "repair"],
             "repair": ["isolated_implementation (budget remains)", "escalation"],
             "approval_gate": ["merge", "approval_gate (waiting_approval)", "ci_policy_verification (blocked checks)"],
             "merge": ["post_merge_verification", "blocked"],
@@ -181,7 +188,7 @@ def initialise(repo: Path, root: Path, backend: str = "local", trusted_local: bo
     return path
 
 
-class Workflow(InvestigationNodes):
+class Workflow(InvestigationNodes,AcceptedDevelopmentNodes):
     def __init__(self, root: Path):
         self.store = Store(root)
         self.root = self.store.root
@@ -223,6 +230,7 @@ class Workflow(InvestigationNodes):
             return run
         self.run_id = run_id
         config = run["state"]["config"]
+        if run['status']=='ready_for_delivery':return run
         if config.get('run_mode')=='intake' and run['status'] in ('needs_information','duplicate_review',
             'ready_for_review','ready_for_development','development_queued','enhancement_rejected'):
             return run
@@ -357,7 +365,13 @@ class Workflow(InvestigationNodes):
             from .control_repositories import metadata_check
             return metadata_check(path,state['repository'])
         config = state["config"]
-        return run_check(path, config["test_command"], config["trusted_local"], config["command_timeout"], self.cancelled)
+        if config.get('run_mode')=='accepted_development':prepare_dependencies(self,state,path)
+        result=run_check(path, config["test_command"], config["trusted_local"], config["command_timeout"], self.cancelled)
+        if state.get('regression'):
+            regression=run_check(path,state['regression']['argv'],config['trusted_local'],config['command_timeout'],self.cancelled)
+            result.update(regression=regression,passed=result['passed'] and regression['passed'])
+            result['output']+='\nFrozen accepted-ticket regression:\n'+regression['output']
+        return result
 
     def node_repository_discovery(self, state):
         info = discover(Path(state["config"]["repo"]))
@@ -392,6 +406,9 @@ class Workflow(InvestigationNodes):
         frozen_names += [arg for arg in state["config"]["test_command"] if arg in baseline_tracked]
         frozen = {name: digest((path / name).read_bytes().hex()) for name in frozen_names if (path / name).is_file()}
         baseline = self.check(state, path)
+        self.store.event(self.run_id,'evidence_collection','test_result',baseline|{'graph_node':self.store.get(self.run_id)['node']})
+        if baseline['timed_out'] or baseline['empty_suite']:
+            raise ValueError('Baseline timeout/empty suite is not a validated software defect; inspect the test_result event')
         if git(path, "status", "--porcelain"):
             raise ValueError("Baseline test modified the repository; evidence must describe the recorded immutable commit")
         bundle = source_bundle(path, state["repository"]["source_files"] + state["repository"]["test_files"], baseline["output"], limit=10000)
@@ -471,7 +488,7 @@ class Workflow(InvestigationNodes):
     def node_task_planning(self, state):
         plan = self.ask(state, "planning", {"task": "Plan a minimal source-only fix to the validated test failure. Preserve all tests and policy. Select only complete source files from the supplied bundle.",
                         "candidate": state["candidate"], "evidence": state["bundle"]}, PLAN_SCHEMA, "a")
-        complete = {f["path"] for f in state["bundle"]["files"] if f["complete"]}
+        complete = {f["path"] for f in state["bundle"]["files"] if f["complete"] or state['config'].get('run_mode')=='accepted_development'}
         if not set(plan["files"]) <= (set(state["repository"]["source_files"]) & complete) - set(state["frozen"]):
             raise ValueError("Plan requests unapproved or incomplete source files")
         return {"plan": plan}, "model_selection", "ready"
@@ -489,12 +506,23 @@ class Workflow(InvestigationNodes):
         path = self.root / "worktrees" / self.run_id / "implementation"
         wt = Worktree(Path(state["config"]["repo"]), path, branch, state["base_sha"])
         wt.ensure()
-        patch = self.ask(state, "implementation", {"task": "Return COMPLETE replacement content for only planned source files to fix the observed bug. Preserve behavior other than the defect. No test, config, instruction, shell or policy edits.",
-                         "plan": state["plan"], "candidate": state["candidate"],
-                         "evidence": source_bundle(path, state["plan"]["files"] + state["repository"]["test_files"], state["baseline"]["output"], 14000),
-                         "previous_failure": state.get("verification", {}).get("output", "")[-4000:],
-                         "review_feedback": state.get("review", {})}, PATCH_SCHEMA, "a")
-        edits = validate_edits(path, patch["files"], state["plan"]["files"])
+        accepted=state['config'].get('run_mode')=='accepted_development'
+        if accepted:install_regression(path,state['regression'])
+        evidence=source_bundle(path,state['plan']['files']+([state['regression']['path']] if accepted else state['repository']['test_files']),state['validation']['output'] if accepted else state['baseline']['output'],30000 if accepted else 14000)
+        if accepted and any(not f['complete'] for f in evidence['files'] if f['path'] in state['plan']['files']):raise ValueError('Planned source exceeds complete implementation context; split the task')
+        def propose():
+            patch = self.ask(state, "implementation", {"task": ("Return exact old/new source fragment replacements for planned files only. Each old fragment must occur exactly once. The frozen regression must pass after the fix. " if accepted else "Return COMPLETE replacement content for only planned source files to fix the observed bug. ")+"Preserve other behavior. No test, config, instruction, shell or policy edits.",
+                             "plan": state["plan"], "candidate": state["candidate"],
+                             "evidence": evidence,
+                             "previous_failure": state.get("verification", {}).get("output", "")[-4000:],
+                             "review_feedback": state.get("review", {})}, HUNK_SCHEMA if accepted else PATCH_SCHEMA, "a")
+            edits = validate_edits(path, materialize_hunks(path,patch,state['plan']['files']) if accepted else patch["files"], state["plan"]["files"])
+            return {"patch":patch,"edits":edits,"edits_hash":digest(edits)}
+        # Persist validated complete contents before writing so a resumed fragment
+        # proposal never tries to match its old source a second time.
+        proposal=self.store.effect(self.run_id,"accepted_source_proposal-"+str(state["repairs"]),propose,on_uncertain=propose) if accepted else propose()
+        if digest(proposal['edits'])!=proposal['edits_hash']:raise ValueError('Persisted source proposal changed, including by secrets redaction; refusing to apply')
+        patch=proposal["patch"];edits=validate_edits(path,proposal["edits"],state["plan"]["files"])
         # A killed controller may leave its prior proposal applied. Reapplying complete files is idempotent.
         wt.apply(edits)
         return {"worktree": str(path), "branch": branch, "patch": patch}, "test_execution", "ready"
@@ -505,9 +533,10 @@ class Workflow(InvestigationNodes):
             if not (path / name).is_file() or digest((path / name).read_bytes().hex()) != expected:
                 raise ValueError("Frozen regression/policy modified: " + name)
         changed = git(path, "diff", "--no-ext-diff", "--name-only", state["base_sha"]).splitlines()
-        if not changed or not set(changed) <= set(state["plan"]["files"]):
+        new_tests={state['regression']['path']} if state.get('regression') else set()
+        if not changed or not set(changed) <= set(state["plan"]["files"])|new_tests:
             raise ValueError("Unexpected or empty implementation diff")
-        if git(path, "ls-files", "--others", "--exclude-standard"):
+        if set(git(path, "ls-files", "--others", "--exclude-standard").splitlines())-new_tests:
             raise ValueError("Untracked files in worker worktree")
 
     def node_test_execution(self, state):
@@ -525,7 +554,7 @@ class Workflow(InvestigationNodes):
         self.verify_files(state)  # Test processes have no authority to modify protected files.
         if not verification["passed"]:
             return {"verification": verification, "head": "unverified", "diff": ""}, "repair", "ready"
-        head = Worktree(Path(state["config"]["repo"]), path, state["branch"], state["base_sha"]).commit(state["plan"]["files"], self.run_id)
+        head = Worktree(Path(state["config"]["repo"]), path, state["branch"], state["base_sha"]).commit(state["plan"]["files"]+([state['regression']['path']] if state.get('regression') else []), self.run_id)
         diff = git(path, "diff", "--no-ext-diff", "--no-color", state["base_sha"], head)
         if len(diff.encode()) > 18000:
             raise ValueError("Diff exceeds independent review budget; split task")
@@ -554,6 +583,10 @@ class Workflow(InvestigationNodes):
             raise ValueError("Actual selected review model equals implementer; policy requires a different model")
         review["independent_session"] = True
         review["approved"] = review["decision"] == "approve" and not any(f["severity"] in ("critical", "required") for f in review["findings"])
+        if review['approved'] and state['config'].get('run_mode')=='accepted_development' and not state.get('delivery_revision'):
+            from .autonomy import current
+            setting=current(self,state)
+            return {'review':review},'development_delivery','ready' if setting['development'] and setting['publish'] else 'ready_for_delivery'
         return {"review": review}, "pull_request_creation" if review["approved"] else "repair", "ready"
 
     def node_repair(self, state):

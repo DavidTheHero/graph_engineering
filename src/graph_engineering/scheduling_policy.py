@@ -18,6 +18,8 @@ def retry_delay(attempt, base=2, cap=300):
 
 
 def board_status(node, status, paused=False):
+    if status=='cancelled':return 'Cancelled'
+    if status=='ready_for_delivery':return 'Ready for Merge'
     if status in ('completed','no_findings','duplicate'): return 'Done'
     if status in ('escalated','failed'): return 'Failed'
     if paused or status in ('blocked','cancelled'): return 'Blocked'
