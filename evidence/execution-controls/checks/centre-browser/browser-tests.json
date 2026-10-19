@@ -1,0 +1,63 @@
+{
+  "at": "2026-10-19T17:37:15.998Z",
+  "kind": "browser-integration-with-labelled-inference-double",
+  "checks": [
+    {
+      "name": "Ten authoritative board columns including cancellation and three persistent tickets",
+      "passed": true
+    },
+    {
+      "name": "Ticket journey includes actual injected review loop and explicit historical replay",
+      "passed": true
+    },
+    {
+      "name": "Node inspector opens its actual ticket; unapproved merge remains held",
+      "passed": true
+    },
+    {
+      "name": "Ticket animation is correlated to a real persisted scheduler transition",
+      "passed": true
+    },
+    {
+      "name": "Dependency reason, pause/resume and concurrency controls persist in backend",
+      "passed": true
+    },
+    {
+      "name": "Search, triage and browser refresh share persistent backend state",
+      "passed": true
+    },
+    {
+      "name": "Light/dark accessibility and responsive layout at 320–1600px",
+      "passed": true
+    },
+    {
+      "name": "Zero browser console warnings or errors",
+      "passed": true
+    }
+  ],
+  "accessibility": [
+    {
+      "view": "board-dark",
+      "violations": []
+    },
+    {
+      "view": "network-dark",
+      "violations": []
+    },
+    {
+      "view": "monitor-dark",
+      "violations": []
+    },
+    {
+      "view": "board-light",
+      "violations": []
+    },
+    {
+      "view": "board-mobile",
+      "violations": []
+    }
+  ],
+  "errors": [],
+  "browser": "155.0.4283.62",
+  "passed": true
+}

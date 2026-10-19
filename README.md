@@ -51,7 +51,8 @@ the problem and select **Create & Investigate**. The report is saved immediately
 Qwen 4B classifies it and Qwen 27B investigates committed source through OpenCode.
 Compare the original and enhanced ticket, inspect evidence, follow its live graph
 journey, request clarification, and approve the current revision for development
-queue admission or issue publication. Development admission holds execution.
+queue admission or issue publication. Opt-in repository autonomy can dispatch
+accepted revisions through regression, implementation, review and delivery.
 See the [ticket investigation guide](docs/TICKET-INVESTIGATION.md) and
 [actual Phase 3 results](docs/PHASE3-RESULTS.md).
 
@@ -286,9 +287,15 @@ graph_engineering/
   .venv/                     # prepared installation (ignored)
 ```
 
-The current scope is bounded source-only repair driven by existing failing tests.
-Tests/manifests/instructions/CI/security files cannot be changed by workers.
-Dependency installation, new regression-test generation, broad vulnerability
+Accepted natural-language tickets can now enter the existing repair graph under
+an opt-in **Autonomy policy**, with reviewed regression-test generation, immutable
+tests, bounded recovery and optional issue/PR delivery. New repositories remain
+read-only. See [autonomous operation](docs/AUTONOMOUS-DEVELOPMENT.md) for dashboard
+controls and the Windows supervised controller.
+
+The current scope is bounded source repair driven by reproducible test failures.
+Existing tests/manifests/instructions/CI/security files cannot be changed by workers.
+Locked npm installation is opt-in and disables lifecycle scripts. Broad vulnerability
 discovery, semantic issue deduplication, automatic rebasing, merge queues and
 distributed scheduling need further implementation. Automated revisions after
 external GitHub review requests also need implementation; the current repair loop

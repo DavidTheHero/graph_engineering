@@ -1,0 +1,26 @@
+{
+  "metric": {
+    "model_key": "b",
+    "model_id": "docker.io/local/qwen35-4b:8k",
+    "role": "regression_test_support",
+    "run_id": "autonomy-grammar-fix",
+    "attempt": 0,
+    "success": true,
+    "tool_calls": 0,
+    "raw_path": "D:\\git_code\\graph_engineering\\evidence\\execution-controls\\support-workers\\autonomy-grammar-fix\\regression_test_support-0-20cd1fd0\\result.json",
+    "input_bytes": 878,
+    "utc": "2026-10-19T17:26:22.797994+00:00",
+    "opencode_version": "2.0.32",
+    "session_ids": [
+      "ses_eaaccc4e2ffeHu8co4MYcyy33m"
+    ],
+    "latency_seconds": 6.25
+  },
+  "exit_code": 0,
+  "stdout": "{\"type\":\"step_start\",\"timestamp\":1792430785449,\"sessionID\":\"ses_eaaccc4e2ffeHu8co4MYcyy33m\",\"part\":{\"id\":\"prt_1553343a9001jG1l8mcY7H9bgD\",\"sessionID\":\"ses_eaaccc4e2ffeHu8co4MYcyy33m\",\"messageID\":\"msg_155333c63001iumA5PKiJhjQ7k\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1792430788878,\"sessionID\":\"ses_eaaccc4e2ffeHu8co4MYcyy33m\",\"part\":{\"id\":\"prt_155333c63001iumA5PKiJhjQ7k_text-0\",\"sessionID\":\"ses_eaaccc4e2ffeHu8co4MYcyy33m\",\"messageID\":\"msg_155333c63001iumA5PKiJhjQ7k\",\"type\":\"text\",\"text\":\"{\\n  \\\"content\\\": \\\"from invoice import discounted_total\\\\nimport unittest\\\\n\\\\nclass TestDiscount(unittest.TestCase):\\\\n    def test_1(self):\\\\n        self.assertEqual(discounted_total(20000, 10), 18000)\\\\n    def test_2(self):\\\\n        self.assertEqual(discounted_total(2500, 0), 2500)\\\",\\n  \\\"rationale\\\": \\\"Tests match expected discounted_total outputs per task.\\\"\\n}\",\"time\":{\"start\":1792430783593,\"end\":1792430788878}}}\n",
+  "stderr": "",
+  "content": {
+    "content": "from invoice import discounted_total\nimport unittest\n\nclass TestDiscount(unittest.TestCase):\n    def test_1(self):\n        self.assertEqual(discounted_total(20000, 10), 18000)\n    def test_2(self):\n        self.assertEqual(discounted_total(2500, 0), 2500)",
+    "rationale": "Tests match expected discounted_total outputs per task."
+  }
+}

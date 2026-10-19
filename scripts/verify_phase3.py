@@ -1,5 +1,6 @@
 """Repeat backend/browser acceptance checks with separate, observed receipts."""
 import json
+import argparse
 import os
 from pathlib import Path
 import subprocess
@@ -7,7 +8,8 @@ import sys
 import time
 
 root=Path(__file__).resolve().parents[1]
-output=root/'evidence/phase3'
+parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,default=root/'evidence/phase3');args=parser.parse_args()
+output=args.output.resolve()
 output.mkdir(parents=True,exist_ok=True)
 checks=[('unittest',[sys.executable,'-m','unittest','discover','-s','tests','-v'],root),
         ('compile',[sys.executable,'-m','compileall','-q','src','scripts'],root),

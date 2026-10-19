@@ -1,0 +1,63 @@
+{
+  "kind": "browser-acceptance-with-scripted-inference",
+  "at": "2026-10-19T17:37:08.555Z",
+  "checks": [
+    {
+      "name": "Plain-English form returns a durable ticket before inference; exact original preserved",
+      "passed": true
+    },
+    {
+      "name": "Actual graph dispatch, source validation and original/enhanced comparison synchronise",
+      "passed": true
+    },
+    {
+      "name": "Editing appends a revision; acceptance and development admission do not implement code",
+      "passed": true
+    },
+    {
+      "name": "Reload restores accepted content and authoritative development queue",
+      "passed": true
+    },
+    {
+      "name": "Ambiguous reports persist, request clarification and re-enter investigation",
+      "passed": true
+    },
+    {
+      "name": "Repository autonomy consent persists through the real API and browser reload",
+      "passed": true
+    },
+    {
+      "name": "Cancellation remains distinct and cannot accidentally resume or admit development",
+      "passed": true
+    },
+    {
+      "name": "Mobile layout and accessibility remain valid",
+      "passed": true
+    },
+    {
+      "name": "No browser warnings or runtime errors",
+      "passed": true
+    }
+  ],
+  "accessibility": [
+    {
+      "view": "create-form",
+      "violations": []
+    },
+    {
+      "view": "enhanced-ticket",
+      "violations": []
+    },
+    {
+      "view": "autonomy-policy",
+      "violations": []
+    },
+    {
+      "view": "mobile-board",
+      "violations": []
+    }
+  ],
+  "errors": [],
+  "browser": "155.0.4283.62",
+  "passed": true
+}

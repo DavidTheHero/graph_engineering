@@ -1122,6 +1122,7 @@
     "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
     "conditional_edges": [
       "pull_request_creation",
+      "development_delivery (accepted ticket publication approval)",
       "repair"
     ]
   },
@@ -2963,7 +2964,540 @@
     },
     "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
     "conditional_edges": [
-      "development_admission",
+      "development_admission (waiting for explicit execution approval)",
+      "development_setup (operator start)"
+    ]
+  },
+  {
+    "name": "development_setup",
+    "inputs": {
+      "config": {
+        "type": "object"
+      },
+      "enhanced": {
+        "type": "object"
+      },
+      "base_sha": {
+        "type": "string"
+      },
+      "development": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "config": {
+        "type": "object"
+      },
+      "repository": {
+        "type": "object"
+      },
+      "baseline": {
+        "type": "object"
+      },
+      "baseline_path": {
+        "type": "string"
+      },
+      "frozen": {
+        "type": "object"
+      },
+      "bundle": {
+        "type": "object"
+      },
+      "development": {
+        "type": "object"
+      }
+    },
+    "responsible": "deterministic isolated setup",
+    "permissions": "Explicit accepted-revision execution approval; isolated code/tests; publication separately approved",
+    "next": "regression_authoring",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "type": "object"
+        },
+        "enhanced": {
+          "type": "object"
+        },
+        "base_sha": {
+          "type": "string"
+        },
+        "development": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "config",
+        "enhanced",
+        "base_sha",
+        "development",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "type": "object"
+        },
+        "repository": {
+          "type": "object"
+        },
+        "baseline": {
+          "type": "object"
+        },
+        "baseline_path": {
+          "type": "string"
+        },
+        "frozen": {
+          "type": "object"
+        },
+        "bundle": {
+          "type": "object"
+        },
+        "development": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "config",
+        "repository",
+        "baseline",
+        "baseline_path",
+        "frozen",
+        "bundle",
+        "development"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "regression_authoring",
+      "blocked"
+    ]
+  },
+  {
+    "name": "regression_authoring",
+    "inputs": {
+      "bundle": {
+        "type": "object"
+      },
+      "enhanced": {
+        "type": "object"
+      },
+      "repository": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "regression": {
+        "type": "object"
+      },
+      "regression_feedback": {
+        "type": "string"
+      }
+    },
+    "responsible": "A regression test author",
+    "permissions": "Explicit accepted-revision execution approval; isolated code/tests; publication separately approved",
+    "next": "regression_review",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "bundle": {
+          "type": "object"
+        },
+        "enhanced": {
+          "type": "object"
+        },
+        "repository": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bundle",
+        "enhanced",
+        "repository",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "regression": {
+          "type": "object"
+        },
+        "regression_feedback": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "regression",
+        "regression_feedback"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "regression_authoring (invalid executable test; bounded correction)",
+      "regression_review"
+    ]
+  },
+  {
+    "name": "regression_review",
+    "inputs": {
+      "regression": {
+        "type": "object"
+      },
+      "enhanced": {
+        "type": "object"
+      },
+      "bundle": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "regression_review": {
+        "type": "object"
+      },
+      "regression_review_round": {
+        "type": "integer"
+      }
+    },
+    "responsible": "independent B/A regression review",
+    "permissions": "Explicit accepted-revision execution approval; isolated code/tests; publication separately approved",
+    "next": "regression_validation",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "regression": {
+          "type": "object"
+        },
+        "enhanced": {
+          "type": "object"
+        },
+        "bundle": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "regression",
+        "enhanced",
+        "bundle",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "regression_review": {
+          "type": "object"
+        },
+        "regression_review_round": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "regression_review",
+        "regression_review_round"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "regression_validation",
+      "regression_authoring (bounded correction)"
+    ]
+  },
+  {
+    "name": "regression_validation",
+    "inputs": {
+      "regression": {
+        "type": "object"
+      },
+      "regression_review": {
+        "type": "object"
+      },
+      "baseline_path": {
+        "type": "string"
+      },
+      "frozen": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "regression_feedback": {
+        "type": "string"
+      },
+      "regression_validation_round": {
+        "type": "integer"
+      }
+    },
+    "responsible": "independent deterministic regression runner",
+    "permissions": "Explicit accepted-revision execution approval; isolated code/tests; publication separately approved",
+    "next": "task_planning",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "regression": {
+          "type": "object"
+        },
+        "regression_review": {
+          "type": "object"
+        },
+        "baseline_path": {
+          "type": "string"
+        },
+        "frozen": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "regression",
+        "regression_review",
+        "baseline_path",
+        "frozen",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "regression_feedback": {
+          "type": "string"
+        },
+        "regression_validation_round": {
+          "type": "integer"
+        },
+        "regression_baseline": {
+          "type": "object"
+        },
+        "baseline": {
+          "type": "object"
+        },
+        "validation": {
+          "type": "object"
+        },
+        "candidate": {
+          "type": "object"
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "frozen": {
+          "type": "object"
+        },
+        "bundle": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "regression_feedback",
+        "regression_validation_round"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "regression_authoring (invalid reproduction; bounded correction)",
+      "task_planning"
+    ]
+  },
+  {
+    "name": "development_delivery",
+    "inputs": {
+      "verification": {
+        "type": "object"
+      },
+      "review": {
+        "type": "object"
+      },
+      "development": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "issue": {
+        "type": "object"
+      },
+      "delivery_revision": {
+        "type": "integer"
+      }
+    },
+    "responsible": "approved policy or explicit publication",
+    "permissions": "Explicit accepted-revision execution approval; isolated code/tests; publication separately approved",
+    "next": "pull_request_creation",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "verification": {
+          "type": "object"
+        },
+        "review": {
+          "type": "object"
+        },
+        "development": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "verification",
+        "review",
+        "development",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "issue": {
+          "type": "object"
+        },
+        "delivery_revision": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "issue",
+        "delivery_revision"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "pull_request_creation",
       "blocked"
     ]
   }

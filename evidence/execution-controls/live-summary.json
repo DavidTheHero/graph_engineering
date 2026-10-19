@@ -1,0 +1,122 @@
+{
+  "ticket": "GE-B7645158",
+  "run": "a17b622fd52c47eb",
+  "status": "waiting_approval",
+  "node": "approval_gate",
+  "regression_baseline": {
+    "passed": false,
+    "receipts": [
+      {
+        "argv": [
+          "D:\\git_code\\graph_engineering\\.venv\\Scripts\\python.exe",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_graph_a17b622fd52c47eb.py",
+          "-v"
+        ],
+        "cwd": "D:\\git_code\\graph_engineering\\.runtime\\general-ai-agent\\worktrees\\a17b622fd52c47eb\\baseline",
+        "returncode": 1,
+        "output": "test_invalid_percentage_is_rejected (test_graph_a17b622fd52c47eb.DiscountTests) ... ok\r\ntest_percentage_discount_is_applied_to_subtotal (test_graph_a17b622fd52c47eb.DiscountTests) ... FAIL\r\ntest_zero_discount_keeps_subtotal (test_graph_a17b622fd52c47eb.DiscountTests) ... ok\r\n\r\n======================================================================\r\nFAIL: test_percentage_discount_is_applied_to_subtotal (test_graph_a17b622fd52c47eb.DiscountTests)\r\n----------------------------------------------------------------------\r\nTraceback (most recent call last):\r\n  File \"D:\\git_code\\graph_engineering\\.runtime\\general-ai-agent\\worktrees\\a17b622fd52c47eb\\baseline\\tests\\test_graph_a17b622fd52c47eb.py\", line 8, in test_percentage_discount_is_applied_to_subtotal\r\n    self.assertEqual(discounted_total(20000, 10), 18000)\r\nAssertionError: 19990 != 18000\r\n\r\n----------------------------------------------------------------------\r\nRan 3 tests in 0.000s\r\n\r\nFAILED (failures=1)\r\n",
+        "timed_out": false,
+        "duration_seconds": 0.06300000000010186,
+        "output_truncated": false,
+        "passed": false,
+        "empty_suite": false
+      },
+      {
+        "argv": [
+          "D:\\git_code\\graph_engineering\\.venv\\Scripts\\python.exe",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_graph_a17b622fd52c47eb.py",
+          "-v"
+        ],
+        "cwd": "D:\\git_code\\graph_engineering\\.runtime\\general-ai-agent\\worktrees\\a17b622fd52c47eb\\baseline",
+        "returncode": 1,
+        "output": "test_invalid_percentage_is_rejected (test_graph_a17b622fd52c47eb.DiscountTests) ... ok\r\ntest_percentage_discount_is_applied_to_subtotal (test_graph_a17b622fd52c47eb.DiscountTests) ... FAIL\r\ntest_zero_discount_keeps_subtotal (test_graph_a17b622fd52c47eb.DiscountTests) ... ok\r\n\r\n======================================================================\r\nFAIL: test_percentage_discount_is_applied_to_subtotal (test_graph_a17b622fd52c47eb.DiscountTests)\r\n----------------------------------------------------------------------\r\nTraceback (most recent call last):\r\n  File \"D:\\git_code\\graph_engineering\\.runtime\\general-ai-agent\\worktrees\\a17b622fd52c47eb\\baseline\\tests\\test_graph_a17b622fd52c47eb.py\", line 8, in test_percentage_discount_is_applied_to_subtotal\r\n    self.assertEqual(discounted_total(20000, 10), 18000)\r\nAssertionError: 19990 != 18000\r\n\r\n----------------------------------------------------------------------\r\nRan 3 tests in 0.000s\r\n\r\nFAILED (failures=1)\r\n",
+        "timed_out": false,
+        "duration_seconds": 0.06199999999989814,
+        "output_truncated": false,
+        "passed": false,
+        "empty_suite": false
+      }
+    ]
+  },
+  "verification": {
+    "argv": [
+      "D:\\git_code\\graph_engineering\\.venv\\Scripts\\python.exe",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-v"
+    ],
+    "cwd": "D:\\git_code\\graph_engineering\\.runtime\\general-ai-agent\\worktrees\\a17b622fd52c47eb\\implementation",
+    "returncode": 0,
+    "output": "test_invalid_percentage_is_rejected (test_graph_a17b622fd52c47eb.DiscountTests) ... ok\r\ntest_percentage_discount_is_applied_to_subtotal (test_graph_a17b622fd52c47eb.DiscountTests) ... ok\r\ntest_zero_discount_keeps_subtotal (test_graph_a17b622fd52c47eb.DiscountTests) ... ok\r\ntest_invalid_percentage_is_rejected (test_invoice.DiscountTests) ... ok\r\ntest_percentage_discount_is_applied_to_subtotal (test_invoice.DiscountTests) ... ok\r\ntest_zero_discount_keeps_subtotal (test_invoice.DiscountTests) ... ok\r\n\r\n----------------------------------------------------------------------\r\nRan 6 tests in 0.000s\r\n\r\nOK\r\n\nFrozen accepted-ticket regression:\ntest_invalid_percentage_is_rejected (test_graph_a17b622fd52c47eb.DiscountTests) ... ok\r\ntest_percentage_discount_is_applied_to_subtotal (test_graph_a17b622fd52c47eb.DiscountTests) ... ok\r\ntest_zero_discount_keeps_subtotal (test_graph_a17b622fd52c47eb.DiscountTests) ... ok\r\n\r\n----------------------------------------------------------------------\r\nRan 3 tests in 0.000s\r\n\r\nOK\r\n",
+    "timed_out": false,
+    "duration_seconds": 0.10899999999946886,
+    "output_truncated": false,
+    "passed": true,
+    "empty_suite": false,
+    "regression": {
+      "argv": [
+        "D:\\git_code\\graph_engineering\\.venv\\Scripts\\python.exe",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_graph_a17b622fd52c47eb.py",
+        "-v"
+      ],
+      "cwd": "D:\\git_code\\graph_engineering\\.runtime\\general-ai-agent\\worktrees\\a17b622fd52c47eb\\implementation",
+      "returncode": 0,
+      "output": "test_invalid_percentage_is_rejected (test_graph_a17b622fd52c47eb.DiscountTests) ... ok\r\ntest_percentage_discount_is_applied_to_subtotal (test_graph_a17b622fd52c47eb.DiscountTests) ... ok\r\ntest_zero_discount_keeps_subtotal (test_graph_a17b622fd52c47eb.DiscountTests) ... ok\r\n\r\n----------------------------------------------------------------------\r\nRan 3 tests in 0.000s\r\n\r\nOK\r\n",
+      "timed_out": false,
+      "duration_seconds": 0.06300000000010186,
+      "output_truncated": false,
+      "passed": true,
+      "empty_suite": false
+    },
+    "builds": [],
+    "tested_head": "f072bb52da8aef568a2245d84a2a4a663b48a9dd"
+  },
+  "review": {
+    "decision": "approve",
+    "findings": [],
+    "rationale": "The proposed change correctly computes the discount as subtotal_cents * discount_percent // 100 and subtracts it from the subtotal, satisfying the expected behavior and all provided test evidence.",
+    "model": "a",
+    "independent_session": true,
+    "approved": true
+  },
+  "head": "f072bb52da8aef568a2245d84a2a4a663b48a9dd",
+  "gate": {
+    "allowed": false,
+    "reasons": [
+      "human approval missing or stale"
+    ]
+  },
+  "issue": {
+    "number": 1,
+    "url": "local://issues/1",
+    "key": "212372f68999462f31d18f2e053cef22d3343d19d9f5f8a82737f0f674f96b48"
+  },
+  "pr": {
+    "number": 1,
+    "url": "local://pulls/1",
+    "key": "212372f68999462f31d18f2e053cef22d3343d19d9f5f8a82737f0f674f96b48",
+    "head": "f072bb52da8aef568a2245d84a2a4a663b48a9dd"
+  },
+  "backend": "local"
+}

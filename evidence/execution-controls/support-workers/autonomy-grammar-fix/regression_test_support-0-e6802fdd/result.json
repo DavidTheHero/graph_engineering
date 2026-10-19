@@ -1,0 +1,26 @@
+{
+  "metric": {
+    "model_key": "a",
+    "model_id": "qwen3.8-27b",
+    "role": "regression_test_support",
+    "run_id": "autonomy-grammar-fix",
+    "attempt": 0,
+    "success": true,
+    "tool_calls": 0,
+    "raw_path": "D:\\git_code\\graph_engineering\\evidence\\execution-controls\\support-workers\\autonomy-grammar-fix\\regression_test_support-0-e6802fdd\\result.json",
+    "input_bytes": 878,
+    "utc": "2026-10-19T17:26:29.050216+00:00",
+    "opencode_version": "2.0.32",
+    "session_ids": [
+      "ses_eaaccac75ffeXsQRC6p5hER4Nj"
+    ],
+    "latency_seconds": 3.922
+  },
+  "exit_code": 0,
+  "stdout": "{\"type\":\"step_start\",\"timestamp\":1792430790423,\"sessionID\":\"ses_eaaccac75ffeXsQRC6p5hER4Nj\",\"part\":{\"id\":\"prt_1553357170010dgXoRkKuitJje\",\"sessionID\":\"ses_eaaccac75ffeXsQRC6p5hER4Nj\",\"messageID\":\"msg_1553354d3001kTcsTMeJv3Diyk\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1792430792811,\"sessionID\":\"ses_eaaccac75ffeXsQRC6p5hER4Nj\",\"part\":{\"id\":\"prt_1553354d3001kTcsTMeJv3Diyk_text-0\",\"sessionID\":\"ses_eaaccac75ffeXsQRC6p5hER4Nj\",\"messageID\":\"msg_1553354d3001kTcsTMeJv3Diyk\",\"type\":\"text\",\"text\":\"{\\n  \\\"content\\\": \\\"from invoice import discounted_total\\\\nimport unittest\\\\n\\\\nclass TestDiscount(unittest.TestCase):\\\\n    def test_discount(self):\\\\n        self.assertEqual(discounted_total(20000, 10), 18000)\\\\n\\\\n    def test_no_discount(self):\\\\n        self.assertEqual(discounted_total(2500, 0), 2500)\\\",\\n  \\\"rationale\\\": \\\"Tests verify expected discounted total calculations.\\\"\\n}\",\"time\":{\"start\":1792430789849,\"end\":1792430792811}}}\n",
+  "stderr": "",
+  "content": {
+    "content": "from invoice import discounted_total\nimport unittest\n\nclass TestDiscount(unittest.TestCase):\n    def test_discount(self):\n        self.assertEqual(discounted_total(20000, 10), 18000)\n\n    def test_no_discount(self):\n        self.assertEqual(discounted_total(2500, 0), 2500)",
+    "rationale": "Tests verify expected discounted total calculations."
+  }
+}

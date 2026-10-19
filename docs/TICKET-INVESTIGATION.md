@@ -30,9 +30,11 @@ dashboard; do not launch another listener on the same port.
    investigation. Missing evidence can leave the ticket in **Needs Information**.
 7. **Edit enhancement** appends an operator revision. **Accept enhancement** accepts
    that exact revision; editing or reinvestigation clears its acceptance.
-8. **Send to Development Queue** records admission and holds the task. It does
-   **not** start an implementation. The current development engine is test-failure
-   driven: start a separate trusted assisted workflow when implementation is authorised.
+8. Choose **Autonomy policy** for the selected repository to permit development
+   of accepted revisions, optional publication, and locked npm dependency setup.
+   With development enabled, accepting an enhancement dispatches it automatically.
+   With the policy disabled, **Send to Development Queue** holds the ticket until
+   **Start development** explicitly authorises isolated execution.
 9. **Publish GitHub issue** requires the current accepted revision and a named
    publication approval. A local backend offers **Create local issue simulation**
    instead. The issue link appears only after the backend observes the write.
@@ -50,7 +52,15 @@ search, problem investigation, enhancement, reproduction, finding validation,
 finalisation, publication and development admission. Conditional edges return from
 investigation to search and from invalid references to investigation. Human actions
 return waiting tickets to search or route accepted revisions to publication/admission.
-Development admission has no automatic edge into implementation.
+Development admission conditionally enters isolated development under the current
+repository policy or an explicit revision-bound start. The controller adds setup,
+regression authoring, independent regression review, deterministic regression
+validation and delivery nodes to the existing graph. The implementation agent
+receives source edits only; the new regression is frozen before implementation.
+It must fail with an assertion twice at the original commit and pass alongside
+the registered suite after the fix. Non-executable tests, passing regressions,
+environment errors and timeouts block implementation. Invalid proposals get a
+bounded regeneration loop. See [autonomous operation](AUTONOMOUS-DEVELOPMENT.md).
 
 Qwen 4B classifies a bounded report and suggests search terms. Deterministic policy
 sets priority (security P1, otherwise P2 by default), preserving an explicit override.
@@ -93,13 +103,15 @@ unknown identity. An accepted write is not a claim that its asynchronous work co
 |---|---|
 | `POST /api/centre/create-ticket` | `repository_id`, `description`; optional `logs`, `expected`, `context`, `priority`, `related_ticket`, `reproduce`, `trust_execution` |
 | `POST /api/centre/intake-action` | `ticket_id`, exact integer `revision` (0 before enhancement), named `actor`, `action`; action-specific fields below |
+| `POST /api/centre/repository-policy` | `repository_id`, named `actor`, boolean `development`, `publish`, `prepare_dependencies`; all default false |
 | `GET /api/centre/ticket?id=GE-...` | Original, revisions, investigation evidence, timeline, actual worker artifacts |
 | `GET /api/centre` | Shared authoritative board, queues, topology and execution projection |
 | `GET /api/centre/events` | Existing persisted SSE stream; resumable event IDs |
 
 Actions are `accept`, `edit_enhancement` (`changes`), `clarify`/`reinvestigate`
 (`text`), `reject_enhancement`, `mark_duplicate` (`related_ticket`),
-`send_development`, and `publish` (`approve_publication: true`; also
+`send_development`, `start_development` (`trust_execution: true`),
+`publish_development` (`approve_publication: true`), and `publish` (`approve_publication: true`; also
 `simulation: true` for the local backend). Reusing a key with different content
 is rejected. Active worker leases prevent concurrent editing/review.
 
