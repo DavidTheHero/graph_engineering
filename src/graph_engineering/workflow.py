@@ -15,7 +15,7 @@ from .publication import GitHubBackend, LocalBackend, merge_gate
 from .repository import Cancelled, Worktree, discover, git, run_check, source_bundle, tracked, validate_edits
 from .runtime import BusyError, RepoLock, Store, digest, redact, NODE_DEADLINE
 from .investigation import InvestigationNodes, INVESTIGATION_CONTRACTS
-from .accepted_development import AcceptedDevelopmentNodes,CONTRACTS as DEVELOPMENT_CONTRACTS,HUNK_SCHEMA,install_regression,materialize_hunks,prepare_dependencies
+from .accepted_development import AcceptedDevelopmentNodes,CONTRACTS as DEVELOPMENT_CONTRACTS,HUNK_SCHEMA,install_regression,materialize_hunks,prepare_dependencies,troubleshooting_context
 
 
 def obj(properties: dict, required: list[str] | None = None) -> dict:
@@ -105,8 +105,8 @@ REQUIRED_INPUTS = {
     "approval_gate": {"verification": DICT, "plan": DICT, "diff": STR, "candidate": DICT, "base_sha": STR, "pr": DICT},
     "merge": {"worktree": STR, "frozen": DICT, "plan": DICT, "base_sha": STR, "verification": DICT, "review": DICT, "diff": STR, "candidate": DICT},
 }
-OPTIONAL_INPUTS = {"issue_detection": {"validation_feedback": STR},
-                   "isolated_implementation": {"verification": DICT, "review": DICT},
+OPTIONAL_INPUTS = {"regression_authoring":{"development_information":ARRAY}, "task_planning":{"development_information":ARRAY}, "issue_detection": {"validation_feedback": STR},
+                   "isolated_implementation": {"verification": DICT, "review": DICT,"development_information":ARRAY},
                    "completion": {"outcome": STR, "postmerge": DICT, "issue": DICT}}
 OPTIONAL_OUTPUTS = {"evidence_collection": {"outcome": STR},
                     'regression_validation':{k:STR if k=='fingerprint' else DICT for k in ('regression_baseline','baseline','validation','candidate','fingerprint','frozen','bundle')},
@@ -487,7 +487,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes):
 
     def node_task_planning(self, state):
         plan = self.ask(state, "planning", {"task": "Plan a minimal source-only fix to the validated test failure. Preserve all tests and policy. Select only complete source files from the supplied bundle.",
-                        "candidate": state["candidate"], "evidence": state["bundle"]}, PLAN_SCHEMA, "a")
+                        "candidate": state["candidate"], "evidence": state["bundle"],"additional_information":troubleshooting_context(state)}, PLAN_SCHEMA, "a")
         complete = {f["path"] for f in state["bundle"]["files"] if f["complete"] or state['config'].get('run_mode')=='accepted_development'}
         if not set(plan["files"]) <= (set(state["repository"]["source_files"]) & complete) - set(state["frozen"]):
             raise ValueError("Plan requests unapproved or incomplete source files")
@@ -515,7 +515,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes):
                              "plan": state["plan"], "candidate": state["candidate"],
                              "evidence": evidence,
                              "previous_failure": state.get("verification", {}).get("output", "")[-4000:],
-                             "review_feedback": state.get("review", {})}, HUNK_SCHEMA if accepted else PATCH_SCHEMA, "a")
+                             "review_feedback": state.get("review", {}),"additional_information":troubleshooting_context(state)}, HUNK_SCHEMA if accepted else PATCH_SCHEMA, "a")
             edits = validate_edits(path, materialize_hunks(path,patch,state['plan']['files']) if accepted else patch["files"], state["plan"]["files"])
             return {"patch":patch,"edits":edits,"edits_hash":digest(edits)}
         # Persist validated complete contents before writing so a resumed fragment

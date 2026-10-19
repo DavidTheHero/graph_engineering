@@ -28,6 +28,11 @@ dashboard; do not launch another listener on the same port.
    actual source evidence, reproduction receipt, model requests/responses and revision history.
 6. **Provide information** or **Investigate further** queues another bounded
    investigation. Missing evidence can leave the ticket in **Needs Information**.
+   During accepted development, **Provide information** is available only on a
+   blocked ticket. It appends troubleshooting context without changing the accepted
+   revision, retry counters, pause state, or execution position. Select **Retry with
+   backoff** separately when the ticket is ready to run again. A rejected regression
+   review returns to regression authoring with the saved review findings and context.
 7. **Edit enhancement** appends an operator revision. **Accept enhancement** accepts
    that exact revision; editing or reinvestigation clears its acceptance.
 8. Choose **Autonomy policy** for the selected repository to permit development
@@ -91,6 +96,13 @@ within the same registered repository produces a review hold; it never silently
 deletes a report. Semantic deduplication against arbitrary existing GitHub issues
 is not implemented.
 
+The dashboard reports three separate execution limits: node attempts (normally
+two for the current step), ticket retries (three), and implementation repair loops
+(two). These are loop-safety counters, not token, credit, or spending budgets.
+`Attempt budget exhausted` means the current graph node used all of its attempts.
+The ticket remains recoverable while its ticket retry count is below its limit.
+The queue reason includes the independent review or failure that caused the stop.
+
 ## API and persistence
 
 All writes use the existing same-origin loopback session: obtain `/api/session`,
@@ -111,6 +123,8 @@ unknown identity. An accepted write is not a claim that its asynchronous work co
 Actions are `accept`, `edit_enhancement` (`changes`), `clarify`/`reinvestigate`
 (`text`), `reject_enhancement`, `mark_duplicate` (`related_ticket`),
 `send_development`, `start_development` (`trust_execution: true`),
+`development_information` (non-empty `text`, at most 4,000 characters and five
+stored notes on a blocked accepted-development ticket),
 `publish_development` (`approve_publication: true`), and `publish` (`approve_publication: true`; also
 `simulation: true` for the local backend). Reusing a key with different content
 is rejected. Active worker leases prevent concurrent editing/review.

@@ -1,0 +1,11 @@
+{
+  "check": "intake-browser",
+  "argv": [
+    "node",
+    "intake.cjs"
+  ],
+  "returncode": 1,
+  "duration_seconds": 38.10900000000038,
+  "stdout": "PASS Plain-English form returns a durable ticket before inference; exact original preserved\nPASS Actual graph dispatch, source validation and original/enhanced comparison synchronise\nPASS Editing appends a revision; acceptance and development admission do not implement code\nPASS Reload restores accepted content and authoritative development queue\nPASS Ambiguous reports persist, request clarification and re-enter investigation\nPASS Repository autonomy consent persists through the real API and browser reload\nPASS Blocked development accepts troubleshooting context while preserving acceptance and both retry limits\n",
+  "stderr": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.kanban-column[data-status=\"Cancelled\"]').locator('[data-ticket=\"GE-82356C74\"]')\u001b[22m\n\n    at D:\\git_code\\graph_engineering\\tests\\browser\\intake.cjs:96:64 {\n  log: [\n    `  - waiting for locator('.kanban-column[data-status=\"Cancelled\"]').locator('[data-ticket=\"GE-82356C74\"]')`\n  ],\n  name: 'TimeoutError'\n}\n"
+}

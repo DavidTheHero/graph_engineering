@@ -1,0 +1,18 @@
+﻿{
+    "id":  "GE-2CD12338",
+    "run_status":  "blocked",
+    "node":  "regression_authoring",
+    "execution_limits":  {
+                             "step":  "regression_authoring",
+                             "step_used":  2,
+                             "step_limit":  2,
+                             "retries_used":  0,
+                             "retry_limit":  3,
+                             "repairs_used":  0,
+                             "repair_limit":  2,
+                             "exhausted":  true,
+                             "reason":  "Test uses hasattr to check for method existence and fails if missing, which is a weak assertion that does not verify actual deletion behavior, data removal, or permission enforcement as required by acceptance criteria.",
+                             "explanation":  "Step attempt limit reached at regression authoring (2/2). Ticket retries used: 0/3. Last feedback: Test uses hasattr to check for method existence and fails if missing, which is a weak assertion that does not verify actual deletion behavior, data removal, or permission enforcement as required by acceptance criteria."
+                         },
+    "queue_reason":  "Step attempt limit reached at regression authoring (2/2). Ticket retries used: 0/3. Last feedback: Test uses hasattr to check for method existence and fails if missing, which is a weak assertion that does not verify actual deletion behavior, data removal, or permission enforcement as required by acceptance criteria."
+}

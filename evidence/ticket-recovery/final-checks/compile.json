@@ -1,0 +1,15 @@
+{
+  "check": "compile",
+  "argv": [
+    "D:\\git_code\\graph_engineering\\.venv\\Scripts\\python.exe",
+    "-m",
+    "compileall",
+    "-q",
+    "src",
+    "scripts"
+  ],
+  "returncode": 0,
+  "duration_seconds": 0.0470000000022992,
+  "stdout": "",
+  "stderr": ""
+}

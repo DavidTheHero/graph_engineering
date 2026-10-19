@@ -8,7 +8,7 @@ import time
 import uuid
 
 from .runtime import Store, digest, redact
-from .scheduling_policy import retry_delay
+from .scheduling_policy import retry_delay,execution_limits
 
 
 QUEUES = {'high': 'Critical / High Priority', 'normal': 'Normal Priority', 'low': 'Low Priority',
@@ -128,7 +128,8 @@ class Tickets:
         if ticket['lease_owner']: return 'active', 'Worker owns a durable execution lease'
         if ticket.get('cancel') or status=='cancelled': return 'cancelled', 'Cancelled; no further work will be dispatched. Retry explicitly to restart.'
         if status in ('failed', 'escalated') or status in ('blocked','cancelled') and ticket['retries'] >= ticket['max_retries']:
-            return 'dead', 'Retry budget exhausted; human intervention required'
+            limits=execution_limits(ticket)
+            return 'dead', ('Ticket retry limit reached. ' if ticket['retries']>=ticket['max_retries'] else 'Execution escalated. ')+limits['explanation']
         if ticket['paused'] or self.setting('paused', False): return 'paused', 'Admission paused; active steps finish at their checkpoint'
         if status=='ready_for_delivery':return 'approval','Implementation and independent review passed; approve issue/PR publication to continue'
         if ticket['state']['config'].get('run_mode')=='intake':
@@ -140,7 +141,9 @@ class Tickets:
             if status=='ready' and ticket['node']=='manual_intake':return 'intake','Original report saved; queued for investigation'
         if status == 'waiting_approval' and self.store.approved_head(ticket['run_id']) != ticket['state'].get('head'):
             return 'approval', 'Exact tested commit needs human approval'
-        if status in ('blocked', 'cancelled'): return 'investigation', str(ticket['state'].get('error') or status)
+        if status in ('blocked', 'cancelled'):
+            limits=execution_limits(ticket)
+            return 'investigation', limits['explanation'] if limits['exhausted'] else str(ticket['state'].get('error') or status)
         if status == 'scanned':
             if ticket['state']['config'].get('run_mode') == 'metadata':
                 return 'investigation', 'Read-only observations have verified source references; they are not confirmed bugs'
@@ -180,7 +183,13 @@ class Tickets:
                 state.setdefault('attempts', {})[f"{ticket['node']}:{state.get('repairs',0)}"] = 0
                 if state['config'].get('run_mode')=='intake':
                     state['attempts']={key:0 if key.startswith(ticket['node']+':') else count for key,count in state['attempts'].items()}
-                self.db.execute('UPDATE runs SET status=?,cancel=0,state=? WHERE id=?', ('ready',json.dumps(state),run_id))
+                retry_node=ticket['node']
+                if retry_node=='regression_review' and not state.get('regression_review',{}).get('approved'):
+                    retry_node='regression_authoring'
+                    state['regression_review_round']=0
+                    state['attempts'][f"{retry_node}:{state.get('repairs',0)}"] = 0
+                self.db.execute('UPDATE runs SET node=?,status=?,cancel=0,state=? WHERE id=?',
+                                (retry_node,'ready',json.dumps(state),run_id))
                 updates = {'retries':ticket['retries']+1, 'paused':False,
                            'not_before':time.time()+retry_delay(ticket['retries']+1)}
             elif action == 'approve':
@@ -215,7 +224,9 @@ class Tickets:
             for field, value in updates.items():
                 self.db.execute(f'UPDATE tickets SET {field}=?,updated=? WHERE id=?', (value,time.time(),ticket_id))
             result = {'ticket_id':ticket_id, 'action':action, 'accepted':True}
-            self.store._event(run_id, ticket['node'], 'operator_' + action, redact(data | {'ticket_id':ticket_id}))
+            event_data=data|{'ticket_id':ticket_id}
+            if action=='retry':event_data|={'source':ticket['node'],'destination':retry_node}
+            self.store._event(run_id, ticket['node'], 'operator_' + action, redact(event_data))
             self.db.execute('INSERT INTO operator_commands VALUES(?,?,?)', (key,request_hash,json.dumps(result)))
             self.db.commit()
             return result

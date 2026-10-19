@@ -28,6 +28,12 @@ with patch('graph_engineering.scheduler.Workflow',worker):
   assert execute_assignment(home,target,assigned['lease_owner'])==0
 `;
 execFileSync(python,['-c',code,home,id],{cwd:root,windowsHide:true});}
+function blockDevelopment(id){execFileSync(python,['-c',`import sys
+from graph_engineering.tickets import Tickets
+from graph_engineering.report_commands import act
+t=Tickets(sys.argv[1]);x=t.get(sys.argv[2]);act(t,{'ticket_id':x['id'],'revision':x['state']['revision'],'actor':'Browser fixture','action':'start_development','trust_execution':True},'browser-blocked-start')
+t.store.checkpoint(x['run_id'],'regression_authoring',{'attempts':{'regression_authoring:0':2},'error':'Attempt budget exhausted','regression_review':{'approved':False,'findings':[{'severity':'critical','message':'Permission assertions were commented out.'}]}},'regression_authoring','blocked');t.store.close()
+`,home,id],{cwd:root,windowsHide:true});}
 (async()=>{
  const fixture=await serve(),url=`http://127.0.0.1:${fixture.port}`;
  browser=await chromium.launch({channel:process.env.UI_TEST_BROWSER||'msedge',headless:true});receipt.browser=browser.version();
@@ -70,12 +76,24 @@ execFileSync(python,['-c',code,home,id],{cwd:root,windowsHide:true});}
  await page.reload();await page.getByRole('button',{name:'Autonomy policy',exact:true}).click();
  assert(await page.getByLabel('Automatically develop accepted tickets',{exact:true}).isChecked());
  await page.getByRole('button',{name:'Cancel',exact:true}).click();check('Repository autonomy consent persists through the real API and browser reload');
+ blockDevelopment(id);await page.reload();await page.locator(`[data-ticket="${id}"]`).click();
+ await page.getByRole('heading',{name:'Execution retry limits',exact:true}).waitFor();
+ assert.match(await page.locator('#ticket-detail').innerText(),/2\/2/);assert.match(await page.locator('#ticket-detail').innerText(),/0\/3/);
+ assert(await page.getByRole('button',{name:'Provide information',exact:true}).isEnabled());
+ await page.getByRole('button',{name:'Provide information',exact:true}).click();await page.getByLabel('Additional troubleshooting information',{exact:true}).fill('Exercise actual deletion and permission denial, including dependent records.');
+ await page.getByRole('button',{name:'Save information',exact:true}).click();await page.getByText('Information saved.',{exact:false}).waitFor();
+ detail=await(await context.request.get(url+'/api/centre/ticket?id='+id)).json();snapshot=await(await context.request.get(url+'/api/centre')).json();
+ const blocked=snapshot.tickets.find(t=>t.id===id);assert.equal(blocked.run_status,'blocked');assert.equal(blocked.accepted_revision,2);assert.equal(blocked.execution_limits.step_used,2);assert.equal(blocked.execution_limits.retries_used,0);
+ assert.equal(detail.investigation.development_information.length,1);
+ await page.screenshot({path:path.join(output,'blocked-recovery-tested.png'),fullPage:true});await audit(page,'blocked-development');
+ await page.getByRole('button',{name:'Close ticket',exact:true}).click();check('Blocked development accepts troubleshooting context while preserving acceptance and both retry limits');
  await page.locator(`[data-ticket="${ambiguous}"]`).click();await page.getByRole('button',{name:'Cancel task',exact:true}).click();
  await page.waitForFunction(()=>document.querySelector('#ticket-live-status')?.textContent.includes('Cancelled'));
  assert.equal(await page.getByRole('button',{name:'Resume',exact:true}).count(),0);
  assert(await page.getByRole('button',{name:'Send to Development Queue',exact:true}).isDisabled());
  await page.getByRole('button',{name:'Close ticket',exact:true}).click();
  const cancelledColumn=page.locator('.kanban-column[data-status="Cancelled"]');
+ await cancelledColumn.locator(`[data-ticket="${ambiguous}"]`).waitFor({state:'attached'});
  assert.equal(await cancelledColumn.locator(`[data-ticket="${ambiguous}"]`).count(),1);check('Cancellation remains distinct and cannot accidentally resume or admit development');
  await page.screenshot({path:path.join(output,'autonomy-board-tested.png'),fullPage:true});
  await page.setViewportSize({width:320,height:900});await audit(page,'mobile-board');const size=await page.evaluate(()=>({width:innerWidth,page:document.documentElement.scrollWidth}));assert(size.page<=size.width+1);check('Mobile layout and accessibility remain valid');

@@ -39,6 +39,18 @@ scoped follow-up after diagnosis. A cancelled ticket has its own board column an
 queue, never automatically resumes, and requires explicit **Retry with backoff**.
 Pause, cancellation, dependencies and resource locks remain authoritative.
 
+The displayed attempt budget is an execution-loop limit, not a model-token or
+financial budget. The ticket detail shows current node attempts, ticket retries,
+and implementation repair loops separately. A blocked accepted-development ticket
+can receive up to five operator troubleshooting notes through **Provide information**.
+The controller preserves the accepted requirements and all counters, and supplies
+only the three most recent notes (up to 800 characters each) to later regression,
+planning, and implementation workers. Saving a note does not restart work; use
+**Retry with backoff** explicitly unless an already-enabled repository autonomy
+policy independently admits that class of retry. A retry after rejected regression
+review follows the real feedback edge to regression authoring and starts a fresh,
+bounded review loop; it does not re-review the unchanged test.
+
 Locked npm setup runs `npm ci --ignore-scripts --no-audit --no-fund` only inside
 controller-owned worktrees. A successful receipt binds the worktree and lockfile
 hash. A partially populated `node_modules` directory is insufficient evidence of

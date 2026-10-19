@@ -2,6 +2,28 @@
 import math
 
 
+def execution_limits(ticket):
+    from .workflow import REGISTRY
+    state=ticket['state'];config=state['config'];node=ticket['node'];spec=REGISTRY.get(node)
+    key=f"{node}:{state.get('repairs',0)}"
+    if config.get('run_mode')=='intake':
+        key+=f":g{state['intake'].get('generation',0)}:s{state.get('search_round',0)}:v{state.get('validation_round',0)}:r{state.get('revision',0)}"
+    result={'step':node,'step_used':state.get('attempts',{}).get(key,0),
+        'step_limit':min(config.get('max_node_attempts',2),spec.max_attempts if spec else 2),
+        'retries_used':ticket['retries'],'retry_limit':ticket['max_retries'],
+        'repairs_used':state.get('repairs',0),'repair_limit':config.get('max_repairs',2),
+        'exhausted':state.get('error')=='Attempt budget exhausted'}
+    label='Step attempt limit reached at' if result['exhausted'] else 'Step attempts at'
+    explanation=f"{label} {node.replace('_',' ')} ({result['step_used']}/{result['step_limit']}). Ticket retries used: {result['retries_used']}/{result['retry_limit']}."
+    review=state.get('regression_review',{})
+    reason=state.get('regression_feedback') or next((f['message'] for f in review.get('findings',[]) if f.get('severity') in ('critical','required') and not review.get('approved')),'')
+    if not reason:
+        previous=state.get('last_error',{});reason=previous.get('message','') if isinstance(previous,dict) else str(previous or '')
+    result['reason']=reason[:1000]
+    result['explanation']=explanation+(' Last feedback: '+reason[:500] if reason else '')
+    return result
+
+
 def effective_rank(priority, enqueued_at, current, aging_seconds=300):
     if not math.isfinite(aging_seconds) or aging_seconds <= 0:
         raise ValueError('aging_seconds must be positive and finite')

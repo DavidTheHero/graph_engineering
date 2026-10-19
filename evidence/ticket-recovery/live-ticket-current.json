@@ -1,0 +1,24 @@
+{
+  "observed_at": "2026-10-19T23:28:35.9703175+01:00",
+  "ticket_id": "GE-2CD12338",
+  "run_id": "b1d0375b52394984",
+  "status": "blocked",
+  "node": "regression_review",
+  "step_attempts": {
+    "used": 1,
+    "limit": 2
+  },
+  "ticket_retries": {
+    "used": 2,
+    "limit": 3
+  },
+  "implementation_repairs": {
+    "used": 0,
+    "limit": 2
+  },
+  "saved_troubleshooting_notes": 1,
+  "provide_information_visible": true,
+  "provide_information_enabled": true,
+  "current_reason": "Regression review rejected twice; the generated test deleted database rows directly instead of exercising the intended admin deletion API.",
+  "operator_retry_performed_by_this_change": false
+}

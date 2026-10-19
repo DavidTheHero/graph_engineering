@@ -8,7 +8,7 @@ import time
 
 from .dashboard_data import Catalog, EVIDENCE, ROLE_NODES, bounded
 from .runtime import redact
-from .scheduling_policy import board_status, effective_rank
+from .scheduling_policy import board_status, effective_rank,execution_limits
 from .scheduler import required_model, ROLES
 from .tickets import Tickets, QUEUES
 from .workflow import graph_contracts
@@ -117,7 +117,7 @@ def snapshot(home):
                 'run_status':ticket['status'],'node':ticket['node'],'queue':queue,'queue_reason':reason,
                 'effective_rank':effective_rank(ticket['priority'],ticket['created'],time.time()),
                 'dependencies':ticket['dependencies'],'paused':bool(ticket['paused']),'cancel_requested':bool(ticket.get('cancel')),
-                'retries':ticket['retries'],'repairs':state.get('repairs',0),
+                'retries':ticket['retries'],'repairs':state.get('repairs',0),'execution_limits':execution_limits(ticket),
                 'attempts':state.get('attempts',{}),'not_before':ticket['not_before'],
                 'agent':role or 'deterministic','model':current_model,'planned_model':required_model(ticket),
                 'execution_id':ticket['lease_owner'],'started':ticket['lease_started'] if ticket['lease_owner'] else None,
@@ -159,7 +159,7 @@ def ticket_detail(home, ticket_id):
         from .report_store import report
         detail['intake_report']=report(tickets.db,ticket_id)
         detail['investigation']={key:ticket['state'][key] for key in ('triage','retrieved','enhanced',
-            'finding_validation','reproduction','duplicate_candidates','revision','accepted_revision','published_revision','clarifications','development','regression','regression_review','regression_baseline') if key in ticket['state']}
+            'finding_validation','reproduction','duplicate_candidates','revision','accepted_revision','published_revision','clarifications','development','development_information','regression','regression_review','regression_baseline') if key in ticket['state']}
         detail['timeline'] = events(tickets,limit=2000,ticket_id=ticket_id)
         detail['worker_artifacts'] = []
         for call in detail['model_calls'][-12:]:

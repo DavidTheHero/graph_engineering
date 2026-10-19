@@ -677,6 +677,9 @@
         },
         "frozen": {
           "type": "object"
+        },
+        "development_information": {
+          "type": "array"
         }
       },
       "required": [
@@ -862,6 +865,9 @@
         },
         "review": {
           "type": "object"
+        },
+        "development_information": {
+          "type": "array"
         }
       },
       "required": [
@@ -3157,6 +3163,9 @@
         },
         "repairs": {
           "type": "integer"
+        },
+        "development_information": {
+          "type": "array"
         }
       },
       "required": [

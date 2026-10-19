@@ -1,0 +1,11 @@
+{
+  "check": "motion",
+  "argv": [
+    "node",
+    "motion.cjs"
+  ],
+  "returncode": 0,
+  "duration_seconds": 0.0470000000022992,
+  "stdout": "Bezier marker motion: 10 boundary/curve checks passed.\n",
+  "stderr": ""
+}

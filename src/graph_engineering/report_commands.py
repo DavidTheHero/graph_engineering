@@ -21,11 +21,17 @@ def act(tickets,data,key):
         if type(data.get('revision')) is not int or data['revision']!=current:raise ValueError('Ticket revision changed; reload before acting')
         action=data.get('action');actor=data.get('actor','')
         if ticket.get('cancel') or ticket['status']=='cancelled':raise ValueError('Ticket is cancelled. Use Retry with backoff explicitly before another action.')
-        if state['config'].get('run_mode')=='accepted_development' and action!='publish_development':raise ValueError('Development has started with a frozen accepted revision; use pause, cancel or retry to control execution.')
+        if state['config'].get('run_mode')=='accepted_development' and action not in ('publish_development','development_information'):raise ValueError('Development has started with a frozen accepted revision; add troubleshooting information or use pause, cancel or retry to control execution.')
         if not isinstance(actor,str) or not actor.strip() or len(actor)>120:raise ValueError('A named operator is required')
         actor=actor.strip()
         node=ticket['node'];status=ticket['status']
-        if action=='edit_enhancement':
+        if action=='development_information':
+            if state['config'].get('run_mode')!='accepted_development' or status!='blocked':raise ValueError('Troubleshooting information requires a blocked development ticket at a safe checkpoint')
+            text=data.get('text');notes=state.get('development_information',[])
+            if not isinstance(text,str) or not text.strip() or len(text)>4000:raise ValueError('Provide troubleshooting information in 1–4000 characters')
+            if len(notes)>=5:raise ValueError('Five troubleshooting notes already recorded; create a scoped follow-up for further changes')
+            state['development_information']=[*notes,{'text':text,'actor':actor,'at':now()}]
+        elif action=='edit_enhancement':
             content=data.get('changes');allowed={'title','problem_statement','expected_behaviour','observed_behaviour',
                 'root_cause_hypothesis','proposed_solution','acceptance_criteria','validation_plan','reproduction_steps'}
             if not isinstance(content,dict) or not content or not set(content)<=allowed:raise ValueError('Only technical prose and criteria are editable; original report and evidence are immutable')
@@ -89,7 +95,7 @@ def act(tickets,data,key):
         else:raise ValueError('Unsupported intake action')
         db.execute('UPDATE runs SET node=?,status=?,state=?,cancel=0,updated=? WHERE id=?',
                    (node,status,json.dumps(state),now(),ticket['run_id']))
-        db.execute("UPDATE tickets SET paused=0,last_reason='' WHERE id=?",(ticket['id'],))
+        if action!='development_information':db.execute("UPDATE tickets SET paused=0,last_reason='' WHERE id=?",(ticket['id'],))
         tickets.store._event(ticket['run_id'],ticket['node'],'intake_'+action,
             {'actor':actor,'revision':state.get('revision'),'source':ticket['node'],'destination':node,'status':status})
         result={'ticket_id':ticket['id'],'revision':state.get('revision'),'status':status,'accepted':True}

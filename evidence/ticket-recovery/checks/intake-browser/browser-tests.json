@@ -1,0 +1,56 @@
+{
+  "kind": "browser-acceptance-with-scripted-inference",
+  "at": "2026-10-19T18:36:52.704Z",
+  "checks": [
+    {
+      "name": "Plain-English form returns a durable ticket before inference; exact original preserved",
+      "passed": true
+    },
+    {
+      "name": "Actual graph dispatch, source validation and original/enhanced comparison synchronise",
+      "passed": true
+    },
+    {
+      "name": "Editing appends a revision; acceptance and development admission do not implement code",
+      "passed": true
+    },
+    {
+      "name": "Reload restores accepted content and authoritative development queue",
+      "passed": true
+    },
+    {
+      "name": "Ambiguous reports persist, request clarification and re-enter investigation",
+      "passed": true
+    },
+    {
+      "name": "Repository autonomy consent persists through the real API and browser reload",
+      "passed": true
+    },
+    {
+      "name": "Blocked development accepts troubleshooting context while preserving acceptance and both retry limits",
+      "passed": true
+    }
+  ],
+  "accessibility": [
+    {
+      "view": "create-form",
+      "violations": []
+    },
+    {
+      "view": "enhanced-ticket",
+      "violations": []
+    },
+    {
+      "view": "autonomy-policy",
+      "violations": []
+    },
+    {
+      "view": "blocked-development",
+      "violations": []
+    }
+  ],
+  "errors": [],
+  "browser": "155.0.4283.62",
+  "failure": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.kanban-column[data-status=\"Cancelled\"]').locator('[data-ticket=\"GE-82356C74\"]')\u001b[22m\n\n    at D:\\git_code\\graph_engineering\\tests\\browser\\intake.cjs:96:64",
+  "passed": false
+}

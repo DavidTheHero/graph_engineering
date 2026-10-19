@@ -82,6 +82,7 @@ export async function openTicket(ticketId,refresh,journey){
  state.selected=ticketId;const request=++selectedRequest;
  const ticket=state.snapshot.tickets.find(t=>t.id===ticketId);if(!ticket)return;
  const heading=$('#ticket-detail-heading');heading.replaceChildren(el('div','eyebrow',ticket.id+' · '+ticket.repository_name),el('h2','',ticket.title));
+ $('#ticket-actions').replaceChildren();
  $('#ticket-detail').replaceChildren(el('p','empty-copy','Loading persisted execution evidence…'));
  if(!$('#ticket-dialog').open)$('#ticket-dialog').showModal();
  try{
@@ -100,7 +101,10 @@ function renderTicket(ticket,detail,refresh,journey){
  if(!['Done','Failed','Cancelled'].includes(ticket.board_status)&&!ticket.cancel_requested){
   add(ticket.paused?'Resume':'Pause',ticket.paused?'resume':'pause');add('Cancel task','cancel');
  }
- if(['blocked','cancelled','escalated','failed'].includes(ticket.run_status))add('Retry with backoff','retry');
+ if(['blocked','cancelled','escalated','failed'].includes(ticket.run_status)){
+  const retry=add('Retry with backoff','retry'),limits=ticket.execution_limits;
+  if(limits&&limits.retries_used>=limits.retry_limit){retry.disabled=true;retry.title='Ticket retry limit reached. Review the failure and create a scoped follow-up; adding information does not reset limits.';}
+ }
  if(ticket.run_status==='scanned'&&ticket.mode==='scan'){
   const b=el('button','button small quiet','Continue development');b.disabled=!state.control;b.addEventListener('click',()=>formDialog('Continue isolated development',root=>{const trust=field('I approve local execution and scoped implementation for this validated finding','checkbox');root.append(trust.wrapper);return trust;},async trust=>{await command('/api/centre/ticket-action',{ticket_id:ticket.id,action:'develop',trust_execution:trust.input.checked});await refresh();$('#ticket-dialog').close();},'Enable development'));actions.append(b);
  }
@@ -114,6 +118,10 @@ function renderTicket(ticket,detail,refresh,journey){
  if(ticket.demonstration_notice)root.append(el('p','notice',ticket.demonstration_notice));
  const live=el('p','form-note');live.id='ticket-live-status';live.setAttribute('role','status');root.append(live);refreshTicketSummary();
  const status=el('div','detail-status');status.append(tag(ticket.board_status),tag(ticket.priority),tag(human(ticket.category)),tag(ticket.intake&&!ticket.issue?'Local ticket - not published':ticket.backend==='github'?'GitHub-backed':'Local ticket · GitHub simulated'));root.append(status,el('p','detail-description',ticket.description));
+ const limits=ticket.execution_limits;
+ if(limits){root.append(el('h3','','Execution retry limits'),facts([['Current step attempts',`${limits.step_used}/${limits.step_limit}`],['Ticket retries used',`${limits.retries_used}/${limits.retry_limit}`],['Implementation repair loops',`${limits.repairs_used}/${limits.repair_limit}`]]),el('p','form-note','These limits prevent repeated execution loops. They are not token, credit or spending budgets. Retry with backoff follows the graph recovery edge and consumes one ticket retry.'));
+  if(limits.exhausted)root.append(el('p','notice error',limits.explanation));
+ }
  root.append(facts([['Repository',ticket.repository],['Commit',ticket.revision],['Run ID',ticket.run_id],['Current node',human(ticket.node)],['Queue',ticket.queue_reason],['Assigned role',human(ticket.agent)],['Observed current model',ticket.model||'No active model request'],['Execution attempt',ticket.execution_id],['Started',ticket.started?stamp(ticket.started):'Not active'],['Duration',ticket.started?elapsed(ticket.started):'Not active'],['Node attempts',JSON.stringify(ticket.attempts)],['Branch',ticket.branch],['Worktree',ticket.worktree],['Retry / repair count',`${ticket.retries} / ${ticket.repairs}`],['Dependencies',ticket.dependencies.join(', ')||'None']]));
  const links=el('div','detail-links');if(ticket.issue)links.append(safeLink(ticket.issue.url,`Issue #${ticket.issue.number}`));if(ticket.pr)links.append(safeLink(ticket.pr.url,`PR #${ticket.pr.number}`));root.append(links);
  renderIntake(root,actions,ticket,detail,{formDialog,field,selectField},refresh,id=>openTicket(id,refresh,journey));

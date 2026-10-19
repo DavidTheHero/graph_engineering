@@ -73,6 +73,61 @@ class DevelopmentHandoffTests(unittest.TestCase):
         with self.assertRaises(ValueError):act(self.tickets,self.base|{'revision':2,'action':'start_development','trust_execution':True},'unaccepted-start-1')
         self.assertEqual(git(self.repo,'status','--porcelain'),'')
 
+    def test_blocked_development_accepts_context_without_resetting_scope_or_limits(self):
+        act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'context-start-1')
+        self.tickets.store.checkpoint(self.run['id'],'regression_authoring',{'attempts':{'regression_authoring:0':2},'error':'Attempt budget exhausted'},'regression_authoring','blocked')
+        self.tickets.command(self.ticket['ticket_id'],'pause',{},'context-pause-1')
+        request=self.base|{'action':'development_information','text':'Deletion must verify dependent records and actual permission denial.'}
+        first=act(self.tickets,request,'context-save-1');self.assertEqual(first,act(self.tickets,request,'context-save-1'))
+        ticket=self.tickets.get(self.ticket['ticket_id']);state=ticket['state']
+        self.assertEqual(ticket['status'],'blocked');self.assertEqual(state['accepted_revision'],1)
+        self.assertEqual(state['attempts']['regression_authoring:0'],2);self.assertEqual(ticket['retries'],0)
+        self.assertTrue(ticket['paused'])
+        self.assertEqual(len(state['development_information']),1)
+        self.assertEqual(state['development_information'][0]['text'],request['text'])
+        with self.assertRaises(ValueError):act(self.tickets,self.base|{'action':'edit_enhancement','changes':{'title':'Different scope'}},'context-change-scope')
+
+    def test_exhaustion_projection_explains_both_retry_limits(self):
+        from graph_engineering.scheduling_policy import execution_limits
+        act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'limits-start-1')
+        self.tickets.store.checkpoint(self.run['id'],'regression_authoring',{'attempts':{'regression_authoring:0':2},'error':'Attempt budget exhausted',
+            'regression_review':{'approved':False,'findings':[{'severity':'critical','message':'Permission assertion is commented out.'}]}},'regression_authoring','blocked')
+        ticket=self.tickets.get(self.ticket['ticket_id']);limits=execution_limits(ticket)
+        self.assertEqual((limits['step_used'],limits['step_limit'],limits['retries_used'],limits['retry_limit']),(2,2,0,3))
+        reason=self.tickets.queue(ticket)[1]
+        self.assertIn('2/2',reason);self.assertIn('0/3',reason);self.assertIn('Permission assertion is commented out',reason)
+
+    @patch('graph_engineering.workflow.ModelClient.health',return_value={'available':True})
+    def test_saved_context_reaches_next_worker_after_explicit_retry(self,_):
+        act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'worker-context-start')
+        self.tickets.store.checkpoint(self.run['id'],'development_setup',{'error':'Attempt budget exhausted'},'development_setup','blocked')
+        act(self.tickets,self.base|{'action':'development_information','text':'Use real input values 9 and 6.'},'worker-context-note')
+        self.tickets.command(self.ticket['ticket_id'],'retry',{},'worker-context-retry')
+        class ContextDouble(DevelopmentDouble):
+            saw_context=False
+            def invoke(self,role,*args,**kwargs):
+                if role=='regression_test':self.saw_context='Use real input values 9 and 6.' in args[0]
+                return super().invoke(role,*args,**kwargs)
+        flow=Workflow(self.home);worker=ContextDouble();flow.worker=worker
+        try:
+            run=flow.execute(self.run['id']);self.assertEqual(run['status'],'ready_for_delivery',run['state'].get('error'))
+            self.assertTrue(worker.saw_context)
+        finally:flow.store.close()
+
+    def test_review_rejection_retry_returns_to_authoring_with_a_fresh_review_loop(self):
+        act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'review-retry-start')
+        review={'approved':False,'findings':[{'severity':'critical','message':'Test bypasses the public deletion API.'}]}
+        self.tickets.store.checkpoint(self.run['id'],'development_setup',
+            {'regression_review':review,'regression_review_round':2,'error':'Regression review rejected twice; refine the accepted requirement'},
+            'regression_review','blocked')
+        self.tickets.command(self.ticket['ticket_id'],'retry',{},'review-retry-command')
+        ticket=self.tickets.get(self.ticket['ticket_id'])
+        self.assertEqual(ticket['node'],'regression_authoring')
+        self.assertEqual(ticket['status'],'ready')
+        self.assertEqual(ticket['retries'],1)
+        self.assertEqual(ticket['state']['regression_review_round'],0)
+        self.assertEqual(ticket['state']['regression_review'],review)
+
     def test_passing_or_invalid_regression_blocks_implementation(self):
         class PassingRegression(DevelopmentDouble):
             def invoke(self,role,*args,**kwargs):
