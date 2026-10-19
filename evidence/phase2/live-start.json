@@ -1,0 +1,172 @@
+{
+  "kind": "live-local-model-execution",
+  "github_writes": false,
+  "source_before": {
+    "head": "a5488e73ab6a6a161339c49d2c0a157d9e470664",
+    "status_sha256": "942f6fbf12a8b988a0a3deb6d791477d803e383d8ffd881821950c0c7319fecb",
+    "diff_sha256": "1210a2847fbc5d6f560f4b02162696a4c280fd2ba47a563b5c6555ebcfe847ab"
+  },
+  "runs": [
+    {
+      "run_id": "ab798d82f72a64f5",
+      "ticket_id": "GE-B3AA13AB",
+      "mode": "read_only",
+      "revision": "a5488e73ab6a6a161339c49d2c0a157d9e470664",
+      "source_repo": "D:\\git_code\\General_AI_Agent"
+    },
+    {
+      "run_id": "99df79b2f23e65af",
+      "ticket_id": "GE-CED6601A",
+      "mode": "assisted",
+      "revision": "d22ecf67b8d271e22fcae8775d0f667ac523bb1e",
+      "source_repo": "D:\\git_code\\graph_engineering\\.runtime\\phase2-fixtures\\python-invoice"
+    },
+    {
+      "run_id": "ca98f51216bfe76b",
+      "ticket_id": "GE-B0E4AC26",
+      "mode": "assisted",
+      "revision": "e6f0bbe4cd6d8ec4136e2e35cf12bd5287bd6521",
+      "source_repo": "D:\\git_code\\graph_engineering\\.runtime\\phase2-fixtures\\javascript-collections"
+    }
+  ],
+  "health": {
+    "a": {
+      "available": true,
+      "models": [
+        {
+          "id": "qwen3.8-27b",
+          "object": "model",
+          "created": 1792404562,
+          "owned_by": "vllm",
+          "root": "/app/models/Qwen3.8-27B-W4A16-AutoRound",
+          "parent": null,
+          "max_model_len": 150000,
+          "permission": [
+            {
+              "id": "modelperm-876749afb33c62f6",
+              "object": "model_permission",
+              "created": 1792404562,
+              "allow_create_engine": false,
+              "allow_sampling": true,
+              "allow_logprobs": true,
+              "allow_search_indices": false,
+              "allow_view": true,
+              "allow_fine_tuning": false,
+              "organization": "*",
+              "group": null,
+              "is_blocking": false
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "url": "http://192.168.0.60:18020/v1/models",
+          "auth": "absent",
+          "status": 200,
+          "body": {
+            "object": "list",
+            "data": [
+              {
+                "id": "qwen3.8-27b",
+                "object": "model",
+                "created": 1792404562,
+                "owned_by": "vllm",
+                "root": "/app/models/Qwen3.8-27B-W4A16-AutoRound",
+                "parent": null,
+                "max_model_len": 150000,
+                "permission": [
+                  {
+                    "id": "modelperm-876749afb33c62f6",
+                    "object": "model_permission",
+                    "created": 1792404562,
+                    "allow_create_engine": false,
+                    "allow_sampling": true,
+                    "allow_logprobs": true,
+                    "allow_search_indices": false,
+                    "allow_view": true,
+                    "allow_fine_tuning": false,
+                    "organization": "*",
+                    "group": null,
+                    "is_blocking": false
+                  }
+                ]
+              }
+            ]
+          },
+          "latency_seconds": 0.0
+        }
+      ]
+    },
+    "b": {
+      "available": true,
+      "models": [
+        {
+          "id": "huggingface.co/unsloth/qwen3.5-4b-gguf:UD-Q4_K_XL",
+          "object": "model",
+          "created": 1772460497,
+          "owned_by": "docker",
+          "dmr": {
+            "context_window": 262144,
+            "architecture": "qwen35",
+            "parameters": "4.21B",
+            "quantization": "MOSTLY_Q4_K_M",
+            "size": "2.70GiB"
+          }
+        },
+        {
+          "id": "docker.io/local/qwen35-4b:8k",
+          "object": "model",
+          "created": 1772460497,
+          "owned_by": "docker",
+          "dmr": {
+            "context_window": 8192,
+            "architecture": "qwen35",
+            "parameters": "4.21B",
+            "quantization": "MOSTLY_Q4_K_M",
+            "size": "2.70GiB"
+          }
+        }
+      ],
+      "attempts": [
+        {
+          "url": "http://192.168.0.62:18035/v1/models",
+          "auth": "absent",
+          "status": 200,
+          "body": {
+            "object": "list",
+            "data": [
+              {
+                "id": "huggingface.co/unsloth/qwen3.5-4b-gguf:UD-Q4_K_XL",
+                "object": "model",
+                "created": 1772460497,
+                "owned_by": "docker",
+                "dmr": {
+                  "context_window": 262144,
+                  "architecture": "qwen35",
+                  "parameters": "4.21B",
+                  "quantization": "MOSTLY_Q4_K_M",
+                  "size": "2.70GiB"
+                }
+              },
+              {
+                "id": "docker.io/local/qwen35-4b:8k",
+                "object": "model",
+                "created": 1772460497,
+                "owned_by": "docker",
+                "dmr": {
+                  "context_window": 8192,
+                  "architecture": "qwen35",
+                  "parameters": "4.21B",
+                  "quantization": "MOSTLY_Q4_K_M",
+                  "size": "2.70GiB"
+                }
+              }
+            ]
+          },
+          "latency_seconds": 0.016
+        }
+      ]
+    }
+  }
+}

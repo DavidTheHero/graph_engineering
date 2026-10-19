@@ -13,7 +13,7 @@ from urllib.parse import quote
 from .models import ModelClient, ModelError, OpenCodeWorker, default_models, validate_artifact
 from .publication import GitHubBackend, LocalBackend, merge_gate
 from .repository import Cancelled, Worktree, discover, git, run_check, source_bundle, tracked, validate_edits
-from .runtime import RepoLock, Store, digest, redact, NODE_DEADLINE
+from .runtime import BusyError, RepoLock, Store, digest, redact, NODE_DEADLINE
 
 
 def obj(properties: dict, required: list[str] | None = None) -> dict:
@@ -81,6 +81,8 @@ NODES = [
     Node("independent_review", {"diff": STR, "verification": DICT}, {"review": DICT}, "B review or explicit A independent session", "proposal only actual diff", "pull_request_creation", "repair"),
     Node("repair", {"repairs": {"type": "integer"}}, {"repairs": {"type": "integer"}}, "bounded controller loop", "no publication", "isolated_implementation", "escalation"),
     Node("escalation", {"config": DICT}, {"outcome": STR}, "supervisor", "none", "completion", "blocked"),
+    Node('repository_investigation', {'repository':DICT,'bundle':DICT}, {'investigation':DICT,'outcome':STR},
+         'Qwen bounded source investigation', 'proposal only; read-only source references', 'completion'),
     Node("pull_request_creation", {"head": STR, "branch": STR, "review": DICT, "issue": DICT}, {"pr": DICT}, "deterministic backend", "push owned branch/create PR/comment", "ci_policy_verification"),
     Node("ci_policy_verification", {"pr": DICT, "head": STR}, {"policy_snapshot": DICT}, "GitHub API/check receipts", "read checks, reviews, protections", "approval_gate"),
     Node("approval_gate", {"head": STR, "policy_snapshot": DICT, "review": DICT}, {"gate": DICT}, "deterministic head-bound policy", "read approval ledger", "merge"),
@@ -119,7 +121,8 @@ def graph_contracts() -> list[dict]:
         contract["output_schema"] = obj(node.outputs | OPTIONAL_OUTPUTS.get(node.name, {}), list(node.outputs))
         contract["checkpoint"] = "before attempt and after validated output; interrupted effects reconciled"
         contract["conditional_edges"] = {
-            "evidence_collection": ["completion (clean suite)", "issue_detection (failed reproducible check)"],
+            "evidence_collection": ["completion (clean suite)", "issue_detection (failed reproducible check)",
+                                    "repository_investigation (explicit read-only model inspection)"],
             "issue_validation": ["deduplication", "blocked (unconfirmed/low confidence)"],
             "deduplication": ["ticket_creation", "completion (already claimed)"],
             "test_execution": ["independent_review", "repair"],
@@ -204,7 +207,8 @@ class Workflow:
     def cancelled(self) -> bool:
         return bool(self.store.get(self.run_id)["cancel"])
 
-    def execute(self, run_id: str, until: str | None = None, max_nodes: int = 100) -> dict:
+    def execute(self, run_id: str, until: str | None = None, max_nodes: int = 100,
+                single_step: bool = False) -> dict:
         if until is not None and until not in REGISTRY:
             raise ValueError("Unknown graph node")
         run = self.store.get(run_id)
@@ -253,6 +257,8 @@ class Workflow:
                     self.store.checkpoint(run_id, node_name, updates, next_node, status)
                     if status != "ready":
                         return self.store.get(run_id)
+                    if single_step:
+                        return self.store.get(run_id)
                 except Cancelled as exc:
                     self.store.checkpoint(run_id, node_name, {"error": str(exc)}, node_name, "cancelled", "cancelled")
                     return self.store.get(run_id)
@@ -261,9 +267,14 @@ class Workflow:
                     self.store.event(run_id, node_name, "failed", error)
                     if isinstance(exc, CandidateError) and attempts[key] < limit:
                         self.store.checkpoint(run_id, node_name, {"validation_feedback": str(exc)}, "issue_detection", "ready", "candidate_requery")
+                        if single_step:
+                            return self.store.get(run_id)
                         continue
                     if attempts[key] >= limit:
                         self.store.checkpoint(run_id, node_name, {"error": error}, node_name, "blocked", "escalated")
+                        return self.store.get(run_id)
+                    if single_step:
+                        self.store.checkpoint(run_id, node_name, {"last_error": error}, node_name, "ready", "retry_scheduled")
                         return self.store.get(run_id)
                 finally:
                     NODE_DEADLINE.reset(deadline_token)
@@ -290,7 +301,7 @@ class Workflow:
         return selected
 
     def ask(self, state: dict, role: str, prompt: dict, schema: dict, preferred: str) -> dict:
-        model = self.model(state, preferred)
+        model = state["config"].get("model_overrides", {}).get(role) or self.model(state, preferred)
         if model == "b" and "evidence" in prompt:
             evidence = prompt["evidence"]
             prompt = prompt | {"evidence": {"files": [{"path": f["path"], "content": f["content"][:900]}
@@ -303,19 +314,35 @@ class Workflow:
             self.store.event(self.run_id, role, "degraded_routing", {"requested": "b", "selected": "a", "reason": "Task exceeds safe 8K context budget"})
             model = "a"
         try:
-            result = self.worker.invoke(role, encoded, schema, model,
-                                    self.run_id, attempt=state["repairs"], cancelled=self.cancelled)
+            # The actual selected model can differ after context-budget routing.
+            # Kernel ownership also protects that fallback from concurrent calls.
+            with RepoLock(self.root,'inference-model:'+model):
+                self.store.event(self.run_id, role, "model_assigned", {"model_key": model,
+                    "model_id": state["config"]["models"][model].get("model_id"), "role": role,
+                    'graph_node':self.store.get(self.run_id)['node'],
+                    "operation": "OpenCode structured proposal", "request_sha256": digest(prompt)})
+                result = self.worker.invoke(role, encoded, schema, model,
+                                        self.run_id, attempt=state["repairs"], cancelled=self.cancelled)
+        except BusyError as exc:
+            self.store.event(self.run_id,role,'model_capacity_wait',{'model_key':model,
+                'graph_node':self.store.get(self.run_id)['node'],'status':'waiting'})
+            raise ModelError('Actual selected model '+model.upper()+' is occupied; bounded retry or reassignment required') from exc
         except ModelError:
             if self.cancelled():
                 raise Cancelled("Cancelled during worker invocation")
             if self.worker.metrics:
-                self.store.event(self.run_id, role, "model_call", self.worker.metrics[-1])
+                self.store.event(self.run_id, role, "model_call", self.worker.metrics[-1] | {
+                    'graph_node':self.store.get(self.run_id)['node']})
             raise
-        self.store.event(self.run_id, role, "model_call", result["metrics"] | {"artifact": result["raw_path"], "selected_model": model})
+        self.store.event(self.run_id, role, "model_call", result["metrics"] | {"artifact": result["raw_path"], "selected_model": model,
+            'graph_node':self.store.get(self.run_id)['node']})
         self.last_model = model
         return result["content"]
 
     def check(self, state: dict, path: Path) -> dict:
+        if state['config'].get('run_mode') == 'metadata':
+            from .control_repositories import metadata_check
+            return metadata_check(path,state['repository'])
         config = state["config"]
         return run_check(path, config["test_command"], config["trusted_local"], config["command_timeout"], self.cancelled)
 
@@ -334,6 +361,13 @@ class Workflow:
         return {"repository": info, "base_sha": base}, "evidence_collection", "ready"
 
     def node_evidence_collection(self, state):
+        if state['config'].get('run_mode') == 'metadata':
+            baseline = self.check(state,Path(state['config']['repo']))
+            result = {'baseline':baseline,'baseline_path':state['config']['repo'], 'frozen':{},
+                      'bundle':source_bundle(Path(state['config']['repo']),state['repository']['source_files'],baseline['output'],limit=8000)}
+            if baseline['passed'] and state['config'].get('inspect_with_model'):
+                return result,'repository_investigation','ready'
+            return (result | {'outcome':'no_findings'},'completion','ready') if baseline['passed'] else (result,'issue_detection','ready')
         if not state["config"]["trusted_local"]:
             raise PermissionError("Repository execution needs --trust-local-code for trusted repositories")
         path = self.root / "worktrees" / self.run_id / "baseline"
@@ -364,6 +398,20 @@ class Workflow:
                              "evidence": numbered, "validation_feedback": state.get("validation_feedback"),
                              "returncode": state["baseline"]["returncode"]}, CANDIDATE_SCHEMA, "a" if state.get("validation_feedback") else "b")
         return {"candidate": candidate}, "issue_validation", "ready"
+
+    def node_repository_investigation(self,state):
+        schema = obj({'summary':STR,'observations':{'type':'array','minItems':1,'maxItems':3,
+            'items':obj({'file':STR,'line':{'type':'integer','minimum':1},'observation':STR})}})
+        bundle = state['bundle']
+        result = self.ask(state,'investigation',{'task':'Read-only investigation. Describe ONE to THREE concrete observations or questions about the supplied source. Use only displayed file paths and existing line numbers. Do not invent bugs, tests, execution results or commands. These observations require human investigation, not confirmed defects.',
+            'evidence':bundle},schema,'b')
+        snippets = {f['path']:f['content'] for f in bundle['files']}
+        for item in result['observations']:
+            if item['file'] not in snippets or item['line']>len(snippets[item['file']].splitlines()):
+                raise ValueError('Investigation cited an unavailable source reference')
+        result['validated_references'] = True
+        result['confirmed_bug'] = False
+        return {'investigation':result,'outcome':'scanned'},'completion','ready'
 
     def node_issue_validation(self, state):
         candidate = state["candidate"]
@@ -452,9 +500,13 @@ class Workflow:
     def node_test_execution(self, state):
         self.verify_files(state)
         path = Path(state["worktree"])
-        verification = self.check(state, path)
-        builds = [run_check(path, argv, state["config"]["trusted_local"], state["config"]["command_timeout"], self.cancelled)
-                  for argv in state["config"]["build_commands"]]
+        if state['config'].get('parallel_quality') and state['config']['build_commands']:
+            from .quality import parallel_checks
+            verification,builds = parallel_checks(self,state,path)
+        else:
+            verification = self.check(state, path)
+            builds = [run_check(path, argv, state["config"]["trusted_local"], state["config"]["command_timeout"], self.cancelled)
+                      for argv in state["config"]["build_commands"]]
         verification["builds"] = builds
         verification["passed"] = verification["passed"] and all(b["passed"] for b in builds)
         self.verify_files(state)  # Test processes have no authority to modify protected files.

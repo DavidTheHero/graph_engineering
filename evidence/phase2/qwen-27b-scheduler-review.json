@@ -1,0 +1,60 @@
+{
+  "content": {
+    "findings": [
+      {
+        "severity": "blocking",
+        "file": "src/graph_engineering/scheduler.py",
+        "problem": "claim() can dispatch a ticket whose run is already cancelled, because queue() only returns 'cancelled' as an investigation reason when the run status is 'cancelled', but the cancel command sets runs.cancel=1 without changing status when a lease is active, and claim() does not check the cancel flag before dispatching.",
+        "fix": "In claim(), after computing the queue, skip any ticket whose run has cancel=1 or whose status is 'cancelled' before attempting to set a lease."
+      },
+      {
+        "severity": "blocking",
+        "file": "src/graph_engineering/scheduler.py",
+        "problem": "recover() releases the lease and sets not_before to now+2, but does not reset the run status to 'ready' unless the ticket status is 'running'. If a worker is killed while the run status is 'blocked' or 'failed', the run remains in that state and the ticket will be classified as dead/investigation on the next claim, preventing automatic recovery.",
+        "fix": "In recover(), always reset the run status to 'ready' when releasing a lease, not only when the ticket status is 'running'."
+      },
+      {
+        "severity": "blocking",
+        "file": "src/graph_engineering/scheduler.py",
+        "problem": "execute_assignment() catches BaseException and sets the run status to 'blocked', but does not increment the ticket's retries counter. The retry_delay is computed from current['retries']+1, but retries is never incremented in the failure path, so the backoff delay is always based on the same retry count and the ticket will never reach max_retries through automatic failures.",
+        "fix": "In the except block of execute_assignment(), increment the ticket's retries counter before computing the delay and before releasing the lease."
+      },
+      {
+        "severity": "blocking",
+        "file": "src/graph_engineering/scheduler.py",
+        "problem": "claim() uses BEGIN IMMEDIATE but does not hold the lock for the entire dispatch decision. Between the SELECT in tickets.list() and the UPDATE that sets lease_owner, another process could claim the same ticket. The WHERE lease_owner IS NULL guard prevents double-claim, but the capacity and repository checks are computed from a stale snapshot, so two workers could be dispatched to the same repository or exceed model capacity.",
+        "fix": "In claim(), re-read the active tickets and re-validate repository ownership and model capacity immediately before the UPDATE, within the same IMMEDIATE transaction."
+      },
+      {
+        "severity": "blocking",
+        "file": "src/graph_engineering/scheduler.py",
+        "problem": "serve_scheduler() calls recover() with the set of live child PIDs, but recover() only skips tickets whose lease_pid is in protected_pids. If a child process is alive but has not yet acquired its RepoLock, recover() will release its lease and set not_before to now+2, causing the worker to fail its ownership check in execute_assignment() and return 0 without executing.",
+        "fix": "In recover(), only release a lease if the worker process is confirmed dead (poll() is not None) or if the RepoLock is not held by any process. Do not release leases for live child PIDs."
+      },
+      {
+        "severity": "blocking",
+        "file": "src/graph_engineering/scheduler.py",
+        "problem": "execute_assignment() acquires RepoLock before creating Tickets, but Tickets.__init__ opens a new Store/DB connection. If the RepoLock is released by another process between the lock acquisition and the DB write, the lease release UPDATE may fail or be lost. The lease release is not atomic with the lock release.",
+        "fix": "In execute_assignment(), perform the lease release UPDATE before releasing the RepoLock, and ensure the DB transaction is committed before the lock is released."
+      }
+    ]
+  },
+  "raw_path": "D:\\git_code\\graph_engineering\\.runtime\\phase2\\workers\\phase2-recovery-review\\review-0-f49b9166\\result.json",
+  "metrics": {
+    "model_key": "a",
+    "model_id": "qwen3.8-27b",
+    "role": "review",
+    "run_id": "phase2-recovery-review",
+    "attempt": 0,
+    "success": true,
+    "tool_calls": 0,
+    "raw_path": "D:\\git_code\\graph_engineering\\.runtime\\phase2\\workers\\phase2-recovery-review\\review-0-f49b9166\\result.json",
+    "input_bytes": 23625,
+    "utc": "2026-10-19T00:59:27.208512+00:00",
+    "opencode_version": "2.0.32",
+    "session_ids": [
+      "ses_eae5453a5ffeISqYA2j4Oov3yK"
+    ],
+    "latency_seconds": 26.266
+  }
+}

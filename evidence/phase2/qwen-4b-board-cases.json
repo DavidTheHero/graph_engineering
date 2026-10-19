@@ -1,0 +1,84 @@
+{
+  "content": {
+    "cases": [
+      {
+        "node": "NODE",
+        "status": "completed",
+        "paused": true,
+        "expected": "Done"
+      },
+      {
+        "node": "NODE",
+        "status": "no_findings",
+        "paused": true,
+        "expected": "Done"
+      },
+      {
+        "node": "NODE",
+        "status": "duplicate",
+        "paused": true,
+        "expected": "Done"
+      },
+      {
+        "node": "NODE",
+        "status": "failed",
+        "paused": false,
+        "expected": "Failed"
+      },
+      {
+        "node": "NODE",
+        "status": "escalated",
+        "paused": false,
+        "expected": "Failed"
+      },
+      {
+        "node": "NODE",
+        "status": "paused",
+        "paused": true,
+        "expected": "Blocked"
+      },
+      {
+        "node": "NODE",
+        "status": "blocked",
+        "paused": true,
+        "expected": "Blocked"
+      },
+      {
+        "node": "NODE",
+        "status": "waiting_approval",
+        "paused": false,
+        "expected": "Ready for Merge"
+      },
+      {
+        "node": "NODE",
+        "status": "scanned",
+        "paused": false,
+        "expected": "Backlog"
+      },
+      {
+        "node": "NODE",
+        "status": "ready",
+        "paused": false,
+        "expected": "To Do"
+      }
+    ]
+  },
+  "raw_path": "D:\\git_code\\graph_engineering\\.runtime\\phase2\\workers\\phase2-policy-cases\\testing-0-84b95629\\result.json",
+  "metrics": {
+    "model_key": "b",
+    "model_id": "docker.io/local/qwen35-4b:8k",
+    "role": "testing",
+    "run_id": "phase2-policy-cases",
+    "attempt": 0,
+    "success": true,
+    "tool_calls": 0,
+    "raw_path": "D:\\git_code\\graph_engineering\\.runtime\\phase2\\workers\\phase2-policy-cases\\testing-0-84b95629\\result.json",
+    "input_bytes": 628,
+    "utc": "2026-10-19T00:59:27.208512+00:00",
+    "opencode_version": "2.0.32",
+    "session_ids": [
+      "ses_eae5453a5ffejeyeNZgm8nrZXl"
+    ],
+    "latency_seconds": 18.406
+  }
+}

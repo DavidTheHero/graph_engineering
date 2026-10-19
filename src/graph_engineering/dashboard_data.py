@@ -12,7 +12,7 @@ from .runtime import redact
 from .workflow import graph_contracts
 
 
-EVIDENCE = ("candidate", "base_sha", "baseline", "validation", "priority", "plan",
+EVIDENCE = ("candidate", "investigation", "base_sha", "baseline", "validation", "priority", "plan",
             "branch", "head", "verification", "diff", "review", "issue", "pr",
             "policy_snapshot", "gate", "merge", "postmerge", "outcome", "error", "repairs")
 ROLE_NODES = {"investigation": "issue_detection", "planning": "task_planning",
@@ -182,7 +182,7 @@ class Catalog:
             raise KeyError("Unknown source")
         truncated = len(events) > 2000
         events = events[:2000]
-        calls = [e["data"] | {"at": e.get("at"), "node": ROLE_NODES.get(e["data"].get("role"), e["node"])}
+        calls = [e["data"] | {"at": e.get("at"), "node": e['data'].get('graph_node') or ROLE_NODES.get(e["data"].get("role"), e["node"])}
                  for e in events if e["kind"] == "model_call"]
         state = run.get("state", {})
         return redact({"run": summary(run, source), "nodes": nodes,

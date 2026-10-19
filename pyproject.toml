@@ -16,4 +16,4 @@ graph-engineering = "graph_engineering.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-graph_engineering = ["web/*.html", "web/*.css", "web/*.js", "web/*.svg"]
+graph_engineering = ["web/*.html", "web/*.css", "web/*.js", "web/*.svg", "web/vendor/*.js", "web/vendor/*.txt"]

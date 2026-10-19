@@ -95,6 +95,15 @@ def parser() -> argparse.ArgumentParser:
     serve.add_argument("--once", action="store_true", help="process one sweep and return")
     ui = commands.add_parser("ui", help="open a local, read-only workflow dashboard")
     ui.add_argument("--port", type=int, default=8765, help="loopback HTTP port (default: 8765)")
+    dispatch = commands.add_parser('dispatch', help='run the durable priority-aware ticket scheduler')
+    dispatch.add_argument('--workers',type=int,default=2)
+    dispatch.add_argument('--once',action='store_true')
+    worker = commands.add_parser('worker-step',help=argparse.SUPPRESS)
+    worker.add_argument('ticket'); worker.add_argument('owner')
+    centre = commands.add_parser('centre',help='start the operator control centre and scheduler')
+    centre.add_argument('--port',type=int,default=8765)
+    centre.add_argument('--workers',type=int,default=2)
+    centre.add_argument('--attach-controller',action='store_true',help='serve the UI against an existing dispatch service without launching another')
     return result
 
 
@@ -163,6 +172,10 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 run_id = workflow.new_run(args.config.resolve())["id"]
                 if args.command == "enqueue":
+                    from .tickets import Tickets
+                    tickets = Tickets(args.home)
+                    try: tickets.admit(run_id)
+                    finally: tickets.store.close()
                     _emit(_summary(store.get(run_id)))
                     return 0
                 until = "task_planning" if args.command == "scan" else args.until
@@ -204,6 +217,17 @@ def main(argv: list[str] | None = None) -> int:
             if not 1 <= args.port <= 65535:
                 raise ValueError("port must be between 1 and 65535")
             serve_dashboard(args.home, args.port)
+        elif args.command == 'dispatch':
+            from .scheduler import serve_scheduler
+            serve_scheduler(args.home,args.workers,args.once)
+        elif args.command == 'worker-step':
+            from .scheduler import execute_assignment
+            return execute_assignment(args.home,args.ticket,args.owner)
+        elif args.command == 'centre':
+            from .dashboard import serve_centre
+            if not 1 <= args.port <= 65535 or not 1 <= args.workers <= 8:
+                raise ValueError('Invalid port or worker concurrency')
+            serve_centre(args.home,args.port,args.workers,attach_controller=args.attach_controller)
         elif args.command == "seed":
             repositories = seed_repositories(args.output)
             _emit({"repositories": [str(repo) for repo in repositories],

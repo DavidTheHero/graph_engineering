@@ -1,0 +1,111 @@
+.venv/Scripts/python.exe : test_enqueue_persists_ready_run_without_executing_it (test_cli.CLITests) ... ok
+At line:9 char:1
++ .venv/Scripts/python.exe -m unittest discover -s tests -v *> evidence ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (test_enqueue_pe...LITests) ... ok:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+test_evaluate_emits_unknown_values_and_errors_are_redacted (test_cli.CLITests) ... ok
+test_execute_reports_blocked_with_exit_two (test_cli.CLITests) ... ok
+test_invalid_test_argv_and_poll_are_rejected_by_parser (test_cli.CLITests) ... ok
+test_resume_clears_stop_before_execution (test_cli.CLITests) ... ok
+test_serve_only_dispatches_ready_or_exact_head_approved_runs (test_cli.CLITests) ... ok
+test_status_stop_and_exact_head_approval_use_persistent_store (test_cli.CLITests) ... ok
+test_ui_rejects_invalid_port (test_cli.CLITests) ... ok
+test_ui_uses_selected_controller_without_creating_execution_state (test_cli.CLITests) ... ok
+test_attached_ui_does_not_launch_or_own_another_controller (test_control_api.ControlAPITests) ... ok
+test_client_disconnect_does_not_attempt_a_second_error_response (test_control_api.ControlAPITests) ... ok
+test_commands_require_origin_csrf_and_default_repository_to_read_only (test_control_api.ControlAPITests) ... ok
+test_existing_listener_cannot_be_silently_shadowed (test_control_api.ControlAPITests) ... ok
+test_stream_has_persistent_event_ids_and_resumes_after_cursor (test_control_api.ControlAPITests) ... ok
+test_admission_deduplicates_before_creating_an_orphan_run (test_control_recovery.ControlRecoveryTests) ... ok
+test_concurrent_process_claims_respect_global_capacity (test_control_recovery.ControlRecoveryTests) ... ok
+test_context_routing_cannot_bypass_actual_model_capacity (test_control_recovery.ControlRecoveryTests) ... ok
+test_controller_recovery_preserves_live_worker_then_fences_killed_worker (test_control_recovery.ControlRecoveryTests) 
+... ok
+test_review_failure_executes_repair_regression_and_review_without_duplicate_publication 
+(test_control_recovery.ControlRecoveryTests) ... ok
+test_alternate_conventional_test_names_are_protected (test_core.CoreTests) ... ok
+test_checkpoint_and_effect_survive_restart (test_core.CoreTests) ... ok
+test_conflicting_controller_and_path_protection (test_core.CoreTests) ... ok
+test_timeout_terminates_a_real_test_process (test_core.CoreTests) ... ok
+test_unittest_adapter_discovers_tests_directory_without_package (test_core.CoreTests) ... ok
+test_untrusted_code_is_never_executed (test_core.CoreTests) ... ok
+test_worktree_independent_frozen_regression (test_core.CoreTests) ... ok
+test_database_error_is_visible_without_exposing_paths (test_dashboard.DashboardHTTPTests) ... ok
+test_http_assets_api_and_security_boundary (test_dashboard.DashboardHTTPTests) ... ok
+test_archive_is_labelled_and_path_inputs_cannot_escape_catalog (test_dashboard.DashboardTests) ... ok
+test_empty_home_does_not_create_database (test_dashboard.DashboardTests) ... ok
+test_event_history_is_not_silently_cut_to_one_hundred (test_dashboard.DashboardTests) ... ok
+test_failed_tests_and_blocked_cursor_are_not_shown_as_passes (test_dashboard.DashboardTests) ... ok
+test_graph_uses_transitions_after_the_display_history_limit (test_dashboard.DashboardTests) ... ok
+test_live_refresh_reads_new_checkpoints_and_excludes_configuration (test_dashboard.DashboardTests) ... ok
+test_secrets_are_redacted_and_logs_are_bounded (test_dashboard.DashboardTests) ... ok
+test_skipped_nodes_are_not_invented_successes_and_failures_recover (test_dashboard.DashboardTests) ... ok
+test_existing_unmarked_issue_blocks_speculative_duplicate (test_effect_recovery.RecoveryTests) ... ok
+test_reconciliation_missing_marker_never_posts (test_effect_recovery.RecoveryTests) ... ok
+test_uncertain_write_never_blindly_replays_creation (test_effect_recovery.RecoveryTests) ... ok
+test_computes_outcomes_latency_and_baseline_from_observed_receipts (test_evaluation.EvaluationMetricTests) ... ok
+test_empty_measurements_are_unknown_and_no_success_is_invented (test_evaluation.EvaluationMetricTests) ... ok
+test_invalid_measurements_are_rejected (test_evaluation.EvaluationMetricTests) ... ok
+test_partial_truth_does_not_invent_negative_samples (test_evaluation.EvaluationMetricTests) ... ok
+test_refuses_existing_fixture_without_overwriting (test_evaluation.SeedRepositoryTests) ... ok
+test_seeds_two_clean_real_repositories_with_reproduced_defects (test_evaluation.SeedRepositoryTests) ... ok
+test_existing_worktree_from_other_repository_is_refused (test_hardening.HardeningTests) ... Switched to a new branch 
+'graph/task'
+ok
+test_existing_worktree_must_descend_from_baseline (test_hardening.HardeningTests) ... Switched to a new branch 
+'graph/unrelated'
+Switched to branch 'main'
+Preparing worktree (checking out 'graph/unrelated')
+ok
+test_redacts_secrets_with_json_escapes (test_hardening.HardeningTests) ... ok
+test_source_bundle_skips_oversized_files_without_full_read (test_hardening.HardeningTests) ... ok
+test_store_rejects_escaping_run_identifiers (test_hardening.HardeningTests) ... ok
+test_actual_event_shape_parses_and_validates (test_models.ModelBoundaryTests) ... ok
+test_actual_version_prefix (test_models.ModelBoundaryTests) ... ok
+test_cancellation_terminates_actual_child (test_models.ModelBoundaryTests) ... ok
+test_context_limit_before_process_and_unknown_model (test_models.ModelBoundaryTests) ... ok
+test_invalid_response_is_recorded_and_not_success (test_models.ModelBoundaryTests) ... ok
+test_malformed_or_tools_are_rejected (test_models.ModelBoundaryTests) ... ok
+test_unavailable_retries_bounded_and_invalid_models (test_models.ModelBoundaryTests) ... ok
+test_v2_config_and_secrets (test_models.ModelBoundaryTests) ... ok
+test_supervisor_accepted_cases_and_explicit_node_boundaries (test_policy_cases.ModelGeneratedPolicyTests) ... ok
+test_changed_head_never_reaches_merge_endpoint (test_publication.GitHubBackendTests) ... ok
+test_duplicate_markers_block_creation (test_publication.GitHubBackendTests) ... ok
+test_merge_uses_exact_head_and_requires_server_observation (test_publication.GitHubBackendTests) ... ok
+test_observed_unprotected_policy_and_passing_checks_are_known (test_publication.GitHubBackendTests) ... ok
+test_policy_read_error_fails_closed (test_publication.GitHubBackendTests) ... ok
+test_publish_review_posts_comment_for_actual_head (test_publication.GitHubBackendTests) ... ok
+test_record_check_publishes_actual_result_for_exact_head (test_publication.GitHubBackendTests) ... ok
+test_required_check_source_and_unknown_rules_block (test_publication.GitHubBackendTests) ... ok
+test_required_review_requires_independent_current_head_approval (test_publication.GitHubBackendTests) ... ok
+test_uncertain_issue_creation_reconciles_observed_marker (test_publication.GitHubBackendTests) ... ok
+test_dirty_repo_and_changed_pr_head_block_merge (test_publication.LocalBackendTests) ... ok
+test_issue_and_pr_retry_is_idempotent_and_checks_bind_head (test_publication.LocalBackendTests) ... ok
+test_merge_is_real_and_resumes_without_another_commit (test_publication.LocalBackendTests) ... ok
+test_reconciles_merge_that_finished_before_checkpoint (test_publication.LocalBackendTests) ... ok
+test_every_failure_blocks_and_auto_only_allows_low_risk (test_publication.MergeGateTests) ... ok
+test_missing_approval_blocks_and_approval_binds_exact_head (test_publication.MergeGateTests) ... ok
+test_missing_fields_fail_closed (test_publication.MergeGateTests) ... ok
+test_real_child_processes_fan_out_and_join_only_after_every_result (test_quality.ParallelQualityTests) ... ok
+test_atomic_priority_capacity_repository_and_dependency_admission (test_scheduler.SchedulerTests) ... ok
+test_model_capacity_and_unavailable_server_are_explicit_waits (test_scheduler.SchedulerTests) ... ok
+test_one_real_graph_node_checkpoints_without_node_budget_failure (test_scheduler.SchedulerTests) ... ok
+test_same_repository_is_serialized_while_other_repository_continues (test_scheduler.SchedulerTests) ... ok
+test_worker_failure_recovery_preserves_cursor_and_fences_old_owner (test_scheduler.SchedulerTests) ... ok
+test_admission_deduplicates_run_and_validates_dependencies (test_tickets.TicketTests) ... ok
+test_approval_requires_exact_head_and_real_waiting_status (test_tickets.TicketTests) ... ok
+test_dependency_blocks_until_actual_run_completes (test_tickets.TicketTests) ... ok
+test_pause_and_retry_are_idempotent_bounded_commands (test_tickets.TicketTests) ... ok
+test_priority_and_aging_are_deterministic (test_tickets.TicketTests) ... ok
+test_automatic_merge_requires_explicit_trusted_path_scope (test_workflow.WorkflowTests) ... ok
+test_malicious_proposal_is_blocked_and_no_pr_exists (test_workflow.WorkflowTests) ... ok
+test_missing_dependency_is_not_published_as_a_source_bug (test_workflow.WorkflowTests) ... ok
+test_real_git_frozen_regression_approval_merge_and_restart (test_workflow.WorkflowTests) ... ok
+test_unavailable_worker_retry_and_explicit_recovery (test_workflow.WorkflowTests) ... ok
+
+----------------------------------------------------------------------
+Ran 92 tests in 29.093s
+
+OK

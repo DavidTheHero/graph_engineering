@@ -43,6 +43,7 @@ export function renderInspector(detail, contracts, name) {
 }
 
 function testReceipt(label, receipt) {
+  if (receipt?.check_type === 'metadata_only') label = 'Read-only source parsing';
   const card = el('section', 'test-receipt'); card.append(el('h4', '', label));
   if (!receipt) { card.append(el('p', 'muted', 'Not executed')); return card; }
   card.append(badge(receipt.passed === true ? 'completed' : 'failed'));

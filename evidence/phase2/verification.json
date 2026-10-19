@@ -1,0 +1,34 @@
+{
+  "python": {
+    "tests": 92,
+    "passed": true
+  },
+  "control_centre_browser": {
+    "checks": 8,
+    "passed": true,
+    "accessibility_views": 5,
+    "console_errors": []
+  },
+  "motion_checks": 10,
+  "motion_passed": true,
+  "dependency_audit": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "dashboard_url": "http://127.0.0.1:8771",
+  "active_ticket_ids": [
+    "GE-B3AA13AB",
+    "GE-CED6601A",
+    "GE-B0E4AC26"
+  ],
+  "injected_ticket_id": "GE-78065EAE",
+  "github_writes": false,
+  "legacy_browser": {
+    "checks": 12,
+    "passed": true
+  }
+}

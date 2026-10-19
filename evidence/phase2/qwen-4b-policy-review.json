@@ -1,0 +1,30 @@
+{
+  "content": {
+    "decision": "request_changes",
+    "findings": [
+      "Line 32: Syntax error. The line `age = max(0.0, now_ts - queued_ts)\\n` contains a literal newline character inside the string, breaking the Python syntax.",
+      "Line 32: Logic error. The subsequent `if age <= 0:` check is unreachable because the `max(0.0, ...)` function guarantees `age` is always >= 0.0.",
+      "Line 32: Logic error. The `return base_rank` statement is unreachable because the `if age <= 0:` block is dead code.",
+      "Line 32: Logic error. The `return max(0, base_rank - int(age // aging_seconds))` statement is unreachable because the preceding `if` block is dead code.",
+      "Line 63: Logic error. The condition `if status == \"ready\" and node == \"repository_discovery\":` returns \"To Do\". However, the contract states that `Testing`, `Code Review`, and `Ready for Merge` should be mapped. \"To Do\" is not in the contract's explicit list of terminal statuses for this node, and the logic implies a specific state that might conflict with the general \"Ready for Merge\" mapping below it if `node` is not explicitly checked elsewhere. More critically, the contract says 'completed terminal status wins over paused'. The current logic returns \"To Do\" for a specific node, which is a valid mapping, but the variable name `ready` is ambiguous. If the intent is to map 'ready' to 'Ready for Merge' generally, this specific override is confusing. If the intent is to map 'ready' to 'To Do' only for discovery, it should be explicit. However, the most concrete issue is the syntax error preventing execution."
+    ]
+  },
+  "raw_path": "D:\\git_code\\graph_engineering\\.runtime\\phase2\\workers\\scheduler-policy-review\\review-0-f47dbb87\\result.json",
+  "metrics": {
+    "model_key": "b",
+    "model_id": "docker.io/local/qwen35-4b:8k",
+    "role": "review",
+    "run_id": "scheduler-policy-review",
+    "attempt": 0,
+    "success": true,
+    "tool_calls": 0,
+    "raw_path": "D:\\git_code\\graph_engineering\\.runtime\\phase2\\workers\\scheduler-policy-review\\review-0-f47dbb87\\result.json",
+    "input_bytes": 3116,
+    "utc": "2026-10-19T00:49:49.996602+00:00",
+    "opencode_version": "2.0.32",
+    "session_ids": [
+      "ses_eae5d227affes1HQFiCQB5y31h"
+    ],
+    "latency_seconds": 23.0
+  }
+}

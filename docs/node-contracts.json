@@ -173,7 +173,8 @@
     "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
     "conditional_edges": [
       "completion (clean suite)",
-      "issue_detection (failed reproducible check)"
+      "issue_detection (failed reproducible check)",
+      "repository_investigation (explicit read-only model inspection)"
     ]
   },
   {
@@ -1249,6 +1250,93 @@
         }
       },
       "required": [
+        "outcome"
+      ],
+      "additionalProperties": false
+    },
+    "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
+    "conditional_edges": [
+      "completion",
+      "blocked"
+    ]
+  },
+  {
+    "name": "repository_investigation",
+    "inputs": {
+      "repository": {
+        "type": "object"
+      },
+      "bundle": {
+        "type": "object"
+      },
+      "config": {
+        "type": "object"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "repairs": {
+        "type": "integer"
+      }
+    },
+    "outputs": {
+      "investigation": {
+        "type": "object"
+      },
+      "outcome": {
+        "type": "string"
+      }
+    },
+    "responsible": "Qwen bounded source investigation",
+    "permissions": "proposal only; read-only source references",
+    "next": "completion",
+    "failure": "blocked",
+    "timeout_seconds": 120,
+    "max_attempts": 2,
+    "precondition": "Input contract satisfied; repository lock held",
+    "postcondition": "Output schema validated; receipt and next state committed atomically",
+    "evidence": "JSON receipt, input hash, output hash, timestamps, model/process receipts",
+    "escalation": "Invalid/unavailable evidence, permission denial or retry budget exhausted",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "object"
+        },
+        "bundle": {
+          "type": "object"
+        },
+        "config": {
+          "type": "object"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "repairs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "repository",
+        "bundle",
+        "config",
+        "task_id",
+        "repairs"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "investigation": {
+          "type": "object"
+        },
+        "outcome": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "investigation",
         "outcome"
       ],
       "additionalProperties": false

@@ -1,0 +1,25 @@
+{
+  "wheel": "graph_engineering-0.1.0-py3-none-any.whl",
+  "sha256": "c790bf8c136cca52fbf523c009a136e46cf21b1449a378193cff563a576b95df",
+  "bundled_assets": [
+    "graph_engineering/web/app.js",
+    "graph_engineering/web/centre-board.js",
+    "graph_engineering/web/centre-dialogs.js",
+    "graph_engineering/web/centre-motion.js",
+    "graph_engineering/web/centre-network.js",
+    "graph_engineering/web/centre-state.js",
+    "graph_engineering/web/centre.css",
+    "graph_engineering/web/centre.html",
+    "graph_engineering/web/centre.js",
+    "graph_engineering/web/cytoscape-host.css",
+    "graph_engineering/web/details.js",
+    "graph_engineering/web/dom.js",
+    "graph_engineering/web/favicon.svg",
+    "graph_engineering/web/graph.js",
+    "graph_engineering/web/index.html",
+    "graph_engineering/web/style.css",
+    "graph_engineering/web/vendor/cytoscape.js",
+    "graph_engineering/web/vendor/cytoscape.js.LEGAL.txt"
+  ],
+  "passed": true
+}

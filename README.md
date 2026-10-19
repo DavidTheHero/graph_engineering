@@ -44,7 +44,38 @@ source without installation, set `PYTHONPATH` to this project's `src` directory
 and run `python -m graph_engineering`. Other OpenCode versions are rejected until
 their source/schema and real provider invocation have been verified.
 
-## Visual workflow dashboard
+## Live engineering control centre
+
+```powershell
+cd D:\git_code\graph_engineering
+.\.venv\Scripts\graph-engineering.exe --home .runtime/general-ai-agent centre --port 8771 --workers 2
+```
+
+Open **[http://127.0.0.1:8771](http://127.0.0.1:8771)**. The Ticket Board,
+Network, and Queues & Workers views share persistent backend state. Connect a
+repository, inspect it, then choose **Start workflow**. New repositories default
+to read-only source inspection. Development requires explicit trust of local
+code execution; GitHub publication follows the repository's existing configuration.
+
+Select a ticket and **View ticket journey** to follow its recorded path and replay
+its history. The network shows real conditional routes, repair loops, queues,
+model assignments and concurrent executions. Markers move only for persisted
+backend transitions. Closing the browser does not stop the controller.
+
+On 19 October, the new scheduler ran **nine actual Qwen calls through OpenCode**:
+4B investigated `General_AI_Agent` and investigated/reviewed two disposable
+repositories; 27B planned and implemented both fixes. Both frozen regression suites
+passed and both local PRs stopped for human approval. Four cross-ticket model-call
+overlaps were observed. The General repository's uncommitted work was preserved.
+Its source observations remain unconfirmed, clearly distinguished from bugs.
+
+A separate, labelled test-double demonstration exercises the review/repair loop
+and parallel quality checks. No new live GitHub operations were performed in this
+phase. See the [control-centre guide and acceptance evidence](docs/CONTROL-CENTRE.md).
+
+![Live clustered network](evidence/phase2/network-overview.png)
+
+## Earlier read-only evidence dashboard
 
 ```powershell
 .\.venv\Scripts\graph-engineering.exe ui
@@ -228,6 +259,15 @@ graph_engineering/
     models.py                # probes, V2 config and isolated OpenCode sessions
     publication.py           # local and live backends; independent merge gates
     evaluation.py            # real defect seeds and measured evaluation
+    tickets.py               # persistent ticket metadata and idempotent commands
+    scheduling_policy.py     # deterministic priority, aging, status and backoff
+    scheduler.py             # subprocess node leases, capacity and crash recovery
+    control_repositories.py  # registration and pinned, isolated repository snapshots
+    control_api.py           # protected operator command dispatch
+    centre_data.py           # shared board/network/event projection
+    quality.py               # explicitly opted-in quality fan-out and fan-in
+    dashboard.py             # loopback operator API, SSE and bundled web assets
+    web/                     # board, graph, inspectors, replay and local Cytoscape
   tests/                     # unit, integration and failure injection
   scripts/                   # repeatable demos, probes, verification and recovery
   configs/                   # repository and V2 examples

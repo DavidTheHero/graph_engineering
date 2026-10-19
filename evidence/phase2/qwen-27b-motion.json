@@ -1,0 +1,23 @@
+{
+  "content": {
+    "code": "export function quadraticPoint(start, control, end, progress) {\n  const t = clampProgress(progress);\n  const s = point(start);\n  const c = point(control);\n  const e = point(end);\n  const u = 1 - t;\n  return {\n    x: u * u * s.x + 2 * u * t * c.x + t * t * e.x,\n    y: u * u * s.y + 2 * u * t * c.y + t * t * e.y\n  };\n}\n\nfunction clampProgress(progress) {\n  if (typeof progress !== 'number' || !Number.isFinite(progress)) {\n    throw new TypeError('progress must be a finite number');\n  }\n  return Math.min(1, Math.max(0, progress));\n}\n\nfunction point(p) {\n  if (typeof p !== 'object' || p === null) {\n    throw new TypeError('point must be an object with numeric x and y');\n  }\n  if (typeof p.x !== 'number' || !Number.isFinite(p.x)) {\n    throw new TypeError('point.x must be a finite number');\n  }\n  if (typeof p.y !== 'number' || !Number.isFinite(p.y)) {\n    throw new TypeError('point.y must be a finite number');\n  }\n  return p;\n}"
+  },
+  "raw_path": "D:\\git_code\\graph_engineering\\.runtime\\phase2\\workers\\phase2-ticket-motion\\implementation-0-b6b9aa97\\result.json",
+  "metrics": {
+    "model_key": "a",
+    "model_id": "qwen3.8-27b",
+    "role": "implementation",
+    "run_id": "phase2-ticket-motion",
+    "attempt": 0,
+    "success": true,
+    "tool_calls": 0,
+    "raw_path": "D:\\git_code\\graph_engineering\\.runtime\\phase2\\workers\\phase2-ticket-motion\\implementation-0-b6b9aa97\\result.json",
+    "input_bytes": 515,
+    "utc": "2026-10-19T01:04:44.568379+00:00",
+    "opencode_version": "2.0.32",
+    "session_ids": [
+      "ses_eae4f7c1bffeXptK5L6ITPZ43x"
+    ],
+    "latency_seconds": 8.844
+  }
+}

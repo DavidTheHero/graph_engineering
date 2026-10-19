@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Engineering Control Centre · Graph Engineering</title>
+  <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/centre.css">
+  <link id="__________cytoscape_stylesheet" rel="stylesheet" href="/cytoscape-host.css">
+  <script type="module" src="/centre.js"></script>
+</head>
+<body>
+  <a class="skip" href="#workspace">Skip to workspace</a>
+  <header class="app-header">
+    <a class="identity" href="/"><img src="/favicon.svg" width="32" height="32" alt=""><span>graph <b>engineering</b></span></a>
+    <span class="workspace-label">ENGINEERING CONTROL CENTRE</span>
+    <div class="header-right"><span id="stream-status" role="status">Connecting…</span><button id="theme" class="icon-button" aria-label="Toggle dark mode">◐</button><a class="quiet-link" href="/legacy">Run evidence ↗</a></div>
+  </header>
+  <main id="workspace">
+    <div class="heading-row"><div><div class="eyebrow">LOCAL WORKSPACE</div><h1>Engineering, in motion.</h1><p class="subheading">Every ticket. Every worker. Every decision.</p></div><div id="model-health" class="health-row"></div></div>
+    <div id="centre-error" class="notice error" role="alert" hidden></div>
+    <div id="viewer-note" class="notice" hidden>Read-only viewer. Start <code>graph-engineering centre</code> to enable operator commands.</div>
+    <section class="command-bar" aria-label="Repository and workflow controls">
+      <div class="repository-picker"><label for="repository">Repository</label><select id="repository"><option value="all">All repositories</option></select></div>
+      <button id="register-repository" class="button quiet">+ Connect repository</button><button id="inspect-repository" class="button quiet">Inspect</button>
+      <div class="command-spacer"></div><button id="worker-capacity" class="button quiet">Worker limit</button><button id="pause-scheduler" class="button quiet">Pause admission</button><button id="start-workflow" class="button primary">+ Start workflow</button>
+    </section>
+    <div class="workspace-toolbar"><nav class="view-tabs" aria-label="Workspace views">
+      <button data-view="board" aria-current="page">▦ Ticket board <span id="ticket-total">0</span></button>
+      <button data-view="network">⌘ Network</button><button data-view="monitor">◫ Queues & workers</button>
+    </nav><div class="workspace-summary" id="scheduler-summary"></div></div>
+    <section class="filter-bar" aria-label="Filter tickets">
+      <label class="search-field"><span class="sr-only">Search tickets</span><input id="ticket-search" type="search" placeholder="Search ticket, title, branch or run…"></label>
+      <select id="priority-filter" aria-label="Priority"><option value="all">All priorities</option><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select>
+      <select id="model-filter" aria-label="Assigned model"><option value="all">All models</option><option value="a">Qwen 27B</option><option value="b">Qwen 4B</option><option value="tool">Deterministic tools</option></select>
+      <select id="category-filter" aria-label="Issue type"><option value="all">All issue types</option></select>
+      <select id="agent-filter" aria-label="Agent role"><option value="all">All agents</option><option value="investigation">Investigation</option><option value="planning">Planning</option><option value="implementation">Implementation</option><option value="review">Review</option><option value="deterministic">Deterministic</option></select>
+      <select id="severity-filter" aria-label="Severity"><option value="all">All severities</option><option>critical</option><option>high</option><option>medium</option><option>low</option></select>
+      <select id="board-filter" aria-label="Ticket status"><option value="all">All statuses</option></select>
+      <label class="group-control">Group <select id="group-by" aria-label="Group tickets"><option value="none">None</option><option value="repository_name">Repository</option><option value="priority">Priority</option><option value="category">Issue type</option><option value="severity">Severity</option><option value="model">Current model</option><option value="agent">Agent</option><option value="board_status">Status</option><option value="run_id">Workflow run</option></select></label>
+    </section>
+    <section id="board-view" aria-label="Ticket board"><div id="board" class="board-scroll" tabindex="0" aria-label="Kanban columns. Scroll horizontally for all statuses."></div></section>
+    <section id="network-view" hidden aria-label="Execution network">
+      <div class="network-toolbar"><span class="network-title">Live orchestration network</span><span id="network-mode" class="tag">Overview</span><button id="clear-journey" class="button small quiet" hidden>Clear journey</button><div class="command-spacer"></div><button id="network-fit" class="button small quiet">Fit view</button><button id="network-zoom-in" class="button small quiet" aria-label="Zoom in">+</button><button id="network-zoom-out" class="button small quiet" aria-label="Zoom out">−</button><button id="network-layout" class="button small quiet">Auto layout</button><button id="network-save" class="button small quiet">Save layout</button></div>
+      <div class="network-layout"><div class="network-surface"><div id="network" role="img" aria-label="Live clustered graph. Use the node inspector list for keyboard access."></div><div class="network-key"><span>● Ticket</span><span>◎ Active execution</span><span>┄ Feedback route</span><span>Drag nodes · scroll to zoom · double-click cluster to collapse</span></div><div id="graph-loading" class="graph-loading" hidden>Loading graph…</div></div>
+        <aside class="node-inspector"><label for="node-picker">Inspect a node or queue</label><select id="node-picker"><option value="">Choose a node…</option></select><details><summary>Collapse functional groups</summary><div id="cluster-controls"></div></details><div id="node-inspector"><h2>Follow the work</h2><p>Select a processing node, a queue, or a ticket marker. Only observed execution events animate tickets.</p></div></aside></div>
+      <section id="replay" class="replay-bar" hidden><div><strong id="journey-title">Ticket journey</strong><span id="replay-label">Live position</span></div><button id="replay-play" class="button small quiet">▶ Replay history</button><label class="sr-only" for="replay-cursor">Historical event</label><input id="replay-cursor" type="range" min="0" max="0" value="0"><button id="replay-live" class="button small primary">Return to live</button></section>
+    </section>
+    <section id="monitor-view" hidden aria-label="Queue and worker monitoring"><div id="monitor"></div></section>
+    <section class="console-section" aria-label="Live execution console"><div class="console-heading"><h2>Execution console</h2><span id="console-count">Waiting for events</span><button id="console-toggle" class="button small quiet" aria-expanded="true">Collapse</button></div><ol id="live-console" tabindex="0" class="live-console" aria-label="Recent backend events"></ol></section>
+    <footer class="app-footer"><span>Local execution · Persistent state · Policy-controlled delivery</span><span id="snapshot-time"></span></footer>
+  </main>
+  <dialog aria-labelledby="dialog-title" id="operator-dialog" class="operator-dialog"><form id="operator-form" method="dialog"><div class="dialog-header"><h2 id="dialog-title"></h2><button type="button" id="dialog-close" class="icon-button" aria-label="Close dialog">×</button></div><div id="dialog-fields"></div><p id="dialog-error" class="inline-error" role="alert" hidden></p><div class="dialog-footer"><button id="dialog-cancel" type="button" class="button quiet">Cancel</button><button id="dialog-submit" type="submit" class="button primary">Continue</button></div></form></dialog>
+  <dialog aria-labelledby="ticket-detail-heading" id="ticket-dialog" class="ticket-dialog"><div class="ticket-dialog-header"><div id="ticket-detail-heading"></div><button id="ticket-close" class="icon-button" aria-label="Close ticket">×</button></div><div id="ticket-actions" class="ticket-actions"></div><div id="ticket-detail" class="ticket-detail"></div></dialog>
+  <div id="toast" role="status" class="toast" hidden></div>
+</body>
+</html>

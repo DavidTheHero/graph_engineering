@@ -118,6 +118,7 @@ class Store:
         version = self.db.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
         if version != 1:
             raise RuntimeError(f"Unsupported database version: {version}")
+        self.ticket_events = bool(self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='tickets'").fetchone())
 
     def close(self):
         self.db.close()
@@ -144,6 +145,11 @@ class Store:
         return [self.get(r[0]) for r in self.db.execute("SELECT id FROM runs ORDER BY created")]
 
     def _event(self, run_id: str, node: str, kind: str, data: dict):
+        if self.ticket_events:
+            ticket = self.db.execute('SELECT id,lease_owner FROM tickets WHERE run_id=?',(run_id,)).fetchone()
+            if ticket:
+                data = {'ticket_id':ticket['id'],'execution_attempt_id':ticket['lease_owner'],
+                        'parent_task_id':ticket['id']} | data
         self.db.execute("INSERT INTO events(run_id,at,node,kind,data) VALUES(?,?,?,?,?)",
                         (run_id, now(), node, kind, json.dumps(redact(data))))
 
