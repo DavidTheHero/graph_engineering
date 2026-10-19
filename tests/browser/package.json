@@ -4,7 +4,8 @@
   "scripts": {
     "test": "node dashboard.cjs",
     "build:graph": "esbuild vendor-entry.mjs --bundle --format=esm --minify --legal-comments=linked --outfile=../../src/graph_engineering/web/vendor/cytoscape.js",
-    "test:centre": "node centre.cjs"
+    "test:centre": "node centre.cjs",
+    "test:intake": "node intake.cjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

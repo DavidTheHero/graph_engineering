@@ -3,6 +3,10 @@ import {quadraticPoint} from './centre-motion.js';
 import {state,$,el,human,tag,shortModel,elapsed,toast} from './centre-state.js';
 
 const positions={
+ manual_intake:[-1020,-600],request_triage:[-500,-660],request_duplicate_check:[-260,-600],
+ repository_search:[400,-850],problem_investigation:[690,-700],ticket_enhancement:[960,-520],
+ reproduction_check:[1100,330],finding_validation:[1140,520],ticket_finalisation:[-1100,750],
+ ticket_publication:[-900,910],development_admission:[-400,800],
  repository_discovery:[-850,-320],evidence_collection:[-650,-240],issue_detection:[-780,-100],
  issue_validation:[-330,-220],deduplication:[-160,-330],ticket_creation:[50,-280],prioritisation:[30,-100],
  repository_investigation:[360,-560],task_planning:[400,-340],model_selection:[610,-260],isolated_implementation:[830,70],
@@ -69,7 +73,7 @@ export function renderNetwork(data,tickets,select,inspect){
    data.topology.nodes.forEach(n=>{const [x,y]=positions[n.id]||[0,0];cy.add({group:'nodes',data:{id:n.id,label:n.label,parent:'cluster:'+n.cluster,tooltip:n.contract.responsible},position:saved[n.id]||{x,y},classes:'station'});});
    data.topology.queues.forEach((q,i)=>cy.add({group:'nodes',data:{id:q.id,label:q.label,parent:'cluster:classification'},position:saved[q.id]||{x:-250+(i%3)*220,y:70+Math.floor(i/3)*120},classes:'queue'}));
    for(const model of ['a','b'])cy.add({group:'nodes',data:{id:'model:'+model,label:model==='a'?'Qwen 3.8 · 27B':'Qwen 3.5 · 4B',parent:'cluster:engineering'},position:saved['model:'+model]||{x:positions['model:'+model][0],y:positions['model:'+model][1]},classes:'model'});
-   data.topology.edges.forEach(e=>{cy.add({group:'edges',data:e,classes:e.source===e.target?'self-loop':['repair','escalation','issue_detection'].includes(e.target)&&e.source!=='evidence_collection'?'feedback':''});});
+   data.topology.edges.forEach(e=>{cy.add({group:'edges',data:e,classes:e.source===e.target?'self-loop':['repair','escalation','issue_detection','repository_search','problem_investigation'].includes(e.target)&&e.source!=='evidence_collection'?'feedback':''});});
   });
   const picker=$('#node-picker');picker.replaceChildren(el('option','','Choose a node…'));
   for(const n of [...data.topology.nodes,...data.topology.queues]){const o=el('option','',n.label);o.value=n.id;picker.append(o);}

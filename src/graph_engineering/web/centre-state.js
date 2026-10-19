@@ -2,7 +2,7 @@ import {el} from './dom.js';
 export {el};
 export const $ = selector => document.querySelector(selector);
 export const columns = ['Backlog','To Do','In Progress','Blocked','Testing','Code Review','Ready for Merge','Done','Failed'];
-export const categories = ['bug','security','performance','refactoring','test_coverage','technical_debt','documentation','feature','build_ci','architecture_investigation'];
+export const categories = ['bug','security','performance','reliability','refactoring','test_coverage','technical_debt','documentation','feature','build_ci','architecture_investigation'];
 export const state = {snapshot:null,selected:null,detail:null,view:'board',events:[],control:false,csrf:null,replaying:false};
 export const human = value => String(value ?? '').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
 export const shortModel = value => value?.includes('qwen3.8') ? 'Qwen 27B' : value?.includes('qwen35') || value?.includes('qwen3.5') ? 'Qwen 4B' : value || 'Not assigned';

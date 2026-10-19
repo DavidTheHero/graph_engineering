@@ -25,7 +25,7 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
           "/details.js": ("details.js", "text/javascript; charset=utf-8"),
           "/dom.js": ("dom.js", "text/javascript; charset=utf-8"),
           "/favicon.svg": ("favicon.svg", "image/svg+xml")}
-for asset in ('centre.js','centre-state.js','centre-board.js','centre-network.js','centre-dialogs.js','centre-motion.js'):
+for asset in ('centre.js','centre-state.js','centre-board.js','centre-network.js','centre-dialogs.js','centre-motion.js','centre-intake.js'):
     ASSETS['/'+asset] = (asset,'text/javascript; charset=utf-8')
 ASSETS['/centre.css'] = ('centre.css','text/css; charset=utf-8')
 ASSETS['/cytoscape-host.css'] = ('cytoscape-host.css','text/css; charset=utf-8')
@@ -150,7 +150,8 @@ def make_server(home: Path, port: int = 8765, archive: Path | None = None, contr
                 return self._json(403,{'error':'Same-origin operator session and CSRF header required.'})
             try:
                 size = int(self.headers.get('Content-Length','0'))
-                if not 0 < size <= 16384: raise ValueError('Command body must be between 1 and 16384 bytes')
+                limit=96000 if urlsplit(self.path).path=='/api/centre/create-ticket' else 16384
+                if not 0 < size <= limit: raise ValueError(f'Command body must be between 1 and {limit} bytes')
                 data = json.loads(self.rfile.read(size))
                 if not isinstance(data,dict): raise ValueError('Command must be a JSON object')
                 from .control_api import operate

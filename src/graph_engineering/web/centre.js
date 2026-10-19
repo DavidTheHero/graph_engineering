@@ -1,13 +1,13 @@
 import {state,$,el,columns,categories,human,tag,shortModel,elapsed,stamp,filtered,json,command,toast,showError,facts,codeSection} from './centre-state.js';
 import {renderBoard,renderMonitor} from './centre-board.js';
 import {renderNetwork,animateEvents,highlight,replayAt,returnLive,resizeNetwork,themeNetwork,toggleCluster} from './centre-network.js';
-import {openTicket,repositoryStart,connectRepository,formDialog,field,refreshTicketSummary,refreshTicketEvidence} from './centre-dialogs.js';
+import {openTicket,repositoryStart,connectRepository,formDialog,field,refreshTicketSummary,refreshTicketEvidence,createTicket} from './centre-dialogs.js';
 
 let source,refreshing=false,refreshAgain=false,repoSignature='',latestSignature='',refreshTimer,replayTimer;
 const url=new URL(location.href),seenEvents=new Set();
 state.view=['board','network','monitor'].includes(url.searchParams.get('view'))?url.searchParams.get('view'):'board';
 state.selected=url.searchParams.get('ticket');
-let waitingAnimations=[];
+let waitingAnimations=[],inspectedNode=null;
 try{document.documentElement.dataset.theme=localStorage.getItem('ge-theme')||'dark';}catch{/* Preferences are optional. */}
 
 function updateURL(){const u=new URL(location.href);u.search='';u.searchParams.set('view',state.view);if(state.selected)u.searchParams.set('ticket',state.selected);if($('#repository').value!=='all')u.searchParams.set('repository',$('#repository').value);history.replaceState(null,'',u);}
@@ -15,7 +15,7 @@ function view(name){state.view=name;for(const v of ['board','network','monitor']
 function renderViews(){if(!state.snapshot)return;const tickets=filtered();$('#ticket-total').textContent=tickets.length;
  if(state.view==='board')renderBoard(tickets,selectTicket);
  if(state.view==='monitor')renderMonitor(tickets,selectTicket,id=>{view('network');inspectNode(id);});
- if(state.view==='network')renderNetwork(state.snapshot,tickets,selectTicket,inspectNode);
+ if(state.view==='network'){renderNetwork(state.snapshot,tickets,selectTicket,inspectNode);if(inspectedNode)inspectNode(inspectedNode);}
  $('#clear-journey').hidden=!state.selected;$('#network-mode').textContent=state.selected?'Ticket journey · '+state.selected:'Overview';$('#replay').hidden=!state.selected;
  const selected=state.snapshot.tickets.find(t=>t.id===state.selected);if(selected){$('#journey-title').textContent=state.selected+' · '+human(selected.node);if(!state.replaying)$('#replay-label').textContent=selected.execution_id?'Live · active '+(selected.model?shortModel(selected.model):human(selected.agent)):'Live · '+selected.queue_reason;}
 }
@@ -24,6 +24,7 @@ async function selectTicket(id){await openTicket(id,refresh,journey);updateURL()
 function journey(id,detail){state.selected=id;state.detail=detail;returnLive();view('network');highlight(id,detail.timeline);$('#replay-cursor').max=Math.max(0,detail.timeline.length-1);$('#replay-cursor').value=0;}
 
 function inspectNode(id){
+ inspectedNode=id;
  const node=state.snapshot.topology.nodes.find(n=>n.id===id),queue=state.snapshot.queues.find(q=>'queue:'+q.id===id);const root=$('#node-inspector');root.replaceChildren();$('#node-picker').value=id;
  const title=node?.label||queue?.label||human(id);root.append(el('h2','',title));
  const tickets=filtered().filter(t=>queue?t.queue===queue.id:t.node===id);
@@ -44,7 +45,7 @@ function renderHeader(){const data=state.snapshot;const signature=JSON.stringify
  $('#scheduler-summary').textContent=`${data.scheduler.active}/${data.scheduler.workers} workers · ${observed?(data.scheduler.paused?'Admission paused':'Controller running'):'Controller not observed'}`;
  $('#pause-scheduler').textContent=data.scheduler.paused?'Resume admission':'Pause admission';
  const health=$('#model-health');health.replaceChildren();for(const key of ['a','b']){const model=data.models.find(m=>m.key===key);const chip=el('button','health-chip '+(model?.available?'healthy':model?'unhealthy':'unknown'));chip.append(el('span','health-dot'),el('span','',key==='a'?'Qwen 27B':'Qwen 4B'),el('strong','',model?.available?'Available':model?'Unavailable':'Not checked'));chip.title=model?'Observed '+stamp(model.observed):'No observed health check';chip.addEventListener('click',checkHealth);health.append(chip);}
- $('#snapshot-time').textContent='State read '+stamp(data.generated_at);for(const id of ['register-repository','start-workflow','pause-scheduler','inspect-repository'])$('#'+id).disabled=!state.control;
+ $('#snapshot-time').textContent='State read '+stamp(data.generated_at);for(const id of ['create-ticket','register-repository','start-workflow','pause-scheduler','inspect-repository'])$('#'+id).disabled=!state.control;
 }
 
 async function refresh(){
@@ -70,6 +71,7 @@ for(const name of categories){const o=el('option','',human(name));o.value=name;$
 for(const name of columns){const o=el('option','',name);o.value=name;$('#board-filter').append(o);}
 for(const button of document.querySelectorAll('[data-view]'))button.addEventListener('click',()=>view(button.dataset.view));
 for(const id of ['repository','ticket-search','priority-filter','model-filter','category-filter','agent-filter','severity-filter','board-filter','group-by'])$('#'+id).addEventListener(id==='ticket-search'?'input':'change',()=>{renderViews();updateURL();});
+$('#create-ticket').addEventListener('click',()=>createTicket(refresh));
 $('#start-workflow').addEventListener('click',()=>repositoryStart(refresh));$('#register-repository').addEventListener('click',()=>connectRepository(refresh));
 $('#inspect-repository').addEventListener('click',async()=>{try{const id=$('#repository').value;if(id==='all')throw Error('Choose a repository first.');const info=await command('/api/centre/inspect',{repository_id:id});formDialog('Repository inspection',root=>{root.append(facts([['Repository',info.source],['Revision',info.sha],['Working tree',info.clean?'Clean':'Uncommitted work preserved'],['Adapter',info.adapter],['Code execution',info.trusted?'Previously trusted configuration':'Disabled by default'],['Publication backend',info.backend]]),codeSection('Observed repository metadata',info,true));return null;},async()=>{},'Close');}catch(error){showError(error);}});
 $('#pause-scheduler').addEventListener('click',async()=>{try{await command('/api/centre/scheduler',{action:state.snapshot.scheduler.paused?'resume':'pause'});await refresh();toast('Admission updated. Active steps finish at their next checkpoint.');}catch(error){showError(error);}});

@@ -8,7 +8,7 @@ const {chromium}=require('playwright-core');
 const {AxeBuilder}=require('@axe-core/playwright');
 const root=path.resolve(__dirname,'../..');
 const python=process.env.UI_TEST_PYTHON||path.join(root,'.venv',process.platform==='win32'?'Scripts/python.exe':'bin/python');
-const output=path.join(root,'evidence/phase2');
+const output=process.env.GE_BROWSER_OUTPUT||path.join(root,'evidence/phase2');
 fs.mkdirSync(output,{recursive:true});
 const folder=fs.mkdtempSync(path.join(root,'.runtime/centre-browser-'));
 const home=path.join(folder,'controller');

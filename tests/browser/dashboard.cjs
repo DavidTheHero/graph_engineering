@@ -10,7 +10,7 @@ const {AxeBuilder} = require('@axe-core/playwright');
 
 const root = path.resolve(__dirname, '../..');
 const python = process.env.UI_TEST_PYTHON || path.join(root, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
-const output = path.join(root, 'evidence/ui');
+const output = process.env.GE_BROWSER_OUTPUT || path.join(root, 'evidence/ui');
 fs.mkdirSync(output, {recursive: true});
 fs.mkdirSync(path.join(root, '.runtime'), {recursive: true});
 const home = fs.mkdtempSync(path.join(root, '.runtime/ui-browser-'));

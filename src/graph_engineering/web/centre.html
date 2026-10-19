@@ -21,7 +21,7 @@
     <section class="command-bar" aria-label="Repository and workflow controls">
       <div class="repository-picker"><label for="repository">Repository</label><select id="repository"><option value="all">All repositories</option></select></div>
       <button id="register-repository" class="button quiet">+ Connect repository</button><button id="inspect-repository" class="button quiet">Inspect</button>
-      <div class="command-spacer"></div><button id="worker-capacity" class="button quiet">Worker limit</button><button id="pause-scheduler" class="button quiet">Pause admission</button><button id="start-workflow" class="button primary">+ Start workflow</button>
+      <div class="command-spacer"></div><button id="worker-capacity" class="button quiet">Worker limit</button><button id="pause-scheduler" class="button quiet">Pause admission</button><button id="start-workflow" class="button quiet">Start workflow</button><button id="create-ticket" class="button primary">+ Create Ticket</button>
     </section>
     <div class="workspace-toolbar"><nav class="view-tabs" aria-label="Workspace views">
       <button data-view="board" aria-current="page">▦ Ticket board <span id="ticket-total">0</span></button>
@@ -32,7 +32,7 @@
       <select id="priority-filter" aria-label="Priority"><option value="all">All priorities</option><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select>
       <select id="model-filter" aria-label="Assigned model"><option value="all">All models</option><option value="a">Qwen 27B</option><option value="b">Qwen 4B</option><option value="tool">Deterministic tools</option></select>
       <select id="category-filter" aria-label="Issue type"><option value="all">All issue types</option></select>
-      <select id="agent-filter" aria-label="Agent role"><option value="all">All agents</option><option value="investigation">Investigation</option><option value="planning">Planning</option><option value="implementation">Implementation</option><option value="review">Review</option><option value="deterministic">Deterministic</option></select>
+      <select id="agent-filter" aria-label="Agent role"><option value="all">All agents</option><option value="investigation">Investigation</option><option value="classification">Classification</option><option value="root_investigation">Root investigation</option><option value="planning">Planning</option><option value="implementation">Implementation</option><option value="review">Review</option><option value="deterministic">Deterministic</option></select>
       <select id="severity-filter" aria-label="Severity"><option value="all">All severities</option><option>critical</option><option>high</option><option>medium</option><option>low</option></select>
       <select id="board-filter" aria-label="Ticket status"><option value="all">All statuses</option></select>
       <label class="group-control">Group <select id="group-by" aria-label="Group tickets"><option value="none">None</option><option value="repository_name">Repository</option><option value="priority">Priority</option><option value="category">Issue type</option><option value="severity">Severity</option><option value="model">Current model</option><option value="agent">Agent</option><option value="board_status">Status</option><option value="run_id">Workflow run</option></select></label>
