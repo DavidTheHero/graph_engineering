@@ -16,6 +16,14 @@ from graph_engineering.models import (
 
 
 class ModelBoundaryTests(unittest.TestCase):
+    def test_long_source_transport_grammar_keeps_local_length_validation(self):
+        schema={'type':'object','properties':{'content':{'type':'string','minLength':20,'maxLength':6000}},'required':['content'],'additionalProperties':False}
+        config=generate_opencode_config(default_models()['b'],'regression_test',schema)
+        transport=config['providers']['local']['models'][default_models()['b']['model_id']]['body']['response_format']['json_schema']['schema']
+        self.assertNotIn('maxLength',transport['properties']['content'])
+        self.assertEqual(schema['properties']['content']['maxLength'],6000)
+        with self.assertRaises(ModelError):validate_artifact({'content':'x'*6001},schema)
+
     def test_unavailable_retries_bounded_and_invalid_models(self):
         with patch("graph_engineering.models._request", return_value={"error": "unavailable"}) as req:
             result = ModelClient(default_models()["b"]).health(retries=99)

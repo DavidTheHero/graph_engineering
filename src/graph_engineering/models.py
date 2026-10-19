@@ -128,6 +128,15 @@ def probe_endpoints(root: Path, endpoints: dict | None = None) -> dict:
     return report
 
 
+def transport_schema(schema: dict) -> dict:
+    """Avoid huge string repetition grammars; the full schema still validates locally."""
+    result={key:([transport_schema(item) if isinstance(item,dict) else item for item in value] if isinstance(value,list)
+                 else transport_schema(value) if isinstance(value,dict) else value) for key,value in schema.items()}
+    if result.get('type')=='string' and result.get('maxLength',0)>1024:
+        result.pop('minLength',None);result.pop('maxLength',None)
+    return result
+
+
 def generate_opencode_config(model: ModelEndpoint | dict, role: str, output_schema: dict) -> dict:
     model = ModelEndpoint.from_mapping(model)
     if not model.model_id:
@@ -137,7 +146,7 @@ def generate_opencode_config(model: ModelEndpoint | dict, role: str, output_sche
         settings["apiKey"] = "{env:GRAPH_ENGINEERING_MODEL_API_KEY}"
     body: dict = {"chat_template_kwargs": {"enable_thinking": False}, "temperature": 0}
     if model.structured_output:
-        body["response_format"] = {"type": "json_schema", "json_schema": {"name": "artifact", "strict": True, "schema": output_schema}}
+        body["response_format"] = {"type": "json_schema", "json_schema": {"name": "artifact", "strict": True, "schema": transport_schema(output_schema)}}
     limit = {"output": model.output}
     if model.context is not None:
         limit["context"] = model.context
