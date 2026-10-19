@@ -46,6 +46,15 @@ their source/schema and real provider invocation have been verified.
 
 ## Live engineering control centre
 
+**Plain-language tickets:** choose a repository, click **+ Create Ticket**, describe
+the problem and select **Create & Investigate**. The report is saved immediately;
+Qwen 4B classifies it and Qwen 27B investigates committed source through OpenCode.
+Compare the original and enhanced ticket, inspect evidence, follow its live graph
+journey, request clarification, and approve the current revision for development
+queue admission or issue publication. Development admission holds execution.
+See the [ticket investigation guide](docs/TICKET-INVESTIGATION.md) and
+[actual Phase 3 results](docs/PHASE3-RESULTS.md).
+
 ```powershell
 cd D:\git_code\graph_engineering
 .\.venv\Scripts\graph-engineering.exe --home .runtime/general-ai-agent centre --port 8771 --workers 2

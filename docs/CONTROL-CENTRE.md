@@ -27,7 +27,7 @@ the worker service is independently executable:
 
 For an independently restarted UI, use `centre --port 8771 --attach-controller`
 against the same home. This attaches without launching or owning another worker
-service. The prepared workspace currently uses this arrangement.
+service. The prepared workspace currently uses the combined `centre` command.
 
 The dashboard displays the observed controller heartbeat. A stale/missing
 heartbeat is not represented as a healthy worker service. Keep controller homes

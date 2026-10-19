@@ -1,0 +1,47 @@
+{
+  "scheduler": {
+    "paused": false,
+    "workers": 2,
+    "active": 0,
+    "model_capacity": {
+      "a": 1,
+      "b": 1
+    },
+    "service": {
+      "pid": 33476,
+      "observed": 1792412745.737193
+    }
+  },
+  "persisted_tickets": [
+    {
+      "id": "GE-DD0C3FE0",
+      "run_id": "10e011266c514f41",
+      "run_status": "needs_information",
+      "enhancement_revision": 6,
+      "accepted_revision": null,
+      "issue": null
+    },
+    {
+      "id": "GE-81DF53DF",
+      "run_id": "fd8eb5a4c8a8442e",
+      "run_status": "development_queued",
+      "enhancement_revision": 3,
+      "accepted_revision": 3,
+      "issue": null
+    },
+    {
+      "id": "GE-FD7232CD",
+      "run_id": "172474b207da4409",
+      "run_status": "ready_for_development",
+      "enhancement_revision": 6,
+      "accepted_revision": 6,
+      "issue": {
+        "number": 6,
+        "url": "https://github.com/DavidTheHero/graph-engineering-public-fixture-20261018/issues/6",
+        "key": "d260102a53691bfbe846cbb7dc688a2af5bfdaa544073f8428c6fd9c066ceef2",
+        "backend": "github"
+      }
+    }
+  ],
+  "source": "Observed actual HTTP snapshot after final controlled idle restart"
+}

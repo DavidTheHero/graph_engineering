@@ -1,0 +1,32 @@
+{
+  "wheel": ".runtime\\phase3-dist\\graph_engineering-0.1.0-py3-none-any.whl",
+  "sha256": "1fa9e708113cfbecaaa2745702bd1e1a75f0ba724ed7795eeb692d3d195bd42a",
+  "returncode": 0,
+  "installed_import": {
+    "module": "D:\\git_code\\graph_engineering\\.runtime\\phase3-wheel-b8x40wyg\\graph_engineering\\__init__.py",
+    "nodes": 32,
+    "web_assets": [
+      "app.js",
+      "centre-board.js",
+      "centre-dialogs.js",
+      "centre-intake.js",
+      "centre-motion.js",
+      "centre-network.js",
+      "centre-state.js",
+      "centre.css",
+      "centre.html",
+      "centre.js",
+      "cytoscape-host.css",
+      "details.js",
+      "dom.js",
+      "favicon.svg",
+      "graph.js",
+      "index.html",
+      "style.css"
+    ],
+    "vendor_assets": [
+      "cytoscape.js",
+      "cytoscape.js.LEGAL.txt"
+    ]
+  }
+}

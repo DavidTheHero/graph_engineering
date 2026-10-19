@@ -1,0 +1,84 @@
+{
+  "reviewer": "Qwen qwen3.8-27b via OpenCode 2.0.32",
+  "adjudicator": "Codex",
+  "scope": "Each supplied-source finding checked against implementation, test evidence and live operations. Model review is advisory, not an approval gate.",
+  "findings": [
+    {
+      "review_finding_number": 1,
+      "topic": "Priority/triaged flag",
+      "assessment": "Not reproduced: create reads bool(data.get(\"priority\")), not the defaulted local variable. Missing override is 0. The security-priority test verifies policy P1 and explicit P3 preservation.",
+      "confirmed_blocking_defect": false
+    },
+    {
+      "review_finding_number": 2,
+      "topic": "Triage SQL priority",
+      "assessment": "Same incorrect premise as preceding finding; verified by actual priority policy test.",
+      "confirmed_blocking_defect": false
+    },
+    {
+      "review_finding_number": 3,
+      "topic": "Invalid SHA/empty history path list",
+      "assessment": "The node obtains base_sha from git rev-parse HEAD. Invalid state fails closed. git log with an empty path list is valid; no concrete failure was established.",
+      "confirmed_blocking_defect": false
+    },
+    {
+      "review_finding_number": 4,
+      "topic": "Numbered source construction",
+      "assessment": "The comprehension omits text and adds numbered_source. Parsing errors are possible model outputs and the independent validator rejects wrong file/line/quote references.",
+      "confirmed_blocking_defect": false
+    },
+    {
+      "review_finding_number": 5,
+      "topic": "Revision-key collisions across clarification",
+      "assessment": "Clarify and reinvestigate increment generation before resetting search/validation rounds. The full key includes generation; browser clarification and revision tests cover the path.",
+      "confirmed_blocking_defect": false
+    },
+    {
+      "review_finding_number": 6,
+      "topic": "Separate snapshot database connection",
+      "assessment": "The connection is used outside a write transaction for existing snapshot construction and closed in finally. The observed isolated reproduction completed with a clean snapshot; no inconsistency was demonstrated.",
+      "confirmed_blocking_defect": false
+    },
+    {
+      "review_finding_number": 7,
+      "topic": "Multiline quote rejection",
+      "assessment": "Intentional fail-closed behavior: a multi-line quote cannot validate against a claimed single source line and routes through bounded correction/clarification. It never becomes accepted evidence.",
+      "confirmed_blocking_defect": false
+    },
+    {
+      "review_finding_number": 8,
+      "topic": "Finalisation precedence/reproduction",
+      "assessment": "Python precedence implements the intended condition. A failed, nonempty, non-timeout isolated reproduction can yield a reviewable draft despite questions; it cannot confirm runtime causality or accept/publish itself.",
+      "confirmed_blocking_defect": false
+    },
+    {
+      "review_finding_number": 9,
+      "topic": "Missing backend method",
+      "assessment": "Workflow inherits InvestigationNodes and defines backend. The live GitHub issue and local publication tests executed this path.",
+      "confirmed_blocking_defect": false
+    },
+    {
+      "review_finding_number": 10,
+      "topic": "Missing tickets.get",
+      "assessment": "Tickets.get exists. Real browser/API commands and backend tests exercised it.",
+      "confirmed_blocking_defect": false
+    },
+    {
+      "review_finding_number": 11,
+      "topic": "Operator edit lacks Qwen schema validation",
+      "assessment": "Operator revisions have a separate bounded prose/list contract and immutable evidence. They intentionally permit longer human text than the Qwen proposal schema; subsequent deterministic nodes consume those typed fields. Acceptance/publication remains revision bound.",
+      "confirmed_blocking_defect": false
+    },
+    {
+      "review_finding_number": 12,
+      "topic": "Empty validation allows acceptance",
+      "assessment": "Incorrect boolean reading: not validation.get(...) is true for an empty validation and raises ValueError. The acceptance-gate mutation test also demonstrates a guarded admission regression.",
+      "confirmed_blocking_defect": false
+    }
+  ],
+  "remaining_limits": [
+    "No claim of complete security review or production readiness",
+    "Local operator identity is unauthenticated",
+    "Hostile repository code needs OS containment"
+  ]
+}
