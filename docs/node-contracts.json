@@ -2818,6 +2818,9 @@
     "outputs": {
       "issue": {
         "type": "object"
+      },
+      "published_revision": {
+        "type": "integer"
       }
     },
     "responsible": "deterministic approved publication",
@@ -2867,10 +2870,14 @@
       "properties": {
         "issue": {
           "type": "object"
+        },
+        "published_revision": {
+          "type": "integer"
         }
       },
       "required": [
-        "issue"
+        "issue",
+        "published_revision"
       ],
       "additionalProperties": false
     },

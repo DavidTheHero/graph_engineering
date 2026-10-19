@@ -37,8 +37,9 @@ export function renderIntake(root,actions,ticket,detail,ui,refresh,reopen){
  if(!draft)enhanced.append(el('p','empty-copy','Investigation is queued or in progress. Your original report is safely stored.'));
  else{
   enhanced.append(el('h3','',draft.title));
-  const status=validation.source_references_valid?'Source references checked · root cause remains a hypothesis':'Unverified proposal · evidence validation is pending or failed';
-  enhanced.append(el('p',validation.source_references_valid?'notice':'notice error',status));
+  const verified=validation.source_references_valid&&validation.verified_references>0;
+  const status=verified?'Source references checked · root cause remains a hypothesis':'Unverified proposal · no complete source validation';
+  enhanced.append(el('p',verified?'notice':'notice error',status));
   for(const [key,label] of [['problem_statement','Problem Statement'],['expected_behaviour','Expected Behaviour'],['observed_behaviour','Observed / Reported Behaviour'],['root_cause_hypothesis','Potential Root Cause · Hypothesis'],['proposed_solution','Proposed Solution']]){
    enhanced.append(el('h4','',label),el('p','intake-prose',draft[key]||'Not established'));
   }

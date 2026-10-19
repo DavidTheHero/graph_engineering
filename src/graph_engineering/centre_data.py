@@ -158,7 +158,7 @@ def ticket_detail(home, ticket_id):
         from .report_store import report
         detail['intake_report']=report(tickets.db,ticket_id)
         detail['investigation']={key:ticket['state'][key] for key in ('triage','retrieved','enhanced',
-            'finding_validation','reproduction','duplicate_candidates','revision','accepted_revision','clarifications') if key in ticket['state']}
+            'finding_validation','reproduction','duplicate_candidates','revision','accepted_revision','published_revision','clarifications') if key in ticket['state']}
         detail['timeline'] = events(tickets,limit=2000,ticket_id=ticket_id)
         detail['worker_artifacts'] = []
         for call in detail['model_calls'][-12:]:

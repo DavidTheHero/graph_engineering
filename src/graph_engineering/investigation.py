@@ -42,11 +42,11 @@ _CONTRACTS=[
  ('reproduction_check',['base_sha','enhanced'],['reproduction'],'authorised isolated test runner or read-only skip','finding_validation'),
  ('finding_validation',['enhanced','retrieved','revision'],['finding_validation','validation_round','enhanced','revision'],'deterministic file/line/quote checks','ticket_finalisation'),
  ('ticket_finalisation',['finding_validation','enhanced'],['intake_phase'],'deterministic evidence/review gate','development_admission'),
- ('ticket_publication',['enhanced','revision'],['issue'],'deterministic approved publication','ticket_finalisation'),
+ ('ticket_publication',['enhanced','revision'],['issue','published_revision'],'deterministic approved publication','ticket_finalisation'),
  ('development_admission',['enhanced'],['development'],'explicit human development gate','development_admission'),
 ]
 INVESTIGATION_CONTRACTS=[dict(name=name,inputs={'intake':{'type':'object'},**{k:{'type':'string'} if k=='base_sha' else {'type':'object'} for k in inputs}},
-    outputs={k:{'type':'integer'} if k in ('search_round','revision','validation_round') else {'type':'string'} if k in ('base_sha','intake_phase') else {'type':'array'} if k=='duplicate_candidates' else {'type':'object'} for k in outputs},
+    outputs={k:{'type':'integer'} if k in ('search_round','revision','validation_round','published_revision') else {'type':'string'} if k in ('base_sha','intake_phase') else {'type':'array'} if k=='duplicate_candidates' else {'type':'object'} for k in outputs},
     responsible=role,permissions='read committed evidence; proposal only; execution/publication require explicit recorded approval',next=target)
     for name,inputs,outputs,role,target in _CONTRACTS]
 # Registry contracts distinguish scalar revision and the list of duplicate candidates.
@@ -250,12 +250,14 @@ class InvestigationNodes:
         backend=self.backend(state);key=digest(['manual-ticket',state['intake']['ticket_id']])
         body='Original user report:\n'+_report(self,state)['original']+'\n\nTechnical investigation (root cause remains a hypothesis):\n'+json.dumps(state['enhanced'],indent=2)
         if state.get('issue'):
-            update=lambda:backend.update_issue(state['issue']['number'],body=body)
+            update=lambda:backend.update_issue(state['issue']['number'],body=body,title=state['enhanced']['title'])
             issue=self.store.effect(self.run_id,'manual_issue_update:'+str(state['revision']),update,on_uncertain=update)
         else:
             issue=self.store.effect(self.run_id,'manual_issue',lambda:backend.ensure_issue(key,state['enhanced']['title'],body),
                                     on_uncertain=lambda:backend.reconcile_issue(key))
-        return {'issue':issue|{'backend':'local-simulation' if backend.kind=='local' else 'github'}},'ticket_finalisation','ready'
+        observed={'number':issue['number'],'url':issue.get('html_url') or issue['url'],'key':key}
+        return {'issue':observed|{'backend':'local-simulation' if backend.kind=='local' else 'github'},
+                'published_revision':state['revision']},'ticket_finalisation','ready'
 
     def node_development_admission(self,state):
         return {'development':{'admitted':False,'reason':'Explicit execution approval required'}},'development_admission','development_queued'

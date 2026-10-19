@@ -66,8 +66,9 @@ def act(tickets,data,key):
                 raise ValueError('Explicit publication approval of the accepted current revision is required')
             if state['config']['backend']!='github' and data.get('simulation') is not True:
                 raise ValueError('GitHub publication is not configured; explicitly choose a local simulation or configure the authorised GitHub backend')
-            state.update(publication_actor=actor,publication_revision=current)
-            node,status='ticket_publication','ready'
+            if not (state.get('issue') and state.get('published_revision')==current):
+                state.update(publication_actor=actor,publication_revision=current)
+                node,status='ticket_publication','ready'
         else:raise ValueError('Unsupported intake action')
         db.execute('UPDATE runs SET node=?,status=?,state=?,cancel=0,updated=? WHERE id=?',
                    (node,status,json.dumps(state),now(),ticket['run_id']))

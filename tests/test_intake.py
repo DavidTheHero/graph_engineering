@@ -240,3 +240,45 @@ class IntakeTests(unittest.TestCase):
         self.assertEqual(run['state']['duplicate_candidates'][0]['ticket_id'],first['ticket_id'])
         self.assertEqual(len(self.tickets.list()),2)
         self.assertIsNotNone(report(self.tickets.db,second['ticket_id']))
+
+    def test_published_ticket_edits_update_one_issue_across_multiple_accepted_revisions(self):
+        ticket,run=self.investigate();base={'ticket_id':ticket['ticket_id'],'actor':'test-operator'}
+        flow=Workflow(self.home)
+        try:
+            for number in range(1,5):
+                if number>1:
+                    act(self.tickets,base|{'revision':number-1,'action':'edit_enhancement',
+                        'changes':{'title':f'Reviewed addition revision {number}'}},f'sync-edit-{number}')
+                act(self.tickets,base|{'revision':number,'action':'accept'},f'sync-accept-{number}')
+                request=base|{'revision':number,'action':'publish','simulation':True,'approve_publication':True}
+                act(self.tickets,request,f'sync-publish-{number}')
+                run=flow.execute(run['id']);self.assertEqual(run['status'],'ready_for_development',run['state'].get('error'))
+                effects=flow.store.db.execute('SELECT COUNT(*) FROM effects WHERE run_id=?',(run['id'],)).fetchone()[0]
+                act(self.tickets,request,f'sync-publish-repeat-{number}')
+                self.assertEqual(self.tickets.get(ticket['ticket_id'])['status'],'ready_for_development')
+                self.assertEqual(flow.store.db.execute('SELECT COUNT(*) FROM effects WHERE run_id=?',(run['id'],)).fetchone()[0],effects)
+            issues=json.loads(flow.backend(run['state']).path.read_text())['issues']
+            self.assertEqual(len(issues),1);self.assertEqual(issues[0]['title'],'Reviewed addition revision 4')
+            self.assertIn('graph-engineering:',issues[0]['body'])
+        finally:flow.store.close()
+
+    def test_github_update_retains_marker_title_and_observed_browser_url(self):
+        from graph_engineering.publication import GitHubBackend
+        ticket,run=self.investigate()
+        state=run['state'];state['config'].update(backend='github',slug='fixture/repository')
+        path=Path(self.registered['config_path']);config=json.loads(path.read_text())
+        config.update(backend='github',slug='fixture/repository');path.write_text(json.dumps(config))
+        state.update(issue={'number':7,'url':'https://github.com/fixture/repository/issues/7'},
+            publication_revision=1,accepted_revision=1,publication_actor='test-operator')
+        observed={'number':7,'url':'https://api.github.com/repos/fixture/repository/issues/7',
+            'html_url':'https://github.com/fixture/repository/issues/7','body':'old\n<!-- graph-engineering:fixture-key -->'}
+        flow=Workflow(self.home);flow.run_id=run['id']
+        try:
+            with patch.object(GitHubBackend,'_api',return_value=observed) as api:
+                update,_,_=flow.node_ticket_publication(state)
+            self.assertEqual(update['issue']['url'],observed['html_url'])
+            self.assertEqual(update['published_revision'],1)
+            payload=api.call_args.args[2]
+            self.assertEqual(payload['title'],state['enhanced']['title'])
+            self.assertIn('graph-engineering:fixture-key',payload['body'])
+        finally:flow.store.close()

@@ -177,9 +177,10 @@ class LocalBackend:
             raise PublicationError("Uncertain PR outcome; refusing creation")
         return self._brief(matches[0])
 
-    def update_issue(self, number, body=None, labels=None, state=None):
+    def update_issue(self, number, body=None, labels=None, state=None, title=None):
         data = self._load()
         item = self._find(data, "issues", number)
+        if title is not None:item['title']=title
         if body is not None:
             item["body"] = body + "\n\n" + _marker(item["key"])
         if labels is not None:
@@ -402,8 +403,9 @@ class GitHubBackend:
             raise PublicationError("Reconciled PR has conflicting ownership/base/head")
         return self._brief(item, key)
 
-    def update_issue(self, number, body=None, labels=None, state=None):
+    def update_issue(self, number, body=None, labels=None, state=None, title=None):
         payload = {}
+        if title is not None:payload['title']=title
         if body is not None:
             current = self._api(f"{self.prefix}/issues/{int(number)}")
             markers = re.findall(r"<!-- graph-engineering:[A-Za-z0-9_.:-]+ -->", current.get("body") or "")

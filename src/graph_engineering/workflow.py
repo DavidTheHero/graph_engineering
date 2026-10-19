@@ -246,7 +246,7 @@ class Workflow(InvestigationNodes):
                 validate_artifact(inputs, obj(input_fields, list(spec.inputs)))
                 key = f"{node_name}:{state['repairs']}"
                 if config.get('run_mode')=='intake':
-                    key+=f":g{state['intake'].get('generation',0)}:s{state.get('search_round',0)}:v{state.get('validation_round',0)}"
+                    key+=f":g{state['intake'].get('generation',0)}:s{state.get('search_round',0)}:v{state.get('validation_round',0)}:r{state.get('revision',0)}"
                 attempts = state["attempts"].copy()
                 attempts[key] = attempts.get(key, 0) + 1
                 limit = min(config["max_node_attempts"], spec.max_attempts)
