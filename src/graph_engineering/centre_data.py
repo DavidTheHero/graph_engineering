@@ -18,18 +18,19 @@ from .control_repositories import repositories
 CLUSTERS = {
  'ingestion':('Ingestion',['manual_intake','repository_discovery','evidence_collection','issue_detection']),
  'classification':('Classification & queues',['request_triage','request_duplicate_check','issue_validation','deduplication','ticket_creation','prioritisation']),
- 'planning':('Investigation & planning',['repository_search','problem_investigation','ticket_enhancement','repository_investigation','task_planning','model_selection']),
+ 'planning':('Investigation & planning',['development_setup','repository_search','problem_investigation','ticket_enhancement','repository_investigation','task_planning','model_selection']),
  'engineering':('Engineering workers',['isolated_implementation']),
- 'quality':('Quality & review',['reproduction_check','finding_validation','test_execution','independent_review']),
- 'delivery':('Delivery',['ticket_finalisation','ticket_publication','development_admission','pull_request_creation','ci_policy_verification','approval_gate','merge','post_merge_verification','completion']),
+ 'quality':('Quality & review',['regression_authoring','regression_review','regression_validation','reproduction_check','finding_validation','test_execution','independent_review']),
+ 'delivery':('Delivery',['development_delivery','ticket_finalisation','ticket_publication','development_admission','pull_request_creation','ci_policy_verification','approval_gate','merge','post_merge_verification','completion']),
  'recovery':('Recovery',['repair','escalation'])}
 
 
 def intake_lifecycle(ticket):
+    if ticket.get('cancel') and ticket['status']!='cancelled':return 'Cancelling'
     statuses={'ready_for_review':'Ready for Review','needs_information':'Needs Information',
         'duplicate_review':'Possible Duplicate','ready_for_development':'Ready for Development',
         'development_queued':'Development Queued','enhancement_rejected':'Enhancement Rejected',
-        'blocked':'Investigation Failed','cancelled':'Cancelled'}
+        'ready_for_delivery':'Ready for Publication','blocked':'Execution Blocked','cancelled':'Cancelled'}
     if ticket['status'] in statuses:return statuses[ticket['status']]
     return {'manual_intake':'New / Queued for Investigation','request_triage':'Classifying',
         'request_duplicate_check':'Classifying','repository_search':'Investigating','problem_investigation':'Investigating',
@@ -115,7 +116,7 @@ def snapshot(home):
                 'board_status':board_status(ticket['node'],ticket['status'],bool(ticket['paused']) and not ticket['lease_owner']),
                 'run_status':ticket['status'],'node':ticket['node'],'queue':queue,'queue_reason':reason,
                 'effective_rank':effective_rank(ticket['priority'],ticket['created'],time.time()),
-                'dependencies':ticket['dependencies'],'paused':bool(ticket['paused']),
+                'dependencies':ticket['dependencies'],'paused':bool(ticket['paused']),'cancel_requested':bool(ticket.get('cancel')),
                 'retries':ticket['retries'],'repairs':state.get('repairs',0),
                 'attempts':state.get('attempts',{}),'not_before':ticket['not_before'],
                 'agent':role or 'deterministic','model':current_model,'planned_model':required_model(ticket),
@@ -158,7 +159,7 @@ def ticket_detail(home, ticket_id):
         from .report_store import report
         detail['intake_report']=report(tickets.db,ticket_id)
         detail['investigation']={key:ticket['state'][key] for key in ('triage','retrieved','enhanced',
-            'finding_validation','reproduction','duplicate_candidates','revision','accepted_revision','published_revision','clarifications') if key in ticket['state']}
+            'finding_validation','reproduction','duplicate_candidates','revision','accepted_revision','published_revision','clarifications','development','regression','regression_review','regression_baseline') if key in ticket['state']}
         detail['timeline'] = events(tickets,limit=2000,ticket_id=ticket_id)
         detail['worker_artifacts'] = []
         for call in detail['model_calls'][-12:]:

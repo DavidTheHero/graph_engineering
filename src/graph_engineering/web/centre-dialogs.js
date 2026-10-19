@@ -3,6 +3,16 @@ import {safeLink} from './dom.js';
 import {createTicketDialog,renderIntake} from './centre-intake.js';
 let selectedRequest=0,fieldSequence=0,renderedVersion='',evidenceRefreshing=false;
 
+export function autonomyPolicy(refresh){
+ const repo=state.snapshot.repositories.find(r=>r.id===$('#repository').value);if(!repo){showError(Error('Choose one repository to configure its policy.'));return;}
+ formDialog('Repository autonomy policy',root=>{
+  const p=repo.autonomy||{},development=field('Automatically develop accepted tickets','checkbox'),publish=field(repo.backend==='github'?'Automatically publish issues and PRs to the configured GitHub repository':'Automatically create local issue / PR previews','checkbox'),dependencies=field('Install locked npm dependencies in isolated worktrees (scripts disabled)','checkbox'),actor=field('Policy operator');
+  development.input.checked=!!p.development;publish.input.checked=!!p.publish;dependencies.input.checked=!!p.prepare_dependencies;actor.input.value=p.actor||'';actor.input.required=true;
+  development.input.addEventListener('change',()=>{if(!development.input.checked){publish.input.checked=false;dependencies.input.checked=false;}});
+  root.append(el('p','form-note',repo.label+': accepted tickets will execute code/tests and edit isolated branches under this policy. Retries and repairs remain bounded. Missing information and failed verification can still stop work. Merge approval and branch protections remain enforced.'),development.wrapper,publish.wrapper,dependencies.wrapper,actor.wrapper);return {development,publish,dependencies,actor};
+ },async v=>{await command('/api/centre/repository-policy',{repository_id:repo.id,development:v.development.input.checked,publish:v.publish.input.checked,prepare_dependencies:v.dependencies.input.checked,actor:v.actor.input.value});toast('Repository policy saved. Accepted tickets follow this policy without repeated execution prompts.');await refresh();},'Save repository policy');
+}
+
 export async function refreshTicketEvidence(refresh,journey){
  const ticket=state.snapshot.tickets.find(t=>t.id===state.selected);
  if(!ticket||evidenceRefreshing||!$('#ticket-dialog').open||$('#operator-dialog').open||ticket.updated===renderedVersion)return;
@@ -87,7 +97,7 @@ function renderTicket(ticket,detail,refresh,journey){
  const actions=$('#ticket-actions');actions.replaceChildren();
  const add=(label,action,data={})=>{const b=el('button','button small quiet',label);b.disabled=!state.control;b.addEventListener('click',async()=>{b.disabled=true;try{await command('/api/centre/ticket-action',{ticket_id:ticket.id,action,...data});toast(`${human(action)} accepted for ${ticket.id}.`);await refresh();await openTicket(ticket.id,refresh,journey);}catch(error){showError(error);}finally{b.disabled=!state.control;}});actions.append(b);return b;};
  const follow=el('button','button small primary','View ticket journey');follow.addEventListener('click',()=>{$('#ticket-dialog').close();journey(ticket.id,detail);});actions.append(follow);
- if(!['Done','Failed'].includes(ticket.board_status)){
+ if(!['Done','Failed','Cancelled'].includes(ticket.board_status)&&!ticket.cancel_requested){
   add(ticket.paused?'Resume':'Pause',ticket.paused?'resume':'pause');add('Cancel task','cancel');
  }
  if(['blocked','cancelled','escalated','failed'].includes(ticket.run_status))add('Retry with backoff','retry');

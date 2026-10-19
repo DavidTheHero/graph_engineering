@@ -24,7 +24,7 @@ function step(){execFileSync(python,['-c',`from pathlib import Path;from graph_e
  const context=await browser.newContext({viewport:{width:1600,height:1050}});const page=await context.newPage();
  page.on('pageerror',e=>receipt.errors.push(e.message));page.on('console',m=>{if(['error','warning'].includes(m.type()))receipt.errors.push(m.text());});
  await page.goto(url);await page.waitForFunction(()=>document.querySelectorAll('.ticket-card').length===3);
- assert.equal(await page.locator('.kanban-column').count(),9);await audit(page,'board-dark');check('Nine authoritative board columns and three persistent tickets');
+ assert.equal(await page.locator('.kanban-column').count(),10);await audit(page,'board-dark');check('Ten authoritative board columns including cancellation and three persistent tickets');
  await page.locator(`[data-ticket="${fixture.reviewed}"]`).click();await page.getByRole('button',{name:'View ticket journey'}).waitFor();
  assert.match(await page.locator('#ticket-detail').innerText(),/Local ticket/);assert.match(await page.locator('#ticket-detail').innerText(),/Repair/);
  await page.getByRole('button',{name:'View ticket journey'}).click();await page.locator('#network canvas').first().waitFor();

@@ -3,6 +3,7 @@ import {quadraticPoint} from './centre-motion.js';
 import {state,$,el,human,tag,shortModel,elapsed,toast} from './centre-state.js';
 
 const positions={
+ development_setup:[1070,-850],regression_authoring:[1380,-540],regression_review:[1590,-260],regression_validation:[1400,40],development_delivery:[-1200,770],
  manual_intake:[-1020,-600],request_triage:[-500,-660],request_duplicate_check:[-260,-600],
  repository_search:[400,-850],problem_investigation:[690,-700],ticket_enhancement:[960,-520],
  reproduction_check:[1100,330],finding_validation:[1140,520],ticket_finalisation:[-1100,750],

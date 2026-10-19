@@ -1,7 +1,7 @@
 import {state,$,el,columns,categories,human,tag,shortModel,elapsed,stamp,filtered,json,command,toast,showError,facts,codeSection} from './centre-state.js';
 import {renderBoard,renderMonitor} from './centre-board.js';
 import {renderNetwork,animateEvents,highlight,replayAt,returnLive,resizeNetwork,themeNetwork,toggleCluster} from './centre-network.js';
-import {openTicket,repositoryStart,connectRepository,formDialog,field,refreshTicketSummary,refreshTicketEvidence,createTicket} from './centre-dialogs.js';
+import {openTicket,repositoryStart,connectRepository,formDialog,field,refreshTicketSummary,refreshTicketEvidence,createTicket,autonomyPolicy} from './centre-dialogs.js';
 
 let source,refreshing=false,refreshAgain=false,repoSignature='',latestSignature='',refreshTimer,replayTimer;
 const url=new URL(location.href),seenEvents=new Set();
@@ -45,7 +45,7 @@ function renderHeader(){const data=state.snapshot;const signature=JSON.stringify
  $('#scheduler-summary').textContent=`${data.scheduler.active}/${data.scheduler.workers} workers · ${observed?(data.scheduler.paused?'Admission paused':'Controller running'):'Controller not observed'}`;
  $('#pause-scheduler').textContent=data.scheduler.paused?'Resume admission':'Pause admission';
  const health=$('#model-health');health.replaceChildren();for(const key of ['a','b']){const model=data.models.find(m=>m.key===key);const chip=el('button','health-chip '+(model?.available?'healthy':model?'unhealthy':'unknown'));chip.append(el('span','health-dot'),el('span','',key==='a'?'Qwen 27B':'Qwen 4B'),el('strong','',model?.available?'Available':model?'Unavailable':'Not checked'));chip.title=model?'Observed '+stamp(model.observed):'No observed health check';chip.addEventListener('click',checkHealth);health.append(chip);}
- $('#snapshot-time').textContent='State read '+stamp(data.generated_at);for(const id of ['create-ticket','register-repository','start-workflow','pause-scheduler','inspect-repository'])$('#'+id).disabled=!state.control;
+ $('#snapshot-time').textContent='State read '+stamp(data.generated_at);for(const id of ['repository-autonomy','create-ticket','register-repository','start-workflow','pause-scheduler','inspect-repository'])$('#'+id).disabled=!state.control;
 }
 
 async function refresh(){
@@ -88,3 +88,5 @@ setInterval(()=>{if(!document.hidden)refresh();},3000);
 setInterval(()=>{if(document.hidden)return;for(const node of document.querySelectorAll('[data-running-since]'))node.textContent=elapsed(Number(node.dataset.runningSince));},1000);
 
 (async()=>{try{const session=await json('/api/session');state.control=session.control_enabled;state.csrf=session.csrf;$('#viewer-note').hidden=state.control;await refresh();view(state.view);const history=await json('/api/centre/history?after='+Math.max(0,state.snapshot.cursor-200));addEvents(history.events,false);connectEvents(state.snapshot.cursor);if(state.selected){state.detail=await json('/api/centre/ticket?id='+encodeURIComponent(state.selected));$('#replay-cursor').max=Math.max(0,state.detail.timeline.length-1);renderViews();}}catch(error){showError(error);}})();
+
+$('#repository-autonomy').addEventListener('click',()=>autonomyPolicy(refresh));
