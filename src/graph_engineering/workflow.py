@@ -744,6 +744,8 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                 "required_action": "Resolve each prior finding against the actual diff. Contradictory approve plus critical findings is invalid."}, REVIEW_SCHEMA, routing.LARGE, excluded)
             review_model = self.last_model
         review["model"] = review_model
+        # Invariant (unreachable while ask() honours `excluded`): kept so a future routing change
+        # cannot silently let an implementer approve its own diff.
         if review_model in implementers and not state["config"]["allow_same_model_review"]:
             raise ValueError("Actual selected review model wrote part of the diff; policy requires a different model")
         review["independent_session"] = True
