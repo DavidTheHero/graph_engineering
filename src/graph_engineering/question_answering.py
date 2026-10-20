@@ -121,7 +121,8 @@ SHOWN_WIDTH = 160  # Characters of each line the model sees; citations are verif
 
 def blob_lines(repo, sha, name):
     """Blob lines numbered exactly as git grep numbers them (split on \\n only, not str.splitlines())."""
-    return [line.rstrip('\r') for line in read_blob(repo, sha, name).split('\n')]
+    lines = [line.rstrip('\r') for line in read_blob(repo, sha, name).split('\n')]
+    return lines[:-1] if lines and lines[-1] == '' else lines  # A final newline does not start another line.
 
 
 def focused_evidence(repo, sha, terms, picked, allowed, limit=EVIDENCE_CHARACTERS):
@@ -140,6 +141,9 @@ def focused_evidence(repo, sha, terms, picked, allowed, limit=EVIDENCE_CHARACTER
         argv = ['git', 'grep', '-n', '-I', '-i', '-F', '--max-count=50', *[x for term in terms for x in ('-e', term)], sha, '--',
                 *('*' + suffix for suffix in (*CODE_SUFFIXES, *DOC_SUFFIXES))]
         result = command(argv, Path(repo), timeout=20)
+        if result['returncode'] not in (0, 1) and 'max-count' in result['output']:
+            # Git older than 2.38 lacks --max-count: search without the per-file bound rather than not at all.
+            result = command([a for a in argv if a != '--max-count=50'], Path(repo), timeout=20)
         if result['returncode'] not in (0, 1) or result['timed_out']:
             incomplete = 'literal search failed or exceeded its budget; evidence is from picked files only'
         counted = 0

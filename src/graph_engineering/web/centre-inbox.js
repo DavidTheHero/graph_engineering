@@ -99,8 +99,6 @@ function card(item,openTicket,refresh){
 
 export function renderInbox(openTicket,refresh){
   const root=$('#inbox');
-  // Do not rebuild while the operator is typing in a card (a refresh would steal focus); rebuild as soon as
-  // focus leaves the cards so a changed revision or action list is never left stale.
   // Rebuilding on focus-out would swallow a click on the card's buttons, so a deferred update is applied by the
   // next poll (centre.js re-renders while #inbox is marked pending) once no field in the tab has focus.
   if(root.contains(document.activeElement)&&['TEXTAREA','INPUT'].includes(document.activeElement.tagName)){

@@ -190,6 +190,26 @@ class SecretFilterTests(unittest.TestCase):
         reference = {"file": "wide.py", "line": 1, "quote": "HIDDEN_TAIL_VALUE"}
         self.assertIsNone(verify_reference(reference, shown, "HIDDEN_TAIL_VALUE is set"))  # ...so it cannot cite it.
 
+    def test_old_git_without_max_count_still_searches_and_last_line_has_no_phantom(self):
+        from unittest.mock import patch
+        from graph_engineering import question_answering as qa
+        from graph_engineering.investigation import committed_files
+        sha = __import__("tests.test_core", fromlist=["git"]).git(self.repo, "rev-parse", "HEAD")
+        real, calls = qa.command, []
+
+        def old_git(argv, *args, **kwargs):
+            calls.append(argv)
+            if "--max-count=50" in argv:
+                return {"returncode": 129, "timed_out": False, "output": "error: unknown option `max-count=50'"}
+            return real(argv, *args, **kwargs)
+        with patch("graph_engineering.question_answering.command", side_effect=old_git):
+            evidence, shown = qa.focused_evidence(self.repo, sha, ["return"], ["calc.py"], committed_files(self.repo, sha))
+        self.assertEqual(len(calls), 2)
+        self.assertNotIn("search_incomplete", evidence)
+        self.assertEqual(evidence["files_containing_term"]["return"][0], "calc.py")
+        # calc.py has one line ending in a newline: no phantom empty line 2 is shown or citable.
+        self.assertEqual(sorted(shown["calc.py"]), [1])
+
     def test_line_numbers_match_git_with_form_feeds_and_failed_search_degrades(self):
         from unittest.mock import patch
         from graph_engineering.investigation import committed_files
