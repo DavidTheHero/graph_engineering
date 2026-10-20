@@ -136,6 +136,11 @@ def build_server(home: Path, profile: str = "read", client: str = "mcp") -> MCPS
         return run("model_health", refresh=refresh)
 
     @tool("read", READ)
+    def needs_human() -> dict[str, Any]:
+        """Tickets waiting for a person: the decision each needs, its questions and the available actions."""
+        return run("needs_human")
+
+    @tool("read", READ)
     def model_assignment() -> dict[str, Any]:
         """Which models serve which graph roles, and the measured evidence and exclusion reasons behind it."""
         return run("model_assignment")

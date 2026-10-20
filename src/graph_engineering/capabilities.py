@@ -325,6 +325,16 @@ class Capabilities:
         return {"applied": applied, "latest_assessment": None if plan is None else {
             k: plan[k] for k in ("generated_at", "complete", "uncovered_roles", "role_routes", "roles_by_model", "decisions")}}
 
+    def needs_human(self) -> dict:
+        """Tickets waiting for a person and what decision each needs. Approvals themselves stay human-only."""
+        from .attention import items
+        with self._tickets() as tickets:
+            found = items(tickets)
+        return {"items": _bounded([{k: i.get(k) for k in ("ticket_id", "kind", "headline", "priority", "title", "waiting_since",
+                                                            "context", "questions")} | {"actions": [a["label"] for a in i["actions"]]}
+                                   for i in found], 2000), "total": len(found), "trust": UNTRUSTED,
+                "note": "Read-only. Clarifications may be added with add_clarification (operate); approvals are human-only."}
+
     def scheduler_status(self) -> dict:
         with self._tickets() as tickets:
             return {"paused": tickets.setting("paused", False), "workers": tickets.setting("workers"),

@@ -69,8 +69,11 @@ def read_blob(repo,sha,name):
     return result['output']
 
 
-def retrieve(repo,sha,keywords,original):
-    """Literal bounded search of committed blobs; no model-supplied commands."""
+def committed_files(repo,sha):
+    """Committed blobs a model may ever see: regular text-like files of bounded size, never secret-looking paths.
+
+    The single filter for every model-facing read (investigation retrieval and question answering).
+    """
     listing=git(repo,'ls-tree','-rz','--long',sha)
     allowed={}
     extensions=set(CODE_SUFFIXES)|set(DOC_SUFFIXES)
@@ -81,6 +84,12 @@ def retrieve(repo,sha,keywords,original):
             and int(parts[3])<=180000 and PurePosixPath(name).suffix in extensions
             and not re.search(r'(^|/)(\.env|.*(?:secret|credential|private.key))',name,re.I)
             and ':' not in name and '\n' not in name and '\\' not in name):allowed[name]=parts[2]
+    return allowed
+
+
+def retrieve(repo,sha,keywords,original):
+    """Literal bounded search of committed blobs; no model-supplied commands."""
+    allowed=committed_files(repo,sha)
     terms=[]
     for term in [*keywords,*re.findall(r'[A-Za-z_][A-Za-z_0-9]{3,}',original)]:
         term=term.strip()[:60]

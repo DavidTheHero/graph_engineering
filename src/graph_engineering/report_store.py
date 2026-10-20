@@ -9,6 +9,9 @@ import uuid
 
 from .runtime import digest, now, redact
 
+# Further investigations an intake ticket may request (operator clarifications and model answers alike).
+INVESTIGATION_BUDGET = 3
+
 
 def migrate(db):
     db.executescript('''
