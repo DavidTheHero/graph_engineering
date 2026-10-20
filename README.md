@@ -105,6 +105,8 @@ the latest observed health. A complex role never silently falls back to a small 
 unless it is listed in `small_fallback_roles`. Every fallback is a persisted
 `degraded_routing` event. See [ADR 006](docs/ADR-006-capability-routing.md).
 
+**Automatic assignment:** `graph-engineer models assign --endpoint URL …` probes every advertised model through OpenCode (structured output, verified citations, long-context grounding) and assigns each graph role an ordered list of qualifying models. It is a dry run until `--apply`. See [model assignment](docs/MODEL-ASSIGNMENT.md).
+
 ## Infrastructure faults
 
 Worker startup stalls, timeouts and unavailable or busy models are retried automatically with backoff (15 s, 30 s, 60 s, 120 s). They do not spend a step's attempt budget. Tickets wait in the **Retry** queue with the reason shown, and are dead-lettered with the exact cause only when the allowance (`max_infrastructure_retries`, default 4) is exhausted. A silent OpenCode worker is detected after `startup_timeout` (45 s), not the 120 s call timeout. See [ADR 008](docs/ADR-008-infrastructure-faults.md).

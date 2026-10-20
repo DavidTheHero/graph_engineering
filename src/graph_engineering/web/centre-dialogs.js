@@ -55,7 +55,7 @@ export function repositoryStart(refresh){
  formDialog('Start a controlled workflow',root=>{
   const repository=selectField('Repository',state.snapshot.repositories.map(r=>[r.id,r.label]),repo==='all'?state.snapshot.repositories[0]?.id:repo);
   const mode=selectField('Operation mode',[['read_only','Read-only scan · metadata and source parsing'],['assisted','Assisted development · approved test execution'],['autonomous','Autonomous · existing scoped merge policy required']],'read_only');
-  const routing=selectField('Model routing',[['multimodel','Small-tier triage/review + large-tier engineering'],['baseline','Large-tier model only']],'multimodel');
+  const routing=selectField('Model routing',[['multimodel','Small-tier triage/review + large-tier engineering'],['baseline','Large-tier model only'],['assigned','Measured assignment (models assign --apply)']],'multimodel');
   const scan=field('Stop after a validated ticket, before implementation','checkbox');scan.input.checked=true;
   const investigate=field('Use a local Qwen worker for bounded read-only source investigation','checkbox');investigate.input.checked=true;
   const parallel=field('Run configured build checks alongside tests (independent commands only)','checkbox');

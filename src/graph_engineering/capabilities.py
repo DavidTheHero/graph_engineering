@@ -314,6 +314,15 @@ class Capabilities:
                 result[key]["advertised"] = found["advertised"]
         return {"models": result}
 
+    def model_assignment(self) -> dict:
+        """The applied role assignment and the latest assessment evidence (dry run or applied)."""
+        from .model_assignment import load_routing
+        applied = load_routing(self.home)
+        latest = self.home / "model-assignment.json"
+        plan = json.loads(latest.read_text(encoding="utf-8")) if latest.is_file() else None
+        return {"applied": applied, "latest_assessment": None if plan is None else {
+            k: plan[k] for k in ("generated_at", "complete", "uncovered_roles", "role_routes", "roles_by_model", "decisions")}}
+
     def scheduler_status(self) -> dict:
         with self._tickets() as tickets:
             return {"paused": tickets.setting("paused", False), "workers": tickets.setting("workers"),

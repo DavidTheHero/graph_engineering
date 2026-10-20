@@ -46,7 +46,9 @@ def create(tickets, data, key):
     if options['reproduce'] and (not config.get('trusted_local') or data.get('trust_execution') is not True):
         raise ValueError('Reproduction requires a trusted repository and explicit code-execution approval')
     config.update(repo=repo['source'],source_repo=repo['source'],run_mode='intake',auto_merge=False,
-                  routing='multimodel',intake_repository_id=repo['id'])
+                  # Intake keeps a measured assignment when one is configured; otherwise role tiers.
+                  routing='assigned' if config.get('routing')=='assigned' and config.get('role_routes') else 'multimodel',
+                  intake_repository_id=repo['id'])
     request_hash=digest(['create-ticket',data])
     db=tickets.db;db.execute('BEGIN IMMEDIATE')
     try:

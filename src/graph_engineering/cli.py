@@ -68,7 +68,8 @@ def parser() -> argparse.ArgumentParser:
     init.add_argument("--trust-local-code", action="store_true", help="permit this repository's code to run locally")
     init.add_argument("--auto-merge", action="store_true", help="explicitly enable trusted low-risk automatic merge policy")
     init.add_argument("--base", help="base branch override")
-    init.add_argument("--routing", choices=("baseline", "multimodel"), default="baseline", help="A-only measured baseline or two-model roles")
+    init.add_argument("--routing", choices=("baseline", "multimodel", "assigned"), default=None,
+                      help="large-tier only, role tiers, or the applied measured assignment (default: assigned if applied, else baseline)")
     init.add_argument("--test-command", type=_argv, help="explicit JSON argv; never shell text")
     for name in ("scan", "execute", "enqueue"):
         command = commands.add_parser(name, help="create a run and " + ("collect validated evidence" if name == "scan" else "execute its graph"))
@@ -122,7 +123,18 @@ def parser() -> argparse.ArgumentParser:
     start.add_argument("--mode", choices=("read_only", "assisted"), default="read_only")
     start.add_argument("--inspect-with-model", action="store_true", help="read-only model inspection of source")
     start.add_argument("--trust-execution", action="store_true", help="explicitly permit this repository's code to run (assisted)")
-    commands.add_parser("models", help="list the model registry and verify advertised identifiers")
+    models = commands.add_parser("models", help="list the model registry and verify advertised identifiers")
+    model_commands = models.add_subparsers(dest="models_command")
+    assign = model_commands.add_parser("assign", help="probe a set of models and assign them to graph roles")
+    assign.add_argument("--endpoint", action="append", default=[], help="OpenAI-compatible base URL (repeatable); "
+                        "default: the endpoints in the current registry")
+    assign.add_argument("--model", action="append", default=[], metavar="URL=MODEL_ID",
+                        help="assess only these model ids on an endpoint (repeatable); default: every advertised model")
+    assign.add_argument("--trials", type=int, default=3, help="probe calls per test (1-10)")
+    assign.add_argument("--apply", action="store_true", help="write models.json/routing.json and update registered repositories")
+    assign.add_argument("--plan", type=Path, help="apply a previously saved plan instead of probing again")
+    assign.add_argument("--allow-partial", action="store_true", help="apply although some models were unreachable")
+    assign.add_argument("--allow-uncovered", action="store_true", help="apply although some roles have no eligible model")
     mcp = commands.add_parser("mcp", help="Model Context Protocol server")
     mcp_commands = mcp.add_subparsers(dest="mcp_command", required=True)
     mcp_serve = mcp_commands.add_parser("serve", help="serve MCP over stdio (default) or loopback HTTP")
@@ -248,6 +260,8 @@ def _platform_command(args) -> int:
     from . import control_repositories as repositories
     if args.command == "mcp":
         return _mcp(args)
+    if args.command == "models" and args.models_command == "assign":
+        return _assign_models(args)
     if args.command == "models":
         from .models import discover_models, load_models
         _emit(discover_models(load_models(args.home)))
@@ -275,6 +289,44 @@ def _platform_command(args) -> int:
     finally:
         tickets.store.close()
     return 0
+
+
+def _assign_models(args) -> int:
+    from . import model_assignment as assignment
+    from .models import load_models
+    if args.plan:
+        plan = json.loads(args.plan.read_text(encoding="utf-8"))
+    else:
+        if not 1 <= args.trials <= 10:
+            raise ValueError("--trials must be 1-10")
+        endpoints = args.endpoint or sorted({m["endpoint"].rstrip("/") for m in load_models(args.home).values()})
+        select: dict[str, list[str]] = {}
+        for item in args.model:
+            url, sep, model_id = item.rpartition("=")
+            if not sep or not url or not model_id:
+                raise ValueError("--model must be URL=MODEL_ID")
+            select.setdefault(url.rstrip("/"), []).append(model_id)
+            if url.rstrip("/") not in [e.rstrip("/") for e in endpoints]:
+                endpoints.append(url)
+        plan = assignment.assess(endpoints, home=args.home, select=select, trials=args.trials)
+        args.home.mkdir(parents=True, exist_ok=True)
+        (args.home / "model-assignment.json").write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
+    summary = {"complete": plan["complete"], "uncovered_roles": plan["uncovered_roles"], "role_routes": plan["role_routes"],
+               "models": {k: {"model_id": p.get("model_id"), "reachable": p["reachable"], "tier": p.get("tier"),
+                              "context": p.get("context"), "parameters_b": p.get("parameters_b"),
+                              "roles": plan["roles_by_model"].get(k, []), "assessed": p["reachable"] and p.get("assessed", True),
+                              **({"rates": {m: round(v, 2) if isinstance(v, float) else v
+                                            for m, v in assignment.rates(p).items()}} if p["reachable"] and p.get("assessed", True)
+                                 else {"error": p.get("error") or p.get("skipped") or (p.get("infrastructure_errors") or [None])[0]})}
+                          for k, p in plan["models"].items()},
+               "plan": str(args.plan or args.home / "model-assignment.json")}
+    if args.apply:
+        summary["applied"] = assignment.apply_plan(plan, args.home, allow_partial=args.allow_partial,
+                                                   allow_uncovered=args.allow_uncovered)
+    else:
+        summary["next"] = "Dry run. Review the plan, then rerun with --apply (or --plan <file> --apply)."
+    _emit(summary)
+    return 0 if plan["complete"] and not plan["uncovered_roles"] else 2
 
 
 def _mcp(args) -> int:

@@ -136,6 +136,11 @@ def build_server(home: Path, profile: str = "read", client: str = "mcp") -> MCPS
         return run("model_health", refresh=refresh)
 
     @tool("read", READ)
+    def model_assignment() -> dict[str, Any]:
+        """Which models serve which graph roles, and the measured evidence and exclusion reasons behind it."""
+        return run("model_assignment")
+
+    @tool("read", READ)
     def scheduler_status() -> dict[str, Any]:
         """Scheduler pause state, worker concurrency, model capacity and service heartbeat."""
         return run("scheduler_status")

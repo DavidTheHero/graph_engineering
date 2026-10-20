@@ -24,7 +24,10 @@ ROLE_TIERS = {
     "regression_test": LARGE, "deep_review": LARGE,
 }
 COMPLEX_ROLES = frozenset(role for role, tier in ROLE_TIERS.items() if tier == LARGE)
-PROFILES = ("baseline", "multimodel")
+PROFILES = ("baseline", "multimodel", "assigned")
+# "assigned" follows config["role_routes"]: per-role ordered model lists produced by
+# measured model assignment (model_assignment.py). Each list already contains only
+# the models that met that role's requirements, so it is also the fallback order.
 
 
 class RoutingError(ModelError):
@@ -43,19 +46,29 @@ def preferred_tier(config: dict, role: str, requested: str | None = None) -> str
     """``baseline`` keeps the measured large-model-only default; ``multimodel`` uses role tiers."""
     if config.get("routing", "baseline") == "baseline":
         return LARGE
+    if config.get("routing") == "assigned":
+        route = config.get("role_routes", {}).get(role) or []
+        if route and route[0] in config.get("models", {}):
+            return tier_of(config["models"], route[0])
     return requested if requested in TIERS else ROLE_TIERS.get(role, LARGE)
 
 
 def candidates(config: dict, role: str, requested: str | None = None) -> list[str]:
     """Ordered model keys permitted for this role: preferred tier first, then permitted fallbacks."""
     models = config.get("models", {})
-    usable = [k for k, m in models.items() if m.get("model_id") and role in (m.get("roles") or [role])]
-    tier = preferred_tier(config, role, requested)
-    ordered = [k for k in usable if tier_of(models, k) == tier]
-    # A bounded role may escalate to a larger model; a complex role may use a small
-    # model only when the operator explicitly lists that role.
-    if tier == SMALL or role in config.get("small_fallback_roles", []):
-        ordered += [k for k in usable if k not in ordered]
+    # roles=None (absent) permits every role; an explicit list, even empty, is an allow-list.
+    usable = [k for k, m in models.items() if m.get("model_id") and (m.get("roles") is None or role in m["roles"])]
+    if config.get("routing") == "assigned":
+        # Measured assignment: only the listed models, in the listed order. A role with
+        # no route has no eligible model and must fail closed, not guess.
+        ordered = [k for k in config.get("role_routes", {}).get(role, []) if k in usable]
+    else:
+        tier = preferred_tier(config, role, requested)
+        ordered = [k for k in usable if tier_of(models, k) == tier]
+        # A bounded role may escalate to a larger model; a complex role may use a small
+        # model only when the operator explicitly lists that role.
+        if tier == SMALL or role in config.get("small_fallback_roles", []):
+            ordered += [k for k in usable if k not in ordered]
     override = config.get("model_overrides", {}).get(role)
     if override:
         if override not in usable:

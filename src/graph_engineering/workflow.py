@@ -188,8 +188,12 @@ def graph_contracts() -> list[dict]:
 
 def initialise(repo: Path, root: Path, backend: str = "local", trusted_local: bool = False,
                slug: str | None = None, test_command: list[str] | None = None,
-               auto_merge: bool = False, base: str | None = None, routing: str = "baseline") -> Path:
+               auto_merge: bool = False, base: str | None = None, routing: str | None = None) -> Path:
     info = discover(Path(repo))
+    from .model_assignment import load_routing
+    assigned = load_routing(Path(root))
+    # An applied measured assignment is the controller default; an explicit profile still wins.
+    routing = routing or (assigned["routing"] if assigned else "baseline")
     if backend not in ("local", "github"):
         raise ValueError("Unknown publication backend")
     if backend == "github" and (not slug or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", slug)):
@@ -205,6 +209,10 @@ def initialise(repo: Path, root: Path, backend: str = "local", trusted_local: bo
               "max_repairs": 2, "max_node_attempts": 2, "command_timeout": 120,
               "models": load_models(root), "routing": routing, "required_checks": [], "auto_merge_paths": [],
               "allow_same_model_review": True, "protected_paths": []}
+    if routing == "assigned":
+        if not assigned:
+            raise ValueError("Assigned routing needs an applied model assignment: graph-engineer models assign --apply")
+        config["role_routes"] = assigned["role_routes"]
     github_inspection = None
     if backend == "github":
         github_inspection = GitHubBackend(Path(root), Path(info["repo"]), slug, config["base"]).inspect_repository()
