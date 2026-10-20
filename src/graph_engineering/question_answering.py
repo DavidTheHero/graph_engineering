@@ -75,10 +75,8 @@ class QuestionAnsweringNodes:
             'operator_notes': _notes(state),
             'repository_evidence': _evidence(state),
         }
-        # This node exists specifically for a bounded small-tier worker, independent of
-        # the repository's broader baseline/multimodel routing profile.
-        routed=state | {'config': state['config'] | {'routing': 'multimodel'}}
-        result=self.ask(routed, 'question_answering', prompt, QUESTION_ANSWER_SCHEMA, routing.SMALL)
+        # routing.SMALL_FIRST_ROLES keeps this bounded worker on the small tier in every profile.
+        result=self.ask(state, 'question_answering', prompt, QUESTION_ANSWER_SCHEMA, routing.SMALL)
         model=state['config']['models'][self.last_model]
         if [answer['question'] for answer in result['answers']] != questions:
             raise ValueError('Question-answer response did not preserve the persisted questions exactly')

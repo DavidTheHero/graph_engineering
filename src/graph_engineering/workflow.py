@@ -124,7 +124,7 @@ REQUIRED_INPUTS = {
 OPTIONAL_INPUTS = {"regression_authoring":{"development_information":ARRAY}, "task_planning":{"development_information":ARRAY}, "issue_detection": {"validation_feedback": STR},
                    "isolated_implementation": {"verification": DICT, "review": DICT,"development_information":ARRAY},
                    "completion": {"outcome": STR, "postmerge": DICT, "issue": DICT}}
-OPTIONAL_OUTPUTS = {"evidence_collection": {"outcome": STR},
+OPTIONAL_OUTPUTS = {"evidence_collection": {"outcome": STR}, "isolated_implementation": {"implementation_model": STR},
                     'regression_validation':{k:STR if k=='fingerprint' else DICT for k in ('regression_baseline','baseline','validation','candidate','fingerprint','frozen','bundle')},
                     "deduplication": {"duplicate_of": STR, "outcome": STR},
                     "escalation": {"error": STR}, "approval_gate": {"policy_snapshot": DICT}}
@@ -167,11 +167,18 @@ class TransitionError(RuntimeError):
     """A node handler attempted an undeclared graph transition (a controller defect)."""
 
 
-def transitions(name: str) -> set[str]:
+def transitions(name: str, state: dict | None = None) -> set[str]:
     spec = REGISTRY[name]
     edges = CONDITIONAL_EDGES.get(name, [spec.next, spec.failure])
     # A node may always hold its position (blocked, waiting or bounded retry).
-    return {edge.split(" ", 1)[0] for edge in edges} | {name}
+    allowed = {edge.split(" ", 1)[0] for edge in edges} | {name}
+    if name == "question_answering" and state is not None:
+        # Data-driven edge: answers return the ticket to the checkpoint where it was blocked,
+        # which can be any graph node. Only that recorded, real node is permitted.
+        target = (state.get("question_answer_request") or {}).get("return_node")
+        if target in REGISTRY and target != name:
+            allowed.add(target)
+    return allowed
 
 
 def graph_contracts() -> list[dict]:
@@ -313,7 +320,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                 deadline_token = NODE_DEADLINE.set(started + spec.timeout_seconds)
                 try:
                     updates, next_node, status = getattr(self, "node_" + node_name)(state)
-                    if next_node not in transitions(node_name):
+                    if next_node not in transitions(node_name, state):
                         raise TransitionError(f"Undeclared transition {node_name} -> {next_node}")
                     # Terminal shortcuts have an explicit documented conditional edge.
                     if status not in ("no_findings", "duplicate", "blocked", "escalated"):
@@ -616,7 +623,8 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                              "previous_failure": state.get("verification", {}).get("output", "")[-4000:],
                              "review_feedback": state.get("review", {}),"additional_information":troubleshooting_context(state)}, HUNK_SCHEMA if accepted else PATCH_SCHEMA, routing.LARGE)
             edits = validate_edits(path, materialize_hunks(path,patch,state['plan']['files']) if accepted else patch["files"], state["plan"]["files"])
-            return {"patch":patch,"edits":edits,"edits_hash":digest(edits)}
+            # The model that actually wrote the patch (routing may have fallen back since model_selection).
+            return {"patch":patch,"edits":edits,"edits_hash":digest(edits),"model":self.last_model}
         # Persist validated complete contents before writing so a resumed fragment
         # proposal never tries to match its old source a second time.
         proposal=self.store.effect(self.run_id,"accepted_source_proposal-"+str(state["repairs"]),propose,on_uncertain=propose) if accepted else propose()
@@ -624,7 +632,8 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         patch=proposal["patch"];edits=validate_edits(path,proposal["edits"],state["plan"]["files"])
         # A killed controller may leave its prior proposal applied. Reapplying complete files is idempotent.
         wt.apply(edits)
-        return {"worktree": str(path), "branch": branch, "patch": patch}, "test_execution", "ready"
+        return {"worktree": str(path), "branch": branch, "patch": patch,
+                "implementation_model": proposal.get("model") or state["implementation_model"]}, "test_execution", "ready"
 
     def verify_files(self, state):
         path = Path(state["worktree"])

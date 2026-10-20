@@ -24,6 +24,9 @@ ROLE_TIERS = {
     "regression_test": LARGE, "deep_review": LARGE,
 }
 COMPLEX_ROLES = frozenset(role for role, tier in ROLE_TIERS.items() if tier == LARGE)
+# Roles that always prefer the small tier, whatever the profile (a bounded, cheap worker by design).
+# A measured assignment ("assigned") still decides their order.
+SMALL_FIRST_ROLES = frozenset({"question_answering"})
 PROFILES = ("baseline", "multimodel", "assigned")
 # "assigned" follows config["role_routes"]: per-role ordered model lists produced by
 # measured model assignment (model_assignment.py). Each list already contains only
@@ -44,6 +47,8 @@ def tier_of(models: dict, key: str) -> str:
 
 def preferred_tier(config: dict, role: str, requested: str | None = None) -> str:
     """``baseline`` keeps the measured large-model-only default; ``multimodel`` uses role tiers."""
+    if role in SMALL_FIRST_ROLES and config.get("routing") != "assigned":
+        return SMALL
     if config.get("routing", "baseline") == "baseline":
         return LARGE
     if config.get("routing") == "assigned":

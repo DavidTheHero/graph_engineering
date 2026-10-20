@@ -12,18 +12,11 @@ import tempfile
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from graph_engineering.model_assignment import TRIAGE_CASES, TRIAGE_SCHEMA
 from graph_engineering.models import ModelClient, ModelError, OpenCodeWorker, load_models
 
-TRIAGE_CASES = [  # (report, expected category)
-    ("The app crashes with a NullPointerException when I click save on an empty form.", "bug"),
-    ("Please add dark mode to the settings page.", "feature"),
-    ("Login tokens are written to the browser console in production builds.", "security"),
-    ("The dashboard takes 40 seconds to load once there are 10k rows.", "performance"),
-    ("The README install steps reference a script that no longer exists.", "documentation"),
-]
-SCHEMA = {"type": "object", "additionalProperties": False, "required": ["category", "rationale"],
-          "properties": {"category": {"type": "string", "enum": ["bug", "feature", "security", "performance", "documentation"]},
-                         "rationale": {"type": "string", "maxLength": 300}}}
+# Shared with automatic assignment so benchmark and assignment numbers stay comparable.
+SCHEMA = TRIAGE_SCHEMA
 TOOL = {"type": "function", "function": {"name": "search_repository", "description": "Literal search of committed source",
         "parameters": {"type": "object", "required": ["terms"], "additionalProperties": False,
                        "properties": {"terms": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 4}}}}}

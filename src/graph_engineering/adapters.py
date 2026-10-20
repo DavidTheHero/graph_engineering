@@ -44,7 +44,9 @@ def is_test(path: str) -> bool:
     p = PurePosixPath(path)
     name = p.name.lower()
     return (name.startswith(("test", "spec")) or bool(re.search(r"[._-](?:test|spec)s?[._-]", name))
-            or bool(re.search(r"(?:test|tests|spec)\.(?:java|kt|cs|scala|swift|php)$", name))
+            # JVM/.NET/Swift/PHP convention: FooTest.java, FooTests.cs, FooSpec.scala (case-sensitive, so
+            # Latest.kt and Contest.php stay source files).
+            or bool(re.search(r"[a-z0-9](?:Test|Tests|Spec)\.(?:java|kt|cs|scala|swift|php)$", p.name))
             or bool({part.lower() for part in p.parts[:-1]} & TEST_DIRS))
 
 

@@ -231,7 +231,8 @@ class Tickets:
                         or model not in models or not models[model].get('model_id')):
                     raise ValueError('Invalid role/model assignment')
                 if role in routing.COMPLEX_ROLES and routing.tier_of(models, model) != routing.LARGE:
-                    raise ValueError('Complex engineering roles require a large-tier model'); state['config'].setdefault('model_overrides',{})[role] = model
+                    raise ValueError('Complex engineering roles require a large-tier model')
+                state['config'].setdefault('model_overrides',{})[role] = model
                 self.db.execute('UPDATE runs SET state=? WHERE id=?', (json.dumps(state),run_id))
             else: raise ValueError('Unsupported ticket command')
             for field, value in updates.items():

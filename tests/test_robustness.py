@@ -131,19 +131,22 @@ class InfrastructureRetryTests(unittest.TestCase):
 
 
 class ControllerAndDeadlineTests(unittest.TestCase):
-    def test_live_controller_requires_fresh_heartbeat_and_existing_process(self):
+    def test_live_controller_is_decided_by_the_scheduler_lock_not_the_heartbeat(self):
+        from graph_engineering.runtime import RepoLock
         from graph_engineering.tickets import Tickets
         with tempfile.TemporaryDirectory() as folder:
             home = Path(folder)
             self.assertIsNone(live_controller(home))
             tickets = Tickets(home)
             try:
-                tickets.set_setting("worker_service", {"pid": os.getpid(), "observed": time.time()})
-                self.assertEqual(live_controller(home), os.getpid())
-                tickets.set_setting("worker_service", {"pid": os.getpid(), "observed": time.time() - 60})
+                # A fresh heartbeat left behind by a dead scheduler is not proof of life.
+                tickets.set_setting("worker_service", {"pid": 4242, "observed": time.time()})
                 self.assertIsNone(live_controller(home))
-                tickets.set_setting("worker_service", {"pid": 2 ** 22 + 12345, "observed": time.time()})
-                self.assertIsNone(live_controller(home))
+                with RepoLock(home, "scheduler"):  # What a running scheduler holds for its whole life.
+                    # Even a stale heartbeat (slow health sweep) does not hide a live scheduler.
+                    tickets.set_setting("worker_service", {"pid": 4242, "observed": time.time() - 600})
+                    self.assertEqual(live_controller(home), 4242)
+                self.assertIsNone(live_controller(home))  # The kernel released the lock.
             finally:
                 tickets.store.close()
 

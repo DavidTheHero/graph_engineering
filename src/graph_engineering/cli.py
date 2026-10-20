@@ -208,6 +208,16 @@ def _version(argv: list[str]) -> str | None:
     return (result.stdout or result.stderr).strip().splitlines()[0] if result.returncode == 0 else None
 
 
+def _gh_authenticated() -> bool:
+    """gh is optional: a missing binary, a hang (keychain/network prompt) or an error means 'not authenticated'."""
+    if shutil.which("gh") is None:
+        return False
+    try:
+        return subprocess.run(["gh", "auth", "status"], capture_output=True, timeout=15).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def _doctor(home: Path) -> dict:
     """Validate the environment. Required: git, OpenCode 2.0.32 and at least one model with a verified id."""
     from .models import discover_models, load_models
@@ -218,9 +228,7 @@ def _doctor(home: Path) -> dict:
         checks["opencode"] = {"available": True, "executable": executable, "version": version}
     except Exception as exc:
         checks["opencode"] = {"available": False, "error": str(exc)}
-    checks["gh"] = {"version": _version(["gh", "--version"]),
-                    "authenticated": shutil.which("gh") is not None and subprocess.run(
-                        ["gh", "auth", "status"], capture_output=True, timeout=15).returncode == 0}
+    checks["gh"] = {"version": _version(["gh", "--version"]), "authenticated": _gh_authenticated()}
     checks["node"] = _version(["node", "--version"])
     try:
         models = load_models(home)

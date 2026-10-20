@@ -13,9 +13,15 @@ def config(profile="multimodel", **extra):
 
 class RoutingTests(unittest.TestCase):
     def test_baseline_profile_routes_every_role_to_the_large_tier(self):
-        for role in routing.ROLE_TIERS:
+        for role in set(routing.ROLE_TIERS) - routing.SMALL_FIRST_ROLES:
             with self.subTest(role=role):
                 self.assertEqual(routing.select(config("baseline"), role)[0], "a")
+
+    def test_question_answering_is_small_first_in_every_profile_but_assigned_order_wins(self):
+        for profile in ("baseline", "multimodel"):
+            self.assertEqual(routing.candidates(config(profile), "question_answering"), ["b", "a"])
+        assigned = config("assigned", role_routes={"question_answering": ["a"]})
+        self.assertEqual(routing.candidates(assigned, "question_answering"), ["a"])
 
     def test_multimodel_profile_uses_role_tiers(self):
         self.assertEqual(routing.select(config(), "classification")[0], "b")

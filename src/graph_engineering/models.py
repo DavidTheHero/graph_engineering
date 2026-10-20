@@ -63,7 +63,10 @@ class ModelEndpoint:
 
     @property
     def small(self) -> bool:
-        return self.tier == "small" or (not self.tier and self.context is not None and self.context <= 16384)
+        # Same rule as routing.tier_of: an explicit known tier wins; otherwise infer from the context window.
+        if self.tier in ("large", "small"):
+            return self.tier == "small"
+        return self.context is not None and self.context <= 16384
 
     @classmethod
     def from_mapping(cls, value: dict | ModelEndpoint) -> ModelEndpoint:
@@ -275,6 +278,36 @@ def detect_opencode() -> tuple[str, str]:
     return executable, found.group(1)
 
 
+TRANSIENT_HTTP = {408, 409, 425, 429}
+
+
+def _json_or_none(line: str):
+    try:
+        return json.loads(line)
+    except (ValueError, TypeError):
+        return None
+
+
+def provider_rejection(event) -> int | None:
+    """HTTP status of a deterministic provider rejection (4xx other than timeouts/rate limits), else None.
+
+    OpenCode wraps provider failures as {"error": {"status": ..., "response": {"body": "{\"error\": {\"code\": ...}}"}}}.
+    5xx, network errors and unknown shapes stay transient: retrying them can succeed.
+    """
+    if not isinstance(event, dict):
+        return None
+    error = event.get("error") if isinstance(event.get("error"), dict) else {}
+    codes = [error.get("status"), error.get("statusCode")]
+    body = (error.get("response") or {}).get("body") if isinstance(error.get("response"), dict) else None
+    parsed = _json_or_none(body) if isinstance(body, str) else body
+    if isinstance(parsed, dict) and isinstance(parsed.get("error"), dict):
+        codes.append(parsed["error"].get("code"))
+    for code in codes:
+        if isinstance(code, int) and 400 <= code < 500 and code not in TRANSIENT_HTTP:
+            return code
+    return None
+
+
 def parse_opencode_output(stdout: str) -> tuple[dict, dict]:
     texts, sessions, tools = [], set(), []
     for line in stdout.splitlines():
@@ -291,7 +324,9 @@ def parse_opencode_output(stdout: str) -> tuple[dict, dict]:
         if event.get("sessionID"):
             sessions.add(event["sessionID"])
         if kind in ("error", "session.error"):
-            raise ModelError("OpenCode emitted an error event", transient=True, phase="provider")
+            permanent = provider_rejection(event)
+            raise ModelError("OpenCode emitted an error event" + (f" (provider rejected request: HTTP {permanent})" if permanent else ""),
+                             transient=not permanent, phase="provider")
         if kind in ("tool_use", "tool_result", "tool") or part.get("type") in ("tool", "tool-invocation"):
             tools.append(kind)
         if kind == "text" and isinstance(part.get("text"), str):
@@ -478,7 +513,12 @@ class OpenCodeWorker:
                 stdout, stderr = stdout.replace(secret, "[REDACTED]"), stderr.replace(secret, "[REDACTED]")
             record.update(exit_code=code, stdout=stdout[:2_000_000], stderr=stderr[:64000])
             if code:
-                raise ModelError("OpenCode exited unsuccessfully; inspect retained result", transient=True, phase="exit")
+                # The event stream usually says why; a provider's 4xx rejection will not heal on retry.
+                rejected = next((status for line in stdout.splitlines() if '"error"' in line
+                                 for status in [provider_rejection(_json_or_none(line))] if status), None)
+                raise ModelError("OpenCode exited unsuccessfully; inspect retained result" +
+                                 (f" (provider rejected request: HTTP {rejected})" if rejected else ""),
+                                 transient=rejected is None, phase="exit")
             if len(stdout) > 2_000_000:
                 raise ModelError("OpenCode output exceeds evidence size cap")
             content, metadata = parse_opencode_output(stdout)

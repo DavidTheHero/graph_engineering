@@ -35,10 +35,7 @@ def required_model(ticket, health=None):
     if ticket['node']=='regression_review':
         from .accepted_development import regression_review_model
         tier=regression_review_model(ticket['state'])
-    config = ticket['state']['config']
-    if ticket['node']=='question_answering':
-        config = config | {'routing': 'multimodel'}
-    return routing.select(config, name, tier, health)[0]
+    return routing.select(ticket['state']['config'], name, tier, health)[0]
 
 
 def resource_key(ticket):

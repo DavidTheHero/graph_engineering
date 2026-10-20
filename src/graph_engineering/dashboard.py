@@ -201,24 +201,28 @@ def serve_dashboard(home: Path, port: int = 8765):
         server.serve_forever(poll_interval=0.25)
 
 
-def live_controller(home: Path, freshness=15.0):
-    """PID of a scheduler whose heartbeat is fresh and whose process exists, else None."""
+def live_controller(home: Path):
+    """PID of the running scheduler for this home, else None.
+
+    The scheduler holds an OS lock for its whole life and the kernel releases it on
+    death, so the lock, not a heartbeat or a PID probe, proves liveness. This is portable
+    (os.kill(pid, 0) sends CTRL_C_EVENT on Windows) and unaffected by slow health sweeps.
+    """
     if not (Path(home)/'state.sqlite3').exists():
         return None
+    from .runtime import BusyError, RepoLock
+    try:
+        with RepoLock(home, 'scheduler'):
+            return None
+    except BusyError:
+        pass
     from .tickets import Tickets
     tickets = Tickets(home)
     try:
-        service = tickets.setting('worker_service') or {}
+        pid = (tickets.setting('worker_service') or {}).get('pid')
     finally:
         tickets.store.close()
-    pid = service.get('pid')
-    if not isinstance(pid, int) or time.time() - service.get('observed', 0) > freshness:
-        return None
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return None
-    return pid
+    return pid if isinstance(pid, int) else -1
 
 
 def serve_centre(home: Path, port=8765, workers=2, attach_controller=False):
