@@ -14,3 +14,27 @@ dialog{background:var(--surface);color:var(--text);border:1px solid var(--line);
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 
 textarea{width:100%;resize:vertical;min-height:100px;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:10px;font:inherit;line-height:1.7}.intake-options summary{cursor:pointer;font-size:12px;margin-bottom:18px}.intake-comparison{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:24px;margin:18px 0}.intake-comparison h3{font-size:15px;line-height:1.7;margin-bottom:12px}.intake-comparison h4{font-size:12px;margin:20px 0 8px}.original-description{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:12px;line-height:1.9;padding:16px;background:var(--input);border:1px solid var(--line);border-radius:5px}.intake-prose,.intake-list,.finding{font-size:12px;line-height:1.9;overflow-wrap:anywhere}.intake-list{padding-left:20px}.finding{margin:12px 0;padding:12px;border-left:3px solid var(--accent);background:var(--input)}.finding code{display:block;white-space:pre-wrap;margin:8px 0}@media(max-width:800px){.intake-comparison{grid-template-columns:minmax(0,1fr)}}
+
+/* "Needs you": one compact card per decision */
+.inbox-total{display:inline-block;min-width:20px;padding:0 6px;border-radius:10px;text-align:center;font-size:11px;background:var(--raised);color:var(--muted)}
+.inbox-total.has-items{background:var(--warning);color:var(--bg);font-weight:700}
+.inbox-list{display:grid;gap:14px;max-width:980px}
+.inbox-card{border:1px solid var(--line);border-left:4px solid var(--warning);border-radius:7px;background:var(--surface);padding:16px 18px;display:grid;gap:10px}
+.inbox-card[data-kind=merge_approval],.inbox-card[data-kind=publication],.inbox-card[data-kind=start_development]{border-left-color:var(--accent)}
+.inbox-card[data-kind=blocked],.inbox-card[data-kind=dead_letter]{border-left-color:var(--error)}
+.inbox-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.inbox-title{background:none;border:0;padding:0;color:var(--text);font-weight:600;text-align:left;flex:1 1 280px;min-width:0;overflow-wrap:anywhere}
+.inbox-title:hover,.inbox-title:focus-visible{text-decoration:underline}
+.inbox-age{color:var(--muted);font-size:12px}
+.inbox-headline{margin:0;font-size:16px}
+.inbox-context{margin:0;padding-left:18px;color:var(--muted);display:grid;gap:3px}
+.inbox-question{display:grid;gap:6px;padding:10px 12px;background:var(--raised);border-radius:6px}
+.inbox-question label{font-weight:600;overflow-wrap:anywhere}
+.inbox-question textarea,.inbox-note{min-height:56px}
+.inbox-proposal{display:flex;flex-wrap:wrap;align-items:center;gap:8px;color:var(--muted);font-size:13px}
+.inbox-proposal code{font-size:12px}
+.inbox-actor{max-width:340px;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:8px 10px}
+.inbox-consent{display:flex;gap:8px;align-items:flex-start;color:var(--text)}
+.inbox-actions{display:flex;flex-wrap:wrap;gap:8px}
+.inbox-empty{color:var(--muted);padding:40px 0}
+@media(max-width:480px){.inbox-card{padding:12px}.inbox-title{flex-basis:100%}}

@@ -3584,6 +3584,31 @@
       "properties": {
         "question_answers": {
           "type": "object"
+        },
+        "clarifications": {
+          "type": "array"
+        },
+        "intake": {
+          "type": "object"
+        },
+        "search_round": {
+          "type": "integer"
+        },
+        "validation_round": {
+          "type": "integer"
+        },
+        "finding_validation": {
+          "type": "object"
+        },
+        "investigation_result": {
+          "type": "object"
+        },
+        "error": {
+          "type": [
+            "string",
+            "object",
+            "null"
+          ]
         }
       },
       "required": [
@@ -3594,6 +3619,7 @@
     "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
     "conditional_edges": [
       "<recorded checkpoint> (returns to the node where the ticket was blocked)",
+      "repository_search (verified model answers to clarification questions; re-investigate)",
       "problem_investigation",
       "finding_validation",
       "ticket_finalisation",

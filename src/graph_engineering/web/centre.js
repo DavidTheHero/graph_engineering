@@ -1,18 +1,21 @@
 import {state,$,el,columns,categories,human,tag,shortModel,elapsed,stamp,filtered,json,command,toast,showError,facts,codeSection} from './centre-state.js';
 import {renderBoard,renderMonitor} from './centre-board.js';
+import {renderInbox,renderInboxCount} from './centre-inbox.js';
 import {renderNetwork,animateEvents,highlight,replayAt,returnLive,resizeNetwork,themeNetwork,toggleCluster} from './centre-network.js';
 import {openTicket,repositoryStart,connectRepository,formDialog,field,refreshTicketSummary,refreshTicketEvidence,createTicket,autonomyPolicy} from './centre-dialogs.js';
 
 let source,refreshing=false,refreshAgain=false,repoSignature='',latestSignature='',refreshTimer,replayTimer;
 const url=new URL(location.href),seenEvents=new Set();
-state.view=['board','network','monitor'].includes(url.searchParams.get('view'))?url.searchParams.get('view'):'board';
+state.view=['inbox','board','network','monitor'].includes(url.searchParams.get('view'))?url.searchParams.get('view'):'board';
 state.selected=url.searchParams.get('ticket');
 let waitingAnimations=[],inspectedNode=null;
 try{document.documentElement.dataset.theme=localStorage.getItem('ge-theme')||'dark';}catch{/* Preferences are optional. */}
 
 function updateURL(){const u=new URL(location.href);u.search='';u.searchParams.set('view',state.view);if(state.selected)u.searchParams.set('ticket',state.selected);if($('#repository').value!=='all')u.searchParams.set('repository',$('#repository').value);history.replaceState(null,'',u);}
-function view(name){state.view=name;for(const v of ['board','network','monitor']){$('#'+v+'-view').hidden=v!==name;const b=document.querySelector(`[data-view="${v}"]`);if(v===name)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');}renderViews();requestAnimationFrame(resizeNetwork);updateURL();}
-function renderViews(){if(!state.snapshot)return;const tickets=filtered();$('#ticket-total').textContent=tickets.length;
+function view(name){state.view=name;$('.filter-bar').hidden=name==='inbox';// Board filters do not apply to decisions.
+ for(const v of ['inbox','board','network','monitor']){$('#'+v+'-view').hidden=v!==name;const b=document.querySelector(`[data-view="${v}"]`);if(v===name)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');}renderViews();requestAnimationFrame(resizeNetwork);updateURL();}
+function renderViews(){if(!state.snapshot)return;const tickets=filtered();$('#ticket-total').textContent=tickets.length;renderInboxCount();
+ if(state.view==='inbox')renderInbox(selectTicket,refresh);
  if(state.view==='board')renderBoard(tickets,selectTicket);
  if(state.view==='monitor')renderMonitor(tickets,selectTicket,id=>{view('network');inspectNode(id);});
  if(state.view==='network'){renderNetwork(state.snapshot,tickets,selectTicket,inspectNode);if(inspectedNode)inspectNode(inspectedNode);}

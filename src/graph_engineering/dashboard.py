@@ -25,7 +25,7 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
           "/details.js": ("details.js", "text/javascript; charset=utf-8"),
           "/dom.js": ("dom.js", "text/javascript; charset=utf-8"),
           "/favicon.svg": ("favicon.svg", "image/svg+xml")}
-for asset in ('centre.js','centre-state.js','centre-board.js','centre-network.js','centre-dialogs.js','centre-motion.js','centre-intake.js'):
+for asset in ('centre.js','centre-state.js','centre-board.js','centre-network.js','centre-dialogs.js','centre-motion.js','centre-intake.js','centre-inbox.js'):
     ASSETS['/'+asset] = (asset,'text/javascript; charset=utf-8')
 ASSETS['/centre.css'] = ('centre.css','text/css; charset=utf-8')
 ASSETS['/cytoscape-host.css'] = ('cytoscape-host.css','text/css; charset=utf-8')

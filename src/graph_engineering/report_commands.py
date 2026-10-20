@@ -27,9 +27,12 @@ def act(tickets,data,key):
         node=ticket['node'];status=ticket['status']
         if action=='answer_questions':
             questions=state.get('enhanced',{}).get('questions',[])
-            if status!='blocked':raise ValueError('Qwen 4B question answering requires a blocked ticket at a safe checkpoint')
+            # Either a ticket blocked during execution, or an investigated intake ticket waiting for clarification.
+            waiting=state['config'].get('run_mode')=='intake' and status=='needs_information' and node=='ticket_finalisation'
+            if status!='blocked' and not waiting:raise ValueError('Qwen 4B question answering requires a blocked ticket or an investigated ticket waiting for clarification')
             if not isinstance(questions,list) or not questions:raise ValueError('This ticket has no persisted unresolved questions')
-            state['question_answer_request']={'return_node':node,'return_error':state.get('error'),
+            if waiting and state['intake'].get('generation',0)>=3:raise ValueError('Further-investigation budget exhausted; answer the questions yourself or create a scoped follow-up ticket')
+            state['question_answer_request']={'return_node':node,'return_error':state.get('error'),'mode':'clarification' if waiting else 'blocked',
                 'requested_by':actor,'requested_at':now(),'questions_hash':digest(questions)}
             state['attempts']={k:v for k,v in state.get('attempts',{}).items() if not k.startswith('question_answering:')}
             node,status='question_answering','ready'

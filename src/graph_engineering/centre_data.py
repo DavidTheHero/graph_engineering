@@ -9,6 +9,7 @@ import time
 from .dashboard_data import Catalog, EVIDENCE, ROLE_NODES, bounded
 from .runtime import redact
 from .scheduling_policy import board_status, effective_rank,execution_limits
+from .attention import items as attention_items
 from .models import load_models
 from .routing import RoutingError
 from .scheduler import required_model, ROLES
@@ -152,6 +153,7 @@ def snapshot(home):
             'scheduler':{'paused':tickets.setting('paused'),'workers':tickets.setting('workers'),
                          'active':sum(bool(t['execution_id']) for t in result),'model_capacity':tickets.setting('model_capacity'),
                          'service':tickets.setting('worker_service')},
+            'attention':attention_items(tickets),
             'statistics':{'completed':sum(t['board_status']=='Done' for t in result),
                           'failed':sum(t['board_status']=='Failed' for t in result),
                           'retried':sum(t['retries']+t['repairs'] for t in result)},

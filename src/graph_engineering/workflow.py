@@ -128,7 +128,11 @@ OPTIONAL_OUTPUTS = {"evidence_collection": {"outcome": STR},
                     "isolated_implementation": {"implementation_model": STR, "implementation_models": ARRAY},
                     'regression_validation':{k:STR if k=='fingerprint' else DICT for k in ('regression_baseline','baseline','validation','candidate','fingerprint','frozen','bundle')},
                     "deduplication": {"duplicate_of": STR, "outcome": STR},
-                    "escalation": {"error": STR}, "approval_gate": {"policy_snapshot": DICT}}
+                    "escalation": {"error": STR}, "approval_gate": {"policy_snapshot": DICT},
+                    # Clarification mode resets the intake investigation like an operator clarification.
+                    "question_answering": {"clarifications": ARRAY, "intake": DICT, "search_round": {"type": "integer"},
+                                           "validation_round": {"type": "integer"}, "finding_validation": DICT,
+                                           "investigation_result": DICT, "error": {"type": ["string", "object", "null"]}}}
 for node_contract in NODES:
     node_contract.inputs.update({"config": DICT, "task_id": STR, "repairs": {"type": "integer"}})
     node_contract.inputs.update(REQUIRED_INPUTS.get(node_contract.name, {}))
@@ -150,6 +154,7 @@ CONDITIONAL_EDGES = {
     'ticket_finalisation':['ticket_finalisation (review or clarification wait)','repository_search (operator follow-up)',
                             'development_admission (accepted revision)','ticket_publication (explicit approval)'],
     'question_answering':['<recorded checkpoint> (returns to the node where the ticket was blocked)',
+                          'repository_search (verified model answers to clarification questions; re-investigate)',
                           'problem_investigation','finding_validation','ticket_finalisation','regression_authoring',
                           'regression_review','regression_validation','task_planning','isolated_implementation',
                           'test_execution','independent_review','development_delivery','pull_request_creation',

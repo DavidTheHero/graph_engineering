@@ -24,6 +24,7 @@
       <div class="command-spacer"></div><button id="worker-capacity" class="button quiet">Worker limit</button><button id="pause-scheduler" class="button quiet">Pause admission</button><button id="start-workflow" class="button quiet">Start workflow</button><button id="create-ticket" class="button primary">+ Create Ticket</button>
     </section>
     <div class="workspace-toolbar"><nav class="view-tabs" aria-label="Workspace views">
+      <button data-view="inbox">⚑ Needs you <span id="inbox-total" class="inbox-total">0</span></button>
       <button data-view="board" aria-current="page">▦ Ticket board <span id="ticket-total">0</span></button>
       <button data-view="network">⌘ Network</button><button data-view="monitor">◫ Queues & workers</button>
     </nav><div class="workspace-summary" id="scheduler-summary"></div></div>
@@ -45,6 +46,7 @@
       <section id="replay" class="replay-bar" hidden><div><strong id="journey-title">Ticket journey</strong><span id="replay-label">Live position</span></div><button id="replay-play" class="button small quiet">▶ Replay history</button><label class="sr-only" for="replay-cursor">Historical event</label><input id="replay-cursor" type="range" min="0" max="0" value="0"><button id="replay-live" class="button small primary">Return to live</button></section>
     </section>
     <section id="monitor-view" hidden aria-label="Queue and worker monitoring"><div id="monitor"></div></section>
+    <section id="inbox-view" hidden aria-label="Tickets waiting for your input"><div id="inbox" class="inbox-list"></div></section>
     <section class="console-section" aria-label="Live execution console"><div class="console-heading"><h2>Execution console</h2><span id="console-count">Waiting for events</span><button id="console-toggle" class="button small quiet" aria-expanded="true">Collapse</button></div><ol id="live-console" tabindex="0" class="live-console" aria-label="Recent backend events"></ol></section>
     <footer class="app-footer"><span>Local execution · Persistent state · Policy-controlled delivery</span><span id="snapshot-time"></span></footer>
   </main>

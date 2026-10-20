@@ -49,7 +49,17 @@ function step(){execFileSync(python,['-c',`from pathlib import Path;from graph_e
  await page.getByRole('button',{name:'Ticket board'}).click();await page.locator('#ticket-search').fill(fixture.queued);assert.equal(await page.locator('.ticket-card').count(),1);await page.locator('#ticket-search').fill('');
  await page.locator(`[data-ticket="${fixture.queued}"]`).click();await page.getByRole('button',{name:'Edit triage'}).click();await page.locator('#operator-dialog').getByLabel('Priority',{exact:true}).selectOption('P0');await page.getByRole('button',{name:'Save triage',exact:true}).click();await page.getByRole('button',{name:'Close ticket',exact:true}).click();
  await page.reload();await page.waitForFunction(()=>document.querySelectorAll('.ticket-card').length===3);assert.match(await page.locator(`[data-ticket="${fixture.queued}"]`).innerText(),/P0/);check('Search, triage and browser refresh share persistent backend state');
+ await page.getByRole('button',{name:/Needs you/}).click();
+ const inboxCard=page.locator(`.inbox-card[data-ticket="${fixture.reviewed}"]`);await inboxCard.waitFor();
+ assert.equal(await inboxCard.getAttribute('data-kind'),'merge_approval');assert.match(await page.locator('#inbox-total').innerText(),/^[1-9]/);
+ await audit(page,'inbox-dark');
+ await inboxCard.getByRole('button',{name:'Approve commit'}).click();await page.waitForFunction(()=>/Enter your name/.test(document.querySelector('#centre-error').textContent));
+ await inboxCard.getByLabel('Approver name').fill('Browser test operator');await inboxCard.getByRole('button',{name:'Approve commit'}).click();
+ await page.waitForFunction(id=>!document.querySelector(`.inbox-card[data-ticket="${id}"]`),fixture.reviewed);
+ check('Needs you shows the exact-commit approval, refuses an unnamed approver and clears once the server records approval');
+ await page.getByRole('button',{name:'Ticket board'}).click();
  await page.getByRole('button',{name:'Toggle dark mode'}).click();await audit(page,'board-light');
+ await page.getByRole('button',{name:/Needs you/}).click();await page.locator('#inbox').waitFor();await audit(page,'inbox-light');await page.getByRole('button',{name:'Ticket board'}).click();
  for(const width of [1600,1024,768,320]){await page.setViewportSize({width,height:1000});const dimensions=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth}));assert(dimensions.scroll<=width+1,JSON.stringify(dimensions));if(width===320)await audit(page,'board-mobile');}
  await page.screenshot({path:path.join(output,'centre-mobile-tested.png'),fullPage:true});check('Light/dark accessibility and responsive layout at 320–1600px');
  assert.deepEqual(receipt.errors,[]);check('Zero browser console warnings or errors');
