@@ -1,4 +1,4 @@
-import {state,$,el,human,tag,command,facts,codeSection,toast,showError,shortModel} from './centre-state.js';
+import {state,$,el,human,tag,command,facts,codeSection,toast,showError,recordedModel} from './centre-state.js';
 
 function textarea(label,value='',required=false,max=4000){
  const wrapper=el('label','form-field'),input=el('textarea');wrapper.append(el('span','',label));input.rows=5;input.maxLength=max;input.value=value;input.required=required;wrapper.append(input);return {wrapper,input};
@@ -49,7 +49,7 @@ export function renderIntake(root,actions,ticket,detail,ui,refresh,reopen){
    enhanced.append(el('h4','',label));const list=el('ul','intake-list');for(const text of draft[key]||[])list.append(el('li','',text));if(!list.childElementCount)list.append(el('li','','None supplied'));enhanced.append(list);
   }
   if(investigation.question_answers){
-   enhanced.append(el('h4','',shortModel(investigation.question_answers.model_id,investigation.question_answers.model_key)+' proposed answers'),el('p','form-note','Generated through OpenCode from recorded operator notes and bounded repository evidence. These answers remain proposals until verified by source and tests.'));
+   enhanced.append(el('h4','',recordedModel(investigation.question_answers.model_id,investigation.question_answers.model_key)+' proposed answers'),el('p','form-note','Generated through OpenCode from recorded operator notes and bounded repository evidence. These answers remain proposals until verified by source and tests.'));
    for(const answer of investigation.question_answers.answers||[]){const block=el('blockquote','finding');block.append(el('strong','',answer.question),tag(human(answer.status)),el('p','',answer.answer));if(answer.basis?.length){const basis=el('ul','intake-list');for(const item of answer.basis)basis.append(el('li','',item));block.append(basis);}if(answer.references){block.append(tag(answer.verified?'Verified references · used for re-investigation':'Not used: '+(answer.rejected_references?answer.rejected_references+' reference(s) failed verification':'no verified repository evidence'),answer.verified?'good':''));if(answer.references.length){const refs=el('ul','intake-list');for(const r of answer.references)refs.append(el('li','',`${r.file}:${r.line} — ${r.quote}`));block.append(refs);}}enhanced.append(block);}
   }
   enhanced.append(facts([['Model confidence (self-reported)',draft.confidence],['Source commit',draft.source_commit],['Current revision',investigation.revision],['Accepted revision',investigation.accepted_revision||'Not accepted'],['Runtime cause verified','No · source validation is not causal proof']]));

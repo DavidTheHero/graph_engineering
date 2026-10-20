@@ -412,7 +412,7 @@ def adopt_registry(home: Path, registry: dict, role_routes: dict) -> list[dict]:
 
     Runs normally keep the configuration snapshot taken when they started; after a model is
     replaced on its server that snapshot names an identifier that is no longer served. Runs
-    owned by a worker, finished or cancelled are left untouched, and every change is recorded
+    owned by a worker, finished, cancelled or outside the ticket scheduler are left untouched, and every change is recorded
     with the model ids before and after. One immediate transaction: no worker can lease a
     run between the check and the update.
     """
@@ -423,10 +423,12 @@ def adopt_registry(home: Path, registry: dict, role_routes: dict) -> list[dict]:
     try:
         db.execute("BEGIN IMMEDIATE")
         try:
-            leased = {r[0] for r in db.execute("SELECT run_id FROM tickets WHERE lease_owner IS NOT NULL")} \
+            # Only scheduler-managed runs (with a ticket row): the lease is the guard. A legacy CLI ``serve`` run has
+            # no lease and sits at "ready" between nodes while its process still holds the old worker, so it is skipped.
+            idle = {r[0] for r in db.execute("SELECT run_id FROM tickets WHERE lease_owner IS NULL")} \
                 if store.ticket_events else set()
             for row in db.execute("SELECT id,status,cancel,state FROM runs").fetchall():
-                if row["id"] in leased or row["cancel"] or row["status"] in TERMINAL | {"cancelled", "running"}:
+                if row["id"] not in idle or row["cancel"] or row["status"] in TERMINAL | {"cancelled", "running"}:
                     continue
                 state = json.loads(row["state"])
                 config = state["config"]

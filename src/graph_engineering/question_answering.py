@@ -195,14 +195,24 @@ STOPWORDS = {'the', 'and', 'but', 'not', 'are', 'was', 'its', 'that', 'with', 'w
              'then', 'them', 'currently', 'specific', 'only', 'also', 'used', 'uses', 'use'}
 
 
+MIN_QUOTE = 10  # Only for answers with no ASCII content words to compare against.
+
+
+def _stem(part):
+    if len(part) > 4 and part.endswith('ies'):
+        return part[:-3] + 'y'  # retries -> retry
+    if len(part) > 3 and part.endswith('s') and not part.endswith(('ss', 'us', 'is')):
+        return part[:-1]  # models -> model; status, class, axis stay
+    return part
+
+
 def words(text):
-    """Lower-case content words, splitting snake_case and camelCase, with a plural 's' removed."""
-    found = set()
+    """Lower-case content words: snake_case, camelCase and acronym runs (HTTPServer) split, plurals
+    reduced, and numbers of 3+ digits (status codes, ports) kept."""
+    found = set(re.findall(r'(?<![\w.])\d{3,}(?![\w.])', text))
     for token in re.findall(r'[A-Za-z][A-Za-z0-9_]*', text):
-        for part in re.split(r'_+|(?<=[a-z0-9])(?=[A-Z])', token):
-            part = part.lower()
-            if len(part) > 3 and part.endswith('s'):
-                part = part[:-1]
+        for part in re.split(r'_+|(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])', token):
+            part = _stem(part.lower())
             if len(part) >= 3:
                 found.add(part)
     return found - KEYWORDS - STOPWORDS
@@ -212,9 +222,13 @@ def substantive(quote, context):
     """A quote supports an answer only if it names a content word of that answer or its question.
 
     Without this a model could cite any real line (e.g. an import) for an unrelated claim and
-    still pass verification; keyword-only quotes such as ``def`` never count."""
+    still pass verification; keyword-only quotes such as ``def`` never count. When the answer and
+    question have no ASCII words to compare (e.g. another script), a 10+ character quote counts."""
     tokens = words(quote)
-    return bool(tokens) and bool(tokens & words(context))
+    if not tokens:
+        return False
+    about = words(context)
+    return bool(tokens & about) if about else len(quote) >= MIN_QUOTE
 
 
 def verify_reference(reference, shown, context=''):
@@ -288,7 +302,7 @@ class QuestionAnsweringNodes:
         result = self.ask(state, 'question_answering', {
             'task': 'Answer each question ONLY from the numbered source lines and files_containing_term supplied '
                     '(every committed file containing each term). Cite file, the exact line number shown and a short '
-                    'exact quote (10+ characters, or the exact identifier your answer names) copied from that line for every repository fact. If the lines establish a relevant '
+                    'exact quote copied from that line, containing a word or identifier your answer or the question names, for every repository fact. If the lines establish a relevant '
                     'fact but not the whole answer, use partially_answered and state only that fact. Questions about '
                     'what the user wants, product choices or preferences are requires_user_decision. Use '
                     'still_unresolved only when nothing relevant is supplied. Keep questions unchanged and in order. '

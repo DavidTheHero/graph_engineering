@@ -153,6 +153,20 @@ class EvidenceHelperTests(unittest.TestCase):
         whole = {"file": "llm.js", "line": 84, "quote": "process.env.OLLAMA_MODEL"}
         self.assertIsNotNone(verify_reference(whole, env, "Which models are configured?"))
 
+    def test_relevant_citations_in_common_code_shapes_verify(self):
+        """Review of PR #3: plurals in -ies, acronym runs, status codes and non-ASCII questions."""
+        from graph_engineering.question_answering import verify_reference
+        cases = [("const maxRetries = 5;", "Five retry attempts. What is the retry limit?"),
+                 ("server = HTTPServer(address, Handler)", "An HTTP server handles it. Which server is used?"),
+                 ("return res.status(404).json({})", "A 404 is returned. What does the API return when missing?"),
+                 ("model: process.env.OLLAMA_MODEL", "モデルはどこで設定されていますか？")]
+        for quote, context in cases:
+            with self.subTest(quote=quote):
+                shown = {"a.js": {7: "  " + quote}}
+                self.assertIsNotNone(verify_reference({"file": "a.js", "line": 7, "quote": quote}, shown, context))
+        # Still rejected: keyword-only quotes, and a non-ASCII question cannot rescue a keyword-only quote.
+        self.assertIsNone(verify_reference({"file": "a.js", "line": 7, "quote": "import"}, {"a.js": {7: "import"}}, "モデル"))
+
     def test_real_lines_unrelated_to_the_claim_do_not_verify_it(self):
         """Live Qwen 3.5 9B output on GE-30D05C40 (2026-10-20): genuine import lines cited for an unrelated claim."""
         from graph_engineering.question_answering import verify_reference

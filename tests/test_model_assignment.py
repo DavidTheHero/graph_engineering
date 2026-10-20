@@ -193,17 +193,22 @@ class ApplyAndRoutingTests(AssessmentFixture):
 
     def test_update_open_runs_moves_only_idle_unfinished_runs_and_records_it(self):
         from graph_engineering.runtime import Store
+        from graph_engineering.tickets import Tickets
         from graph_engineering.workflow import initialise
         repo = make_repo(Path(self.folder.name))
         config = json.loads(initialise(repo, self.home).read_text())
-        store = Store(self.home)
+        tickets = Tickets(self.home)
+        store = tickets.store
         try:
-            ids = {status: store.create_run(config)["id"] for status in ("needs_information", "completed", "running")}
-            for status, run_id in ids.items():
-                store.db.execute("UPDATE runs SET status=? WHERE id=?", (status, run_id))
+            ids = {}
+            for status in ("needs_information", "completed", "running", "leased", "cancelled"):
+                ids[status] = run_id = store.create_run(config)["id"]
+                tickets.admit(run_id)
+                store.db.execute("UPDATE runs SET status=? WHERE id=?", ("ready" if status == "leased" else status, run_id))
+            store.db.execute("UPDATE tickets SET lease_owner='worker-1' WHERE run_id=?", (ids["leased"],))
             store.db.commit()
-            cancelled = store.create_run(config)["id"]
-            store.stop(cancelled)
+            store.stop(ids["cancelled"])
+            legacy = store.create_run(config)["id"]  # A CLI ``serve`` run: no ticket row, no lease to guard it.
         finally:
             store.close()
         result = ma.apply_plan(self.standard(), self.home, update_open_runs=True)
@@ -212,8 +217,8 @@ class ApplyAndRoutingTests(AssessmentFixture):
         try:
             moved = store.get(ids["needs_information"])["state"]["config"]
             self.assertIn(K("qwen3.8-27b"), moved["models"])
-            for run_id in (ids["completed"], ids["running"], cancelled):  # Snapshots of these stay as they were.
-                self.assertNotIn(K("qwen3.8-27b"), store.get(run_id)["state"]["config"]["models"])
+            for run_id in [ids[k] for k in ("completed", "running", "leased", "cancelled")] + [legacy]:
+                self.assertNotIn(K("qwen3.8-27b"), store.get(run_id)["state"]["config"]["models"], run_id)
             [event] = [e for e in store.events(ids["needs_information"]) if e["kind"] == "model_registry_adopted"]
             self.assertEqual(event["data"]["before"]["b"], config["models"]["b"]["model_id"])
         finally:
