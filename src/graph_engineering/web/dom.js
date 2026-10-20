@@ -48,7 +48,8 @@ export function fact(label, value) {
   const row = el('div', 'fact'); row.append(el('dt', '', label), el('dd', '', value ?? 'Not recorded')); return row;
 }
 export function modelName(id = '') {
-  if (id.includes('qwen3.8')) return 'Qwen 3.8 · 27B';
-  if (id.includes('qwen35') || id.includes('qwen3.5')) return 'Qwen 3.5 · 4B';
+  const family = id.includes('qwen3.8') ? 'Qwen 3.8' : id.includes('qwen35') || id.includes('qwen3.5') ? 'Qwen 3.5' : null;
+  const size = id.match(/[-_:](\d+(?:\.\d+)?)b\b/i)?.[1];  // The size comes from the id, e.g. qwen35-9b:16k.
+  if (family) return size ? `${family} · ${size}B` : family;
   return id || 'Model not recorded';
 }

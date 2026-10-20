@@ -98,13 +98,13 @@ with patch('graph_engineering.scheduler.Workflow',worker):
  detail=await(await context.request.get(url+'/api/centre/ticket?id='+id)).json();snapshot=await(await context.request.get(url+'/api/centre')).json();
  const blocked=snapshot.tickets.find(t=>t.id===id);assert.equal(blocked.run_status,'blocked');assert.equal(blocked.accepted_revision,2);assert.equal(blocked.execution_limits.step_used,2);assert.equal(blocked.execution_limits.retries_used,0);
  assert.equal(detail.investigation.development_information.length,1);
- assert(await page.getByRole('button',{name:'Ask Qwen 4B',exact:true}).isEnabled());await page.getByRole('button',{name:'Ask Qwen 4B',exact:true}).click();
- await page.getByText('Qwen 4B question answering queued through OpenCode.',{exact:false}).waitFor();answerQuestions(id);await page.reload();await page.locator(`[data-ticket="${id}"]`).click();
- await page.getByRole('heading',{name:'Qwen 4B proposed answers',exact:true}).waitFor();assert.match(await page.locator('.intake-enhanced').innerText(),/answered from operator/i);
+ const ask=page.getByRole('button',{name:/^Ask Qwen 3\.5 9B/});assert(await ask.isEnabled());await ask.click();
+ await page.getByText('Question answering queued through OpenCode (Qwen 3.5 9B (16K)).',{exact:false}).waitFor();answerQuestions(id);await page.reload();await page.locator(`[data-ticket="${id}"]`).click();
+ await page.getByRole('heading',{name:/ proposed answers$/}).waitFor();assert.match(await page.locator('.intake-enhanced').innerText(),/answered from operator/i);
  detail=await(await context.request.get(url+'/api/centre/ticket?id='+id)).json();snapshot=await(await context.request.get(url+'/api/centre')).json();
  assert.equal(detail.investigation.question_answers.model_key,'b');assert.equal(snapshot.tickets.find(t=>t.id===id).execution_limits.retries_used,0);
  await page.screenshot({path:path.join(output,'blocked-recovery-tested.png'),fullPage:true});await audit(page,'blocked-development');
- await page.getByRole('button',{name:'Close ticket',exact:true}).click();check('Blocked development uses Qwen 4B through the real graph action while preserving acceptance and both retry limits');
+ await page.getByRole('button',{name:'Close ticket',exact:true}).click();check('Blocked development uses the question-answering model through the real graph action while preserving acceptance and both retry limits');
  await page.locator(`[data-ticket="${ambiguous}"]`).click();await page.getByRole('button',{name:'Cancel task',exact:true}).click();
  await page.waitForFunction(()=>document.querySelector('#ticket-live-status')?.textContent.includes('Cancelled'));
  assert.equal(await page.getByRole('button',{name:'Resume',exact:true}).count(),0);

@@ -15,7 +15,8 @@ Given OpenAI-compatible endpoints (and optionally specific model ids), this modu
 Nothing is applied by default. ``apply_plan`` writes ``<home>/models.json`` and
 ``<home>/routing.json`` and updates registered repository configurations; it refuses
 an incomplete assessment or uncovered roles unless explicitly allowed. Runs already
-in flight keep their configuration snapshot.
+in flight keep their configuration snapshot unless ``--update-open-runs`` moves the
+idle, unfinished ones onto the new registry.
 """
 from __future__ import annotations
 
@@ -353,8 +354,10 @@ def entry(profile: dict, previous: dict | None = None) -> dict:
     return merged | {"endpoint": profile["endpoint"], "model_id": profile["model_id"], "context": context}
 
 
-def apply_plan(plan: dict, home: Path, *, allow_partial: bool = False, allow_uncovered: bool = False) -> dict:
-    """Write the registry and routing, then update registered repository configurations."""
+def apply_plan(plan: dict, home: Path, *, allow_partial: bool = False, allow_uncovered: bool = False,
+               update_open_runs: bool = False) -> dict:
+    """Write the registry and routing, then update registered repository configurations
+    (and, with ``update_open_runs``, idle unfinished runs: see ``adopt_registry``)."""
     if not plan["complete"] and not allow_partial:
         down = sorted(k for k, p in plan["models"].items() if not p["reachable"])
         faulty = sorted(k for k, p in plan["models"].items() if p["reachable"] and not p.get("assessed", True))
@@ -399,7 +402,49 @@ def apply_plan(plan: dict, home: Path, *, allow_partial: bool = False, allow_unc
                     result | {"uncovered_roles": plan["uncovered_roles"], "complete": plan["complete"]})
     finally:
         store.close()
+    if update_open_runs:
+        result["runs_updated"] = adopt_registry(home, registry, plan["role_routes"])
     return result
+
+
+def adopt_registry(home: Path, registry: dict, role_routes: dict) -> list[dict]:
+    """Move idle, unfinished runs onto the applied registry (explicit operator choice).
+
+    Runs normally keep the configuration snapshot taken when they started; after a model is
+    replaced on its server that snapshot names an identifier that is no longer served. Runs
+    owned by a worker, finished or cancelled are left untouched, and every change is recorded
+    with the model ids before and after. One immediate transaction: no worker can lease a
+    run between the check and the update.
+    """
+    from .runtime import Store, redact
+    from .tickets import TERMINAL
+    store = Store(home)
+    db, changed = store.db, []
+    try:
+        db.execute("BEGIN IMMEDIATE")
+        try:
+            leased = {r[0] for r in db.execute("SELECT run_id FROM tickets WHERE lease_owner IS NOT NULL")} \
+                if store.ticket_events else set()
+            for row in db.execute("SELECT id,status,cancel,state FROM runs").fetchall():
+                if row["id"] in leased or row["cancel"] or row["status"] in TERMINAL | {"cancelled", "running"}:
+                    continue
+                state = json.loads(row["state"])
+                config = state["config"]
+                before = {k: m.get("model_id") for k, m in config.get("models", {}).items()}
+                config["models"] = redact(registry)
+                if config.get("routing") == "assigned":
+                    config["role_routes"] = role_routes
+                after = {k: m.get("model_id") for k, m in registry.items()}
+                db.execute("UPDATE runs SET state=? WHERE id=?", (json.dumps(state), row["id"]))
+                store._event(row["id"], "model_assignment", "model_registry_adopted", {"before": before, "after": after})
+                changed.append({"run_id": row["id"], "status": row["status"], "before": before, "after": after})
+            db.commit()
+        except BaseException:
+            db.rollback()
+            raise
+    finally:
+        store.close()
+    return changed
 
 
 def load_routing(home: Path) -> dict | None:

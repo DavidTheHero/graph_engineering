@@ -36,10 +36,10 @@ PROPOSAL=obj({'title':SHORT,'problem_statement':TEXT,'expected_behaviour':TEXT,'
 
 _CONTRACTS=[
  ('manual_intake',[],['repository','base_sha'],'deterministic Git metadata','request_triage'),
- ('request_triage',[],['triage'],'Qwen 4B classification','request_duplicate_check'),
+ ('request_triage',[],['triage'],'small-tier classification','request_duplicate_check'),
  ('request_duplicate_check',['triage'],['duplicate_candidates'],'deterministic local comparison','repository_search'),
  ('repository_search',['base_sha','triage'],['retrieved','search_round'],'deterministic bounded Git search','problem_investigation'),
- ('problem_investigation',['retrieved','triage','base_sha'],['investigation_result'],'Qwen 27B investigation','ticket_enhancement'),
+ ('problem_investigation',['retrieved','triage','base_sha'],['investigation_result'],'large-tier investigation','ticket_enhancement'),
  ('ticket_enhancement',['investigation_result','retrieved'],['enhanced','revision'],'deterministic technical ticket assembly','reproduction_check'),
  ('reproduction_check',['base_sha','enhanced'],['reproduction'],'authorised isolated test runner or read-only skip','finding_validation'),
  ('finding_validation',['enhanced','retrieved','revision'],['finding_validation','validation_round','enhanced','revision'],'deterministic file/line/quote checks','ticket_finalisation'),

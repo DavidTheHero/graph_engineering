@@ -21,7 +21,7 @@ def act(tickets,data,key):
         if type(data.get('revision')) is not int or data['revision']!=current:raise ValueError('Ticket revision changed; reload before acting')
         action=data.get('action');actor=data.get('actor','')
         if ticket.get('cancel') or ticket['status']=='cancelled':raise ValueError('Ticket is cancelled. Use Retry with backoff explicitly before another action.')
-        if state['config'].get('run_mode')=='accepted_development' and action not in ('publish_development','development_information','answer_questions'):raise ValueError('Development has started with a frozen accepted revision; add troubleshooting information, ask Qwen 4B, or use pause, cancel or retry to control execution.')
+        if state['config'].get('run_mode')=='accepted_development' and action not in ('publish_development','development_information','answer_questions'):raise ValueError('Development has started with a frozen accepted revision; add troubleshooting information, ask the question-answering model, or use pause, cancel or retry to control execution.')
         if not isinstance(actor,str) or not actor.strip() or len(actor)>120:raise ValueError('A named operator is required')
         actor=actor.strip()
         node=ticket['node'];status=ticket['status']
@@ -29,7 +29,7 @@ def act(tickets,data,key):
             questions=state.get('enhanced',{}).get('questions',[])
             # Either a ticket blocked during execution, or an investigated intake ticket waiting for clarification.
             waiting=state['config'].get('run_mode')=='intake' and status=='needs_information' and node=='ticket_finalisation'
-            if status!='blocked' and not waiting:raise ValueError('Qwen 4B question answering requires a blocked ticket or an investigated ticket waiting for clarification')
+            if status!='blocked' and not waiting:raise ValueError('Question answering requires a blocked ticket or an investigated ticket waiting for clarification')
             if not isinstance(questions,list) or not questions:raise ValueError('This ticket has no persisted unresolved questions')
             if waiting and state['intake'].get('generation',0)>=INVESTIGATION_BUDGET:raise ValueError('Further-investigation budget exhausted; create a scoped follow-up ticket')
             state['question_answer_request']={'return_node':node,'return_error':state.get('error'),'mode':'clarification' if waiting else 'blocked',

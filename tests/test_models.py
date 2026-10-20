@@ -89,7 +89,7 @@ class ModelBoundaryTests(unittest.TestCase):
             with self.assertRaises(ModelError):
                 worker.invoke("discovery", "classify", {"type": "object"}, "missing", "run")
             with self.assertRaises(ModelError):
-                worker.invoke("discovery", "x" * 6001, {"type": "object"}, "b", "run")
+                worker.invoke("discovery", "x" * 12001, {"type": "object"}, "b", "run")
             with self.assertRaises(ModelError):
                 worker.invoke("discovery", "classify", {"type": "object"}, "a", "../escape")
 

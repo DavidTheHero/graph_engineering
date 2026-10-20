@@ -139,15 +139,30 @@ class EvidenceHelperTests(unittest.TestCase):
         from graph_engineering.question_answering import verify_reference
         shown = {"calc.py": {1: "def add(a,b): return a-b"}}
         ok = {"file": "calc.py", "line": 1, "quote": "def add(a,b): return a-b"}
-        self.assertEqual(verify_reference(ok, shown), ok)
-        self.assertIsNone(verify_reference(ok | {"file": "other.py"}, shown))  # A file the model never saw.
+        about = "add() subtracts instead of adding"
+        self.assertEqual(verify_reference(ok, shown, about), ok)
+        self.assertIsNone(verify_reference(ok | {"file": "other.py"}, shown, about))  # A file the model never saw.
         self.assertIsNone(verify_reference(ok | {"quote": "def"}, shown, "def is used"))  # Keyword only.
-        self.assertEqual(verify_reference(ok | {"line": 3}, shown)["corrected_from"], 3)
+        self.assertEqual(verify_reference(ok | {"line": 3}, shown, about)["corrected_from"], 3)
         # A short identifier counts only when the answer names it.
         env = {"llm.js": {84: "    model: process.env.OLLAMA_MODEL || 'llama3.1'"}}
         short = {"file": "llm.js", "line": 84, "quote": "model:"}
         self.assertIsNotNone(verify_reference(short, env, "The model: option comes from OLLAMA_MODEL"))
         self.assertIsNone(verify_reference(short, env, "Configured elsewhere"))
+        # snake_case and camelCase parts count: OLLAMA_MODEL is about "model".
+        whole = {"file": "llm.js", "line": 84, "quote": "process.env.OLLAMA_MODEL"}
+        self.assertIsNotNone(verify_reference(whole, env, "Which models are configured?"))
+
+    def test_real_lines_unrelated_to_the_claim_do_not_verify_it(self):
+        """Live Qwen 3.5 9B output on GE-30D05C40 (2026-10-20): genuine import lines cited for an unrelated claim."""
+        from graph_engineering.question_answering import verify_reference
+        shown = {"backend/server.js": {1: 'import { createApp } from "./app.js";', 2: 'import { createAgent } from "./agent.js";',
+                                       5: 'import { createTools } from "./tools.js";'}}
+        context = ("The model name is not returned at all by the backend API. Is the model name currently returned by "
+                   "the backend API but not displayed in the frontend, or is it not returned at all?")
+        for line, quote in ((1, 'import { createApp } from "./app.js";'), (2, 'import { createAgent } from "./agent.js";'),
+                            (5, 'import { createTools } from "./tools.js";')):
+            self.assertIsNone(verify_reference({"file": "backend/server.js", "line": line, "quote": quote}, shown, context))
 
 
 

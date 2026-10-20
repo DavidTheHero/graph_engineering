@@ -302,7 +302,7 @@ not a general-purpose detector for arbitrary secrets committed to a repository.
 | `multimodel` | B with selective retrieval | A | B; contradictory output escalates to A |
 
 A is `qwen3.8-27b` at `http://192.168.0.60:18020/v1` (advertised context 150000).
-B is `docker.io/local/qwen35-4b:8k` at `http://192.168.0.62:18035/v1` (8192).
+B is `docker.io/local/qwen35-9b:16k` at `http://192.168.0.62:18035/v1` (16384; replaced the 4B 8K on 2026-10-20).
 Output limits 4096/1024 are controller choices, not claims about server maxima.
 Missing identifiers and unavailable servers fail closed; configured A fallback is
 explicitly logged where used. Large review tasks route to A when B's byte budget

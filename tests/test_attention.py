@@ -44,6 +44,8 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual(found["headline"], "Answer 1 question so investigation can continue")
         self.assertEqual(found["questions"][0]["proposal"]["answer"], "backend/llm.js")
         self.assertEqual(self.kinds(found), ["clarify", "answer_questions", "reinvestigate", "reject_enhancement"])
+        # Labels come from the configured registry, not a fixed model size.
+        self.assertEqual(found["actions"][1]["label"], "Ask " + default_models()["b"]["label"])
         self.assertEqual(found["actions"][0]["payload"], {"ticket_id": "GE-1", "revision": 2, "actor": "Local operator",
                                                           "action": "clarify"})
         exhausted = item(row("needs_information", enhanced=DRAFT, intake={"generation": 3, "ticket_id": "GE-1"}))
@@ -51,6 +53,19 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual(self.kinds(exhausted), ["reject_enhancement"])
         self.assertTrue(exhausted["questions_readonly"])
         self.assertIn("follow-up", exhausted["headline"])
+
+    def test_proposal_names_the_model_that_answered_and_ask_follows_the_route(self):
+        models = default_models() | {"c": default_models()["b"] | {"label": "Replacement small model"}}
+        config = {"run_mode": "intake", "models": models, "routing": "assigned", "role_routes": {"question_answering": ["c", "a"]}}
+        answers = {"model_key": "c", "model_id": models["c"]["model_id"], "answers": [
+            {"question": DRAFT["questions"][0], "status": "still_unresolved", "answer": "", "verified": False}]}
+        found = item(row("needs_information", enhanced=DRAFT, config=config, question_answers=answers))
+        self.assertEqual(found["questions"][0]["proposal"]["model"], "Replacement small model")
+        self.assertEqual(found["actions"][1]["label"], "Ask Replacement small model")
+        # Key "c" later repointed to another model: the old proposal keeps the id of the model that wrote it.
+        older = answers | {"model_id": "docker.io/local/qwen35-4b:8k"}
+        found = item(row("needs_information", enhanced=DRAFT, config=config, question_answers=older))
+        self.assertEqual(found["questions"][0]["proposal"]["model"], "docker.io/local/qwen35-4b:8k")
 
     def test_review_accept_is_disabled_without_verified_references(self):
         good = item(row("ready_for_review", enhanced=DRAFT, finding_validation={"source_references_valid": True, "verified_references": 2}))

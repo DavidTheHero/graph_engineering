@@ -41,7 +41,7 @@ class ControlRecoveryTests(unittest.TestCase):
             try:
                 run=flow.new_run(config);flow.run_id=run['id'];flow.worker=WorkerDouble()
                 with RepoLock(home,'inference-model:a'),self.assertRaises(ModelError):
-                    flow.ask(run['state'],'investigation',{'task':'x'*7000},{'type':'object'},'b')
+                    flow.ask(run['state'],'investigation',{'task':'x'*13000},{'type':'object'},'b')
                 self.assertEqual(flow.worker.metrics,[])
                 kinds=[e['kind'] for e in flow.store.events(run['id'])]
                 self.assertIn('degraded_routing',kinds)
