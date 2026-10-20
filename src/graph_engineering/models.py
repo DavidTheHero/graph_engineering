@@ -88,8 +88,8 @@ def default_models() -> dict[str, dict]:
     return {
         "a": asdict(ModelEndpoint("http://192.168.0.60:18020/v1", "qwen3.8-27b", 150000,
                                   tier="large", label="Qwen 3.8 27B")),
-        "b": asdict(ModelEndpoint("http://192.168.0.62:18035/v1", "docker.io/local/qwen35-4b:8k", 8192,
-                                  input_budget_bytes=6000, output=1024, tier="small", label="Qwen 3.5 4B (8K)")),
+        "b": asdict(ModelEndpoint("http://192.168.0.62:18035/v1", "docker.io/local/qwen35-9b:16k", 16384, timeout=240,
+                                  input_budget_bytes=12000, output=2048, tier="small", label="Qwen 3.5 9B (16K)")),
     }
 
 

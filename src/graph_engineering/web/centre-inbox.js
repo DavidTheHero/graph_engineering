@@ -1,6 +1,7 @@
 // "Needs you": one card per ticket waiting for a person, with only the facts and actions for that decision.
 // Items and their valid actions come from the backend (attention.py); the server re-validates every command.
 import {state,$,el,human,tag,command,toast,showError} from './centre-state.js';
+import {modelName} from './dom.js';
 
 const KIND_LABELS = {clarification:'Questions for you',review:'Review',duplicate_review:'Possible duplicate',
   start_development:'Development approval',publication:'Publication approval',merge_approval:'Merge approval',
@@ -27,7 +28,7 @@ function questionBlock(item,question,index){
   if(proposal){
     // Unverified model text is not shown as if it were an answer; only its status is.
     const hint=el('div','inbox-proposal');
-    hint.append(tag(proposal.verified?'Qwen 4B · verified':'Qwen 4B · '+human(proposal.status)+' · not used',proposal.verified?'good':''));
+    hint.append(tag(modelName(proposal.model)+(proposal.verified?' · verified':' · '+human(proposal.status)+' · not used'),proposal.verified?'good':''));
     if(proposal.verified)hint.append(el('span','',proposal.answer));
     for(const ref of proposal.references||[])hint.append(el('code','',`${ref.file}:${ref.line}`));
     if(proposal.verified){

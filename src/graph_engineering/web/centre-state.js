@@ -1,4 +1,4 @@
-import {el} from './dom.js';
+import {el,modelName} from './dom.js';
 export {el};
 export const $ = selector => document.querySelector(selector);
 export const columns = ['Backlog','To Do','In Progress','Blocked','Testing','Code Review','Ready for Merge','Done','Failed','Cancelled'];
@@ -8,6 +8,8 @@ export const human = value => String(value ?? '').replaceAll('_',' ').replace(/\
 // Labels and tiers come from the backend model registry (models.json), never from model-id guessing.
 export const registryModel = key => state.snapshot?.models?.find(m=>m.key===key);
 export const shortModel = (value,key) => registryModel(key)?.label || state.snapshot?.models?.find(m=>m.model_id===value)?.label || value || 'Not assigned';
+export const recordedModel = (id,key) => (registryModel(key)?.model_id===id?registryModel(key).label:null)
+  || state.snapshot?.models?.find(m=>m.model_id===id)?.label || modelName(id);
 export const tierBadge = key => ({large:'L',small:'S'})[registryModel(key)?.tier] || '•';
 export function tag(text,kind='') {return el('span','tag '+kind,text);}
 export function stamp(value) {return new Date(typeof value==='number'?value*1000:value).toLocaleTimeString();}

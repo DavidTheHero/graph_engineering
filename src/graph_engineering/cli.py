@@ -135,6 +135,8 @@ def parser() -> argparse.ArgumentParser:
     assign.add_argument("--plan", type=Path, help="apply a previously saved plan instead of probing again")
     assign.add_argument("--allow-partial", action="store_true", help="apply although some models were unreachable")
     assign.add_argument("--allow-uncovered", action="store_true", help="apply although some roles have no eligible model")
+    assign.add_argument("--update-open-runs", action="store_true",
+                        help="also move idle, unfinished runs onto the new registry (each change is recorded)")
     mcp = commands.add_parser("mcp", help="Model Context Protocol server")
     mcp_commands = mcp.add_subparsers(dest="mcp_command", required=True)
     mcp_serve = mcp_commands.add_parser("serve", help="serve MCP over stdio (default) or loopback HTTP")
@@ -330,7 +332,8 @@ def _assign_models(args) -> int:
                "plan": str(args.plan or args.home / "model-assignment.json")}
     if args.apply:
         summary["applied"] = assignment.apply_plan(plan, args.home, allow_partial=args.allow_partial,
-                                                   allow_uncovered=args.allow_uncovered)
+                                                   allow_uncovered=args.allow_uncovered,
+                                                   update_open_runs=args.update_open_runs)
     else:
         summary["next"] = "Dry run. Review the plan, then rerun with --apply (or --plan <file> --apply)."
     _emit(summary)

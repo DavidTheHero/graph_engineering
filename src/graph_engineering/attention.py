@@ -10,6 +10,7 @@ or cancelled are never listed.
 from __future__ import annotations
 
 from .report_store import INVESTIGATION_BUDGET
+from .routing import role_label
 
 INTAKE = "/api/centre/intake-action"
 TICKET = "/api/centre/ticket-action"
@@ -48,13 +49,20 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
             "waiting_since": ticket.get("run_updated"), "context": [], "questions": [], "actions": []}
     intake_payload = {"ticket_id": ticket["id"], "revision": revision, "actor": "Local operator"}
     generation = state.get("intake", {}).get("generation", 0)
+    ask_label = "Ask " + role_label(state["config"], "question_answering", "the model")
 
     def intake_action(action_id, label, **kw):
         return _action(action_id, label, INTAKE, intake_payload | {"action": action_id}, **kw)
 
     if intake and status == "needs_information":
         answers = {a["question"]: a for a in (state.get("question_answers") or {}).get("answers", [])}
-        questions = [{"text": q, "proposal": answers.get(q)} for q in draft.get("questions", [])]
+        recorded = state.get("question_answers") or {}
+        # The registry label only while that key still names the model that answered (keys can be repointed).
+        entry = state["config"].get("models", {}).get(recorded.get("model_key"), {})
+        proposer = (entry.get("label") if entry.get("model_id") == recorded.get("model_id") else None) \
+            or recorded.get("model_id") or "Model"
+        questions = [{"text": q, "proposal": answers[q] | {"model": proposer} if q in answers else None}
+                     for q in draft.get("questions", [])]
         limitations = [_short(x, 160) for x in draft.get("limitations", [])[:2]]
         actions = []
         budget_left = generation < INVESTIGATION_BUDGET
@@ -63,7 +71,7 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
                                          help="Your answers are recorded as operator input and investigation continues."))
         if budget_left:
             if questions:
-                actions.append(intake_action("answer_questions", "Ask Qwen 4B",
+                actions.append(intake_action("answer_questions", ask_label,
                                              help="Proposes answers from the code; only verified references are used."))
             actions.append(intake_action("reinvestigate", "Investigate further", input="text",
                                          help="Optional note; reruns the repository investigation."))
@@ -171,7 +179,7 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
             actions.append(_action("retry", "Retry with backoff", TICKET, {"ticket_id": ticket["id"], "action": "retry"},
                                    primary=True))
         if developing and draft.get("questions"):
-            actions.append(intake_action("answer_questions", "Ask Qwen 4B"))
+            actions.append(intake_action("answer_questions", ask_label))
         if developing:
             actions.append(intake_action("development_information", "Add troubleshooting information", input="text"))
         return base | {"kind": "blocked" if retry_left and status == "blocked" else "dead_letter",

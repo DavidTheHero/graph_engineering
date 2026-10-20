@@ -41,7 +41,7 @@ CONTRACT = dict(
     name='question_answering',
     inputs={'enhanced': {'type': 'object'}, 'question_answer_request': {'type': 'object'}},
     outputs={'question_answers': {'type': 'object'}},
-    responsible='Qwen 4B through OpenCode',
+    responsible='question_answering role model (small tier first) through OpenCode',
     permissions='read persisted ticket, operator notes and bounded committed-source evidence; proposal only',
     next='regression_review',
     failure='blocked',
@@ -86,8 +86,8 @@ CLARIFICATION_ANSWER = obj({
     'references': {'type': 'array', 'maxItems': 3, 'items': REFERENCE},
 })
 CLARIFICATION_SCHEMA = obj({'answers': {'type': 'array', 'minItems': 1, 'maxItems': 8, 'items': CLARIFICATION_ANSWER}})
-EVIDENCE_CHARACTERS = 2400  # Keeps the whole prompt inside the 8K small model's safe input budget.
-PROPOSAL_ACTOR = 'Qwen 4B (model proposal, verified references)'
+EVIDENCE_CHARACTERS = 2400  # Keeps the whole prompt inside an 8K-context small model's safe input budget.
+PROPOSAL_ACTOR = '{} (model proposal, verified references)'  # Formatted with the answering model's label.
 
 
 def source_files(allowed, limit=FILE_LIST_CHARACTERS):
@@ -187,26 +187,56 @@ def focused_evidence(repo, sha, terms, picked, allowed, limit=EVIDENCE_CHARACTER
             'files_containing_term': occurrences, **({'search_incomplete': incomplete} if incomplete else {})}, shown
 
 
-MIN_QUOTE = 10  # Shorter quotes count only as an identifier the answer itself names.
 KEYWORDS = {'def', 'return', 'const', 'let', 'var', 'import', 'from', 'class', 'function', 'export', 'async', 'await',
-            'true', 'false', 'none', 'null', 'self', 'this', 'else', 'elif', 'for', 'while', 'new', 'public', 'private'}
+            'true', 'false', 'none', 'null', 'self', 'this', 'else', 'elif', 'for', 'while', 'new', 'public', 'private',
+            'require', 'module', 'default', 'jsx', 'tsx'}
+STOPWORDS = {'the', 'and', 'but', 'not', 'are', 'was', 'its', 'that', 'with', 'which', 'what', 'where', 'when', 'how',
+             'does', 'into', 'any', 'all', 'has', 'have', 'should', 'would', 'can', 'could', 'there', 'their', 'than',
+             'then', 'them', 'currently', 'specific', 'only', 'also', 'used', 'uses', 'use'}
 
 
-def substantive(quote, answer):
-    """A quote proves something: 10+ characters, or a non-keyword identifier that the answer text also names."""
-    tokens = {t.lower() for t in re.findall(r'[A-Za-z_][A-Za-z0-9_]{2,}', quote)} - KEYWORDS
+MIN_QUOTE = 10  # Only for answers with no ASCII content words to compare against.
+
+
+def _stem(part):
+    if len(part) > 4 and part.endswith('ies'):
+        return part[:-3] + 'y'  # retries -> retry
+    if len(part) > 3 and part.endswith('s') and not part.endswith(('ss', 'us', 'is')):
+        return part[:-1]  # models -> model; status, class, axis stay
+    return part
+
+
+def words(text):
+    """Lower-case content words: snake_case, camelCase and acronym runs (HTTPServer) split, plurals
+    reduced, and numbers of 3+ digits (status codes, ports) kept."""
+    found = set(re.findall(r'(?<![\w.])\d{3,}(?![\w.])', text))
+    for token in re.findall(r'[A-Za-z][A-Za-z0-9_]*', text):
+        for part in re.split(r'_+|(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])', token):
+            part = _stem(part.lower())
+            if len(part) >= 3:
+                found.add(part)
+    return found - KEYWORDS - STOPWORDS
+
+
+def substantive(quote, context):
+    """A quote supports an answer only if it names a content word of that answer or its question.
+
+    Without this a model could cite any real line (e.g. an import) for an unrelated claim and
+    still pass verification; keyword-only quotes such as ``def`` never count. When the answer and
+    question have no ASCII words to compare (e.g. another script), a 10+ character quote counts."""
+    tokens = words(quote)
     if not tokens:
         return False
-    if len(quote) >= MIN_QUOTE:
-        return True
-    return bool(tokens & {t.lower() for t in re.findall(r'[A-Za-z_][A-Za-z0-9_]{2,}', answer)})
+    about = words(context)
+    return bool(tokens & about) if about else len(quote) >= MIN_QUOTE
 
 
-def verify_reference(reference, shown, answer=''):
-    """The quote must be substantive and appear on a line exactly as the model was shown it (unique ±3 drift)."""
+def verify_reference(reference, shown, context=''):
+    """The quote must be relevant to ``context`` (answer and question text) and appear on a line exactly as the
+    model was shown it (unique ±3 drift)."""
     lines = shown.get(reference['file'], {})
     quote = reference['quote'].strip()
-    if not lines or not substantive(quote, answer):
+    if not lines or not substantive(quote, context):
         return None
     if quote in lines.get(reference['line'], ''):
         return reference
@@ -272,7 +302,7 @@ class QuestionAnsweringNodes:
         result = self.ask(state, 'question_answering', {
             'task': 'Answer each question ONLY from the numbered source lines and files_containing_term supplied '
                     '(every committed file containing each term). Cite file, the exact line number shown and a short '
-                    'exact quote (10+ characters, or the exact identifier your answer names) copied from that line for every repository fact. If the lines establish a relevant '
+                    'exact quote copied from that line, containing a word or identifier your answer or the question names, for every repository fact. If the lines establish a relevant '
                     'fact but not the whole answer, use partially_answered and state only that fact. Questions about '
                     'what the user wants, product choices or preferences are requires_user_decision. Use '
                     'still_unresolved only when nothing relevant is supplied. Keep questions unchanged and in order. '
@@ -282,7 +312,7 @@ class QuestionAnsweringNodes:
             raise ValueError('Question-answer response did not preserve the persisted questions exactly')
         answers = []
         for answer in result['answers']:
-            checked = [verify_reference(r, shown, answer['answer']) for r in answer['references']]
+            checked = [verify_reference(r, shown, answer['answer'] + ' ' + answer['question']) for r in answer['references']]
             verified = [r for r in checked if r]
             usable = (answer['status'] in ('answered_from_repository', 'partially_answered')
                       and bool(verified) and len(verified) == len(checked))
@@ -296,11 +326,12 @@ class QuestionAnsweringNodes:
         if not accepted:
             # Nothing verifiable: the ticket keeps waiting for the user, with the proposals visible.
             return {'question_answers': artifact}, 'ticket_finalisation', 'needs_information'
-        text = 'Model-proposed answers (Qwen 4B; source references verified against the committed snapshot; ' \
+        label = model.get('label') or model['model_id']
+        text = f'Model-proposed answers ({label}; source references verified against the committed snapshot; ' \
                'not operator input):\n' + '\n'.join(
                    f"Q: {a['question']}\nA{' (partial)' if a['status'] == 'partially_answered' else ''}: {a['answer']} [" + '; '.join(
                        f"{r['file']}:{r['line']} \"{r['quote']}\"" for r in a['references']) + ']' for a in accepted)
-        clarification = {'actor': PROPOSAL_ACTOR, 'at': now(), 'text': text[:4000], 'source': 'model_proposal',
+        clarification = {'actor': PROPOSAL_ACTOR.format(label), 'at': now(), 'text': text[:4000], 'source': 'model_proposal',
                          'unanswered': [a['question'] for a in answers if not a['verified']]}
         intake = state['intake'] | {'generation': state['intake'].get('generation', 0) + 1}
         # Same reset as an operator clarification; the model's terms and cited files steer the next search.

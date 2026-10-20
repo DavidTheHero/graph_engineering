@@ -112,6 +112,15 @@ def select(config: dict, role: str, requested: str | None = None, health: dict[s
     return chosen, decision
 
 
+def role_label(config: dict, role: str, fallback: str = "the model") -> str:
+    """Display name of the model a role would use first (configuration only, health ignored)."""
+    try:
+        ordered = candidates(config, role)
+    except RoutingError:
+        ordered = []
+    return config.get("models", {}).get(ordered[0], {}).get("label") or ordered[0] if ordered else fallback
+
+
 def larger_candidate(config: dict, role: str, current: str, exclude=frozenset()) -> str | None:
     """A large-tier model for escalation when a small model cannot hold the task (never an excluded one)."""
     models = config.get("models", {})

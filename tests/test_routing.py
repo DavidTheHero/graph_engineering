@@ -72,6 +72,16 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(routing.tier_of(models, "a"), routing.LARGE)
 
 
+class RoleLabelTests(unittest.TestCase):
+    def test_label_names_the_first_routed_model_or_a_neutral_fallback(self):
+        config = {"models": default_models(), "routing": "assigned", "role_routes": {"question_answering": ["a", "b"]}}
+        self.assertEqual(routing.role_label(config, "question_answering"), "Qwen 3.8 27B")
+        config["role_routes"]["question_answering"] = []  # Assessed, nothing eligible: no model to name.
+        self.assertEqual(routing.role_label(config, "question_answering", "the model"), "the model")
+        unlabelled = {"models": {"x": {"model_id": "m", "tier": "small"}}}
+        self.assertEqual(routing.role_label(unlabelled, "question_answering"), "x")
+
+
 class ModelRegistryTests(unittest.TestCase):
     def test_home_registry_overrides_defaults_and_rejects_inline_secrets(self):
         with tempfile.TemporaryDirectory() as td:

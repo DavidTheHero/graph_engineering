@@ -38,7 +38,7 @@ def troubleshooting_context(state):
     context=[note['text'][:800] for note in state.get('development_information',[])[-3:]]
     for item in state.get('question_answers',{}).get('answers',[]):
         if item.get('status')!='still_unresolved':
-            context.append(('Qwen 4B proposal; verify against source and tests: '+item['question']+' — '+item['answer'])[:1000])
+            context.append(('Model proposal; verify against source and tests: '+item['question']+' — '+item['answer'])[:1000])
     return context[-6:]
 
 

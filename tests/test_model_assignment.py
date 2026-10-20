@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from graph_engineering import cli, model_assignment as ma, routing
-from graph_engineering.models import ModelError, load_models
+from graph_engineering.models import ModelError, default_models, load_models
 from tests.test_core import make_repo
 
 STRONG, SLOPPY, BROKEN, CRASH = "strong", "sloppy", "broken", "crash"
@@ -122,7 +122,7 @@ class AssessmentTests(AssessmentFixture):
                            ("http://192.168.0.62:18035/v1", None))
         self.assertFalse(plan["complete"])
         self.assertFalse(plan["models"]["b"]["reachable"])  # Same endpoint/model id as the registry's "b".
-        self.assertEqual(plan["models"]["b"]["model_id"], "docker.io/local/qwen35-4b:8k")
+        self.assertEqual(plan["models"]["b"]["model_id"], default_models()["b"]["model_id"])
 
     def test_model_selection_limits_probing(self):
         worker = ProbeDouble({"qwen35-4b-8k": STRONG})
@@ -190,6 +190,41 @@ class ApplyAndRoutingTests(AssessmentFixture):
         with self.assertRaises(routing.RoutingError):
             routing.select(config, "implementation", health={K("qwen3.8-27b"): False})
         self.assertEqual(list((self.home / "assignments").glob("plan-*.json"))[0].suffix, ".json")
+
+    def test_update_open_runs_moves_only_idle_unfinished_runs_and_records_it(self):
+        from graph_engineering.runtime import Store
+        from graph_engineering.tickets import Tickets
+        from graph_engineering.workflow import initialise
+        repo = make_repo(Path(self.folder.name))
+        config = json.loads(initialise(repo, self.home).read_text())
+        tickets = Tickets(self.home)
+        store = tickets.store
+        try:
+            ids = {}
+            for status in ("needs_information", "completed", "running", "leased", "cancelled"):
+                ids[status] = run_id = store.create_run(config)["id"]
+                tickets.admit(run_id)
+                store.db.execute("UPDATE runs SET status=? WHERE id=?", ("ready" if status == "leased" else status, run_id))
+            store.db.execute("UPDATE tickets SET lease_owner='worker-1' WHERE run_id=?", (ids["leased"],))
+            store.db.commit()
+            store.stop(ids["cancelled"])
+            legacy = store.create_run(config)["id"]  # A CLI ``serve`` run: no ticket row, no lease to guard it.
+        finally:
+            store.close()
+        result = ma.apply_plan(self.standard(), self.home, update_open_runs=True)
+        self.assertEqual([r["run_id"] for r in result["runs_updated"]], [ids["needs_information"]])
+        store = Store(self.home)
+        try:
+            moved = store.get(ids["needs_information"])["state"]["config"]
+            self.assertIn(K("qwen3.8-27b"), moved["models"])
+            for run_id in [ids[k] for k in ("completed", "running", "leased", "cancelled")] + [legacy]:
+                self.assertNotIn(K("qwen3.8-27b"), store.get(run_id)["state"]["config"]["models"], run_id)
+            [event] = [e for e in store.events(ids["needs_information"]) if e["kind"] == "model_registry_adopted"]
+            self.assertEqual(event["data"]["before"]["b"], config["models"]["b"]["model_id"])
+        finally:
+            store.close()
+        # Without the flag, open runs keep their snapshot.
+        self.assertNotIn("runs_updated", ma.apply_plan(self.standard(), self.home))
 
     def test_new_registrations_inherit_the_applied_assignment(self):
         from graph_engineering.workflow import initialise

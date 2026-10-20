@@ -11,7 +11,7 @@ from .runtime import redact
 from .scheduling_policy import board_status, effective_rank,execution_limits
 from .attention import items as attention_items
 from .models import load_models
-from .routing import RoutingError
+from .routing import RoutingError, role_label
 from .scheduler import required_model, ROLES
 from .tickets import Tickets, QUEUES
 from .workflow import graph_contracts
@@ -115,6 +115,7 @@ def snapshot(home):
                 'id':ticket['id'],'run_id':ticket['run_id'],'title':enhanced.get('title') or state.get('triage',{}).get('title') or candidate.get('title') or (manual['original'].strip()[:120] if manual else 'Source investigation' if config.get('inspect_with_model') else 'Repository scan'),
                 'description':enhanced.get('problem_statement') or (manual['original'] if manual else None) or candidate.get('actual') or state.get('investigation',{}).get('summary') or 'Inspect repository evidence and validate actionable findings.',
                 'intake':bool(manual),'lifecycle':intake_lifecycle(ticket) if manual else None,
+                'question_model':role_label(config,'question_answering','the model'),
                 'enhancement_revision':state.get('revision'),'accepted_revision':state.get('accepted_revision'),
                 'repository':config.get('source_repo',ticket['repo']),'repository_name':Path(config.get('source_repo',ticket['repo'])).name,
                 'revision':state.get('base_sha'),'category':ticket['category'],'labels':ticket['labels'],

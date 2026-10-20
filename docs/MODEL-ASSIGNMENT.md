@@ -80,3 +80,21 @@ Measured on 2026-10-20 (`--model` for `qwen3.8-27b` and `docker.io/local/qwen35-
 3 trials, 59 s): both models scored 1.0 on structured output, triage and grounding,
 and the 27B also passed the long-context probe. Result: the 4B is first for the
 bounded roles with the 27B as fallback, and the 27B alone serves the complex roles.
+
+### Replacing a model (4B → 9B, 2026-10-20)
+
+The 4B was replaced by `docker.io/local/qwen35-9b:16k` (Qwen3.5 9B UD-Q4_K_XL, 16K context) on the same
+endpoint. Registry entry `b` was pointed at the new id (budget 12 KB, output 2048, timeout 240 s), then
+`models assign --model … --apply --update-open-runs`. Measured (3 trials): structured 1.0, triage 1.0,
+grounding 1.0; long grounding not passed (30 KB probe over its 12 KB budget), so the routes are unchanged:
+the 9B first for bounded roles, the 27B for complex roles.
+
+Runs keep the registry snapshot they started with. `--update-open-runs` moves idle, unfinished runs
+(not leased, running, finished or cancelled) onto the new registry in one transaction and records a
+`model_registry_adopted` event with the model ids before and after. Without it, an open run would keep
+calling an identifier the server no longer serves. Earlier proposals stay attributed to the model id that
+wrote them.
+
+A live trial of the 9B on a copy of GE-30D05C40 cited genuine `import` lines for an unrelated claim. The
+clarification verifier now also requires each quote to share a content word (snake/camelCase split) with
+the answer or question; with that check the trial correctly returned the ticket to the operator.
