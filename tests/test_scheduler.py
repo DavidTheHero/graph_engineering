@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from graph_engineering.models import default_models
 from graph_engineering.scheduler import claim, recover, execute_assignment
 from graph_engineering.tickets import Tickets
 from graph_engineering.workflow import Workflow, initialise
@@ -19,7 +20,7 @@ class SchedulerTests(unittest.TestCase):
         self.tickets.store.close();self.folder.cleanup()
 
     def add(self,name,repo=None,priority='P2'):
-        run=self.tickets.store.create_run({'repo':str(repo or self.root/name),'backend':'local','models':{},'routing':'baseline'},name)
+        run=self.tickets.store.create_run({'repo':str(repo or self.root/name),'backend':'local','models':default_models(),'routing':'baseline'},name)
         return self.tickets.admit(run['id'],priority=priority)
 
     def test_atomic_priority_capacity_repository_and_dependency_admission(self):
@@ -68,3 +69,10 @@ class SchedulerTests(unittest.TestCase):
             self.tickets.db.execute('INSERT INTO model_observations VALUES(?,?,?)',('a',0,json.dumps({'available':False})))
         self.assertIsNone(claim(self.tickets,2))
         self.assertIn('unavailable',self.tickets.get(a['id'])['last_reason'])
+
+    def test_unconfigured_model_holds_ticket_with_explicit_reason(self):
+        run=self.tickets.store.create_run({'repo':str(self.root/'x'),'backend':'local','models':{},'routing':'baseline'},'bare')
+        ticket=self.tickets.admit(run['id'])
+        self.tickets.store.checkpoint('bare','task_planning',{},'task_planning')
+        self.assertIsNone(claim(self.tickets,2))
+        self.assertIn('No configured model',self.tickets.get(ticket['id'])['last_reason'])

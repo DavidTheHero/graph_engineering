@@ -14,6 +14,8 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import tempfile
+import threading
 import time
 from typing import Any, Callable
 import urllib.error
@@ -25,7 +27,22 @@ from .processes import background_options
 
 
 class ModelError(RuntimeError):
-    """A failed boundary check or model invocation; never a successful result."""
+    """A failed boundary check or model invocation; never a successful result.
+
+    ``transient`` marks infrastructure faults (worker startup stalls, timeouts,
+    unreachable or busy servers) that a later retry can fix. Invalid model output,
+    schema violations and policy refusals are not transient: retrying the same
+    evidence is bounded by the node's normal attempt budget instead.
+    """
+
+    def __init__(self, message: str, *, transient: bool = False, phase: str | None = None):
+        super().__init__(message)
+        self.transient = transient
+        self.phase = phase
+
+
+class WorkerStalled(ModelError):
+    """OpenCode emitted nothing within its startup window; the model was never asked."""
 
 
 @dataclass(frozen=True)
@@ -36,22 +53,76 @@ class ModelEndpoint:
     output: int = 4096
     api_key_env: str | None = None
     timeout: int = 120
+    startup_timeout: int = 45
     input_budget_bytes: int = 40000
     structured_output: bool = True
     tools: bool = False
+    tier: str = ""
+    label: str = ""
+    roles: tuple[str, ...] | list[str] | None = None
+
+    @property
+    def small(self) -> bool:
+        # Same rule as routing.tier_of: an explicit known tier wins; otherwise infer from the context window.
+        if self.tier in ("large", "small"):
+            return self.tier == "small"
+        return self.context is not None and self.context <= 16384
 
     @classmethod
     def from_mapping(cls, value: dict | ModelEndpoint) -> ModelEndpoint:
-        return value if isinstance(value, cls) else cls(**value)
+        if isinstance(value, cls):
+            return value
+        known = {name for name in cls.__dataclass_fields__}
+        unknown = set(value) - known
+        if unknown:
+            raise ModelError("Unknown model configuration fields: " + ", ".join(sorted(unknown)))
+        return cls(**value)
 
 
 def default_models() -> dict[str, dict]:
-    """Identifiers and context limits observed from each server's /models response."""
+    """Identifiers and context limits observed from each server's /models response.
+
+    A controller home may replace these with ``models.json`` (see ``load_models``);
+    keys are arbitrary names, routing uses each entry's tier and roles.
+    """
     return {
-        "a": asdict(ModelEndpoint("http://192.168.0.60:18020/v1", "qwen3.8-27b", 150000)),
+        "a": asdict(ModelEndpoint("http://192.168.0.60:18020/v1", "qwen3.8-27b", 150000,
+                                  tier="large", label="Qwen 3.8 27B")),
         "b": asdict(ModelEndpoint("http://192.168.0.62:18035/v1", "docker.io/local/qwen35-4b:8k", 8192,
-                                  input_budget_bytes=6000, output=1024)),
+                                  input_budget_bytes=6000, output=1024, tier="small", label="Qwen 3.5 4B (8K)")),
     }
+
+
+def load_models(home: Path | None = None) -> dict[str, dict]:
+    """Controller-level provider registry: ``<home>/models.json`` overrides the built-in defaults."""
+    path = Path(home) / "models.json" if home is not None else None
+    if path is None or not path.is_file():
+        return default_models()
+    models = json.loads(path.read_text(encoding="utf-8-sig"))
+    if not isinstance(models, dict) or not models:
+        raise ModelError("models.json must map model names to endpoint configurations")
+    for key, value in models.items():
+        if not re.fullmatch(r"[a-z0-9_-]{1,32}", key) or not isinstance(value, dict):
+            raise ModelError("Model names must be 1-32 lowercase letters, digits, '_' or '-'")
+        if set(value) & {"api_key", "apiKey", "token", "password"}:
+            raise ModelError("Store credentials in environment variables (api_key_env), not models.json")
+        ModelEndpoint.from_mapping(value)
+    return models
+
+
+def discover_models(models: dict[str, dict], timeout: int = 8) -> dict:
+    """Compare each configured identifier with what its server actually advertises."""
+    report = {}
+    for key, config in models.items():
+        health = ModelClient(config).health(retries=0, timeout=timeout)
+        advertised = [{"id": m["id"], "context_window": (m.get("dmr") or {}).get("context_window") or m.get("max_model_len")}
+                      for m in health.get("models", [])]
+        configured = config.get("model_id")
+        report[key] = {"endpoint": config["endpoint"], "configured_model_id": configured, "tier": config.get("tier"),
+                       "reachable": health["available"], "advertised": advertised,
+                       "identifier_verified": identifier_advertised(health, configured),
+                       "error": None if health["available"] else (health["attempts"][-1].get("error") or health["attempts"][-1].get("status"))}
+    return report
 
 
 def _request(endpoint: ModelEndpoint, path: str, body: dict | None = None,
@@ -115,6 +186,24 @@ class ModelClient:
                    "max_tokens": self.endpoint.output, "temperature": 0,
                    "chat_template_kwargs": {"enable_thinking": False}, **(body or {})}
         return _request(self.endpoint, "/chat/completions", payload, timeout=timeout or self.endpoint.timeout)
+
+
+def identifier_advertised(health: dict, model_id: str | None) -> bool:
+    return any(isinstance(m, dict) and m.get("id") == model_id for m in health.get("models", []))
+
+
+def model_health(config: dict, timeout: int = 5) -> dict:
+    """Health for routing: the server answers AND still advertises the configured model id.
+
+    A reachable server that no longer serves the model would reject every request (404),
+    so it counts as unavailable. Shared by the scheduler sweep and the workflow's probe.
+    """
+    if not config.get("endpoint"):
+        return {"available": False, "reason": "no endpoint configured"}
+    result = ModelClient(config).health(retries=0, timeout=timeout)
+    if result["available"] and config.get("model_id") and not identifier_advertised(result, config["model_id"]):
+        result = result | {"available": False, "reason": "configured model id not advertised by server"}
+    return result
 
 
 def probe_endpoints(root: Path, endpoints: dict | None = None) -> dict:
@@ -207,6 +296,42 @@ def detect_opencode() -> tuple[str, str]:
     return executable, found.group(1)
 
 
+TRANSIENT_HTTP = {408, 409, 425, 429}
+
+
+def _json_or_none(line: str):
+    try:
+        return json.loads(line)
+    except (ValueError, TypeError):
+        return None
+
+
+def provider_rejection(event) -> int | None:
+    """HTTP status of a deterministic provider rejection (4xx other than timeouts/rate limits), else None.
+
+    OpenCode wraps provider failures as {"error": {"status": ..., "response": {"body": "{\"error\": {\"code\": ...}}"}}}.
+    5xx, network errors and unknown shapes stay transient: retrying them can succeed.
+    """
+    if not isinstance(event, dict):
+        return None
+    error = event.get("error") if isinstance(event.get("error"), dict) else {}
+    data = error.get("data") if isinstance(error.get("data"), dict) else {}  # AI-SDK APIError shape.
+    if data.get("isRetryable") is True:
+        return None
+    codes = [error.get("status"), error.get("statusCode"), data.get("statusCode")]
+    bodies = [(error.get("response") or {}).get("body") if isinstance(error.get("response"), dict) else None,
+              data.get("responseBody")]
+    for body in bodies:
+        parsed = _json_or_none(body) if isinstance(body, str) else body
+        if isinstance(parsed, dict) and isinstance(parsed.get("error"), dict):
+            codes.append(parsed["error"].get("code"))
+    codes = [c for c in codes if isinstance(c, int) and c >= 400]
+    # Any retryable signal (5xx, 408/409/425/429) anywhere wins over an outer 4xx wrapper.
+    if not codes or any(c >= 500 or c in TRANSIENT_HTTP for c in codes):
+        return None
+    return codes[0]
+
+
 def parse_opencode_output(stdout: str) -> tuple[dict, dict]:
     texts, sessions, tools = [], set(), []
     for line in stdout.splitlines():
@@ -223,7 +348,9 @@ def parse_opencode_output(stdout: str) -> tuple[dict, dict]:
         if event.get("sessionID"):
             sessions.add(event["sessionID"])
         if kind in ("error", "session.error"):
-            raise ModelError("OpenCode emitted an error event")
+            permanent = provider_rejection(event)
+            raise ModelError("OpenCode emitted an error event" + (f" (provider rejected request: HTTP {permanent})" if permanent else ""),
+                             transient=not permanent, phase="provider")
         if kind in ("tool_use", "tool_result", "tool") or part.get("type") in ("tool", "tool-invocation"):
             tools.append(kind)
         if kind == "text" and isinstance(part.get("text"), str):
@@ -290,32 +417,71 @@ def validate_artifact(value: Any, schema: dict, path: str = "$") -> None:
         raise ModelError(path + " violates numeric bounds")
 
 
-def _run_opencode(command: list[str], cwd: Path, env: dict, timeout: int,
-                  input_text: str | None = None, cancelled: Callable[[], bool] | None = None) -> tuple[int, str, str]:
-    kwargs = background_options(new_session=True)
-    proc = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", **kwargs)
-    deadline = time.monotonic() + timeout
-    try:
-        while True:
-            if cancelled and cancelled():
-                raise ModelError("Workflow cancelled while OpenCode was running")
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise ModelError("OpenCode exceeded invocation timeout")
-            try:
-                stdout, stderr = proc.communicate(input=input_text, timeout=min(0.5, remaining))
-                break
-            except subprocess.TimeoutExpired:
-                input_text = None
-    except BaseException:
-        if os.name == "nt":
-            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, timeout=10,**background_options())
-        else:
-            import signal
+def _kill_tree(proc: subprocess.Popen) -> None:
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, timeout=10, **background_options())
+    else:
+        import signal
+        try:
             os.killpg(proc.pid, signal.SIGKILL)
-        proc.communicate()
-        raise
-    return proc.returncode, stdout, stderr
+        except ProcessLookupError:
+            pass
+
+
+def _run_opencode(command: list[str], cwd: Path, env: dict, timeout: float,
+                  input_text: str | None = None, cancelled: Callable[[], bool] | None = None,
+                  startup_timeout: float | None = None) -> tuple[int, str, str]:
+    """Run one OpenCode session with a liveness watchdog.
+
+    OpenCode writes a ``step_start`` event as soon as its session starts, before the
+    model streams (measured at ~2-5 s). Zero bytes of output after ``startup_timeout``
+    therefore means the worker stalled during startup, not that the model is slow.
+    Output goes to files, so progress is observable while the process runs.
+    """
+    kwargs = background_options(new_session=True)
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        proc = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=out, stderr=err, **kwargs)
+
+        def feed():
+            try:
+                if input_text is not None:
+                    proc.stdin.write(input_text.encode("utf-8"))
+                proc.stdin.close()
+            except OSError:
+                pass  # The process exited or was killed; its exit status is authoritative.
+        threading.Thread(target=feed, daemon=True).start()
+        started = time.monotonic()
+        try:
+            while proc.poll() is None:
+                if cancelled and cancelled():
+                    raise ModelError("Workflow cancelled while OpenCode was running")
+                elapsed = time.monotonic() - started
+                produced = os.fstat(out.fileno()).st_size > 0
+                if startup_timeout and not produced and elapsed > startup_timeout:
+                    raise WorkerStalled(f"OpenCode produced no output within {startup_timeout:g}s; the worker stalled "
+                                        "during startup and the model was not asked", transient=True, phase="startup")
+                if elapsed > timeout:
+                    raise ModelError("OpenCode exceeded invocation timeout", transient=True,
+                                     phase="generation" if produced else "startup")
+                time.sleep(0.1)
+        except BaseException:
+            _kill_tree(proc)
+            proc.wait(timeout=10)
+            raise
+        out.seek(0)
+        err.seek(0)
+        return proc.returncode, out.read(2_000_001).decode("utf-8", "replace"), err.read(64_000).decode("utf-8", "replace")
+
+
+def opencode_log_tail(profile: Path, limit: int = 3000) -> str:
+    """Last lines of the worker's private OpenCode log: shows how far startup progressed."""
+    path = Path(profile) / "data" / "opencode" / "log" / "opencode.log"
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")[-limit:] if path.is_file() else ""
+    except OSError:
+        return ""
 
 
 class OpenCodeWorker:
@@ -337,7 +503,7 @@ class OpenCodeWorker:
         prompt = redact(prompt)
         if not model.model_id:
             raise ModelError("Selected model has no discovered model identifier; explicit fallback required")
-        budget = min(model.input_budget_bytes, 12000 if model_key == "b" else 40000)
+        budget = min(model.input_budget_bytes, 12000 if model.small else 40000)
         if model.context is not None:
             # Byte count is a conservative token upper bound for byte-tokenized
             # Qwen text. Reserve native OpenCode system framing and all output.
@@ -364,13 +530,19 @@ class OpenCodeWorker:
             metric["opencode_version"] = version
             command = [executable, "run", "--standalone", "--model", "local/" + model.model_id,
                        "--agent", role, "--format", "json"]
-            code, stdout, stderr = _run_opencode(command, cwd, env, remaining_timeout(min(max(model.timeout, 1), 300)), prompt, cancelled)
+            code, stdout, stderr = _run_opencode(command, cwd, env, remaining_timeout(min(max(model.timeout, 1), 300)), prompt,
+                                                 cancelled, startup_timeout=model.startup_timeout)
             secret = env.get("GRAPH_ENGINEERING_MODEL_API_KEY")
             if secret:
                 stdout, stderr = stdout.replace(secret, "[REDACTED]"), stderr.replace(secret, "[REDACTED]")
             record.update(exit_code=code, stdout=stdout[:2_000_000], stderr=stderr[:64000])
             if code:
-                raise ModelError("OpenCode exited unsuccessfully; inspect retained result")
+                # The event stream usually says why; a provider's 4xx rejection will not heal on retry.
+                rejected = next((status for line in stdout.splitlines() if '"error"' in line
+                                 for status in [provider_rejection(_json_or_none(line))] if status), None)
+                raise ModelError("OpenCode exited unsuccessfully; inspect retained result" +
+                                 (f" (provider rejected request: HTTP {rejected})" if rejected else ""),
+                                 transient=rejected is None, phase="exit")
             if len(stdout) > 2_000_000:
                 raise ModelError("OpenCode output exceeds evidence size cap")
             content, metadata = parse_opencode_output(stdout)
@@ -380,9 +552,12 @@ class OpenCodeWorker:
             return {"content": content, "raw_path": str(raw_path), "metrics": metric}
         except Exception as exc:
             record["error"] = type(exc).__name__ + ": " + str(exc)
+            metric.update(phase=getattr(exc, "phase", None), transient=getattr(exc, "transient", True))
+            record["opencode_log_tail"] = opencode_log_tail(invocation / "profile")
             if isinstance(exc, ModelError):
                 raise
-            raise ModelError("OpenCode failed: " + type(exc).__name__) from exc
+            # Process/OS failures (spawn errors, deadline TimeoutError) are infrastructure faults.
+            raise ModelError("OpenCode failed: " + type(exc).__name__, transient=True, phase="process") from exc
         finally:
             metric["latency_seconds"] = round(time.monotonic() - start, 4)
             self.metrics.append(metric)

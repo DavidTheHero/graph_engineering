@@ -1,7 +1,7 @@
 """Single-host, restartable multi-process dispatch of existing graph nodes."""
 from __future__ import annotations
 
-from contextlib import closing
+from contextlib import closing, contextmanager
 import json
 import os
 from pathlib import Path
@@ -10,32 +10,32 @@ import sys
 import time
 import uuid
 
-from .models import ModelClient, default_models
+from . import routing
+from .models import ModelClient, load_models, model_health
 from .runtime import BusyError, RepoLock, now
 from .scheduling_policy import effective_rank, retry_delay
 from .tickets import Tickets
 from .workflow import Workflow
 
 
-ROLES = {'issue_detection':('investigation','b'), 'task_planning':('planning','a'),
-         'request_triage':('classification','b'),'problem_investigation':('root_investigation','a'),
-         'question_answering':('question_answering','b'),
-         'regression_authoring':('regression_test','a'),'regression_review':('regression_review','b'),
-         'repository_investigation':('investigation','b'),
-         'isolated_implementation':('implementation','a'), 'independent_review':('review','b')}
+# Graph node -> (worker role, requested tier). Concrete models come from routing.select.
+ROLES = {'issue_detection':('investigation',routing.SMALL), 'task_planning':('planning',routing.LARGE),
+         'request_triage':('classification',routing.SMALL),'problem_investigation':('root_investigation',routing.LARGE),
+         'question_answering':('question_answering',routing.SMALL),
+         'regression_authoring':('regression_test',routing.LARGE),'regression_review':('regression_review',routing.SMALL),
+         'repository_investigation':('investigation',routing.SMALL),
+         'isolated_implementation':('implementation',routing.LARGE), 'independent_review':('review',routing.SMALL)}
 
 
-def required_model(ticket):
+def required_model(ticket, health=None):
+    """The model this ticket's next step will use, or raise RoutingError when none may run it."""
     role = ROLES.get(ticket['node'])
     if not role: return None
-    name, model = role
+    name, tier = role
     if ticket['node']=='regression_review':
         from .accepted_development import regression_review_model
-        model=regression_review_model(ticket['state'])
-    config = ticket['state']['config']
-    if ticket['node']=='question_answering':
-        return config.get('model_overrides',{}).get(name) or 'b'
-    return config.get('model_overrides',{}).get(name) or ('a' if config.get('routing') == 'baseline' else model)
+        tier=regression_review_model(ticket['state'])
+    return routing.select(ticket['state']['config'], name, tier, health)[0]
 
 
 def resource_key(ticket):
@@ -45,8 +45,8 @@ def resource_key(ticket):
 
 def observe_models(tickets, timeout=2):
     observations = {}
-    for key, config in default_models().items():
-        result = ModelClient(config).health(retries=0, timeout=timeout)
+    for key, config in load_models(tickets.store.root).items():
+        result = model_health(config, timeout=timeout)
         observations[key] = result
         with tickets.db:
             tickets.db.execute('INSERT OR REPLACE INTO model_observations VALUES(?,?,?)',
@@ -65,17 +65,17 @@ def claim(tickets: Tickets, workers=2):
         capacity = tickets.setting('model_capacity', {'a':1,'b':1})
         eligible = [t for t in rows if not t.get('cancel') and tickets.queue(t,lookup)[0] in ('high','normal','low','intake')]
         eligible.sort(key=lambda t:(effective_rank(t['priority'],t['created'],time.time()),t['created'],t['id']))
+        health = routing.observed_health(db)
         for ticket in eligible:
-            model = required_model(ticket)
-            reason = ''
-            if any(resource_key(a) == resource_key(ticket) for a in active):
+            # routing.select already skips models observed unavailable; it raises when none remain.
+            try:
+                model, reason = required_model(ticket, health), ''
+            except routing.RoutingError as exc:
+                model, reason = None, str(exc) + '; awaiting health recovery or routing change'
+            if not reason and any(resource_key(a) == resource_key(ticket) for a in active):
                 reason = 'Repository is owned by another active ticket'
-            elif model and sum(a['lease_model'] == model for a in active) >= capacity.get(model,1):
+            elif not reason and model and sum(a['lease_model'] == model for a in active) >= capacity.get(model,1):
                 reason = f'Model {model.upper()} capacity is occupied'
-            elif model:
-                observed = db.execute('SELECT data FROM model_observations WHERE key=?', (model,)).fetchone()
-                if observed and not json.loads(observed[0]).get('available'):
-                    reason = f'Model {model.upper()} is unavailable; awaiting health recovery'
             if reason:
                 db.execute('UPDATE tickets SET last_reason=? WHERE id=?', (reason,ticket['id']))
                 continue
@@ -131,6 +131,9 @@ def execute_assignment(home, ticket_id, owner):
             last = tickets.db.execute('SELECT kind FROM events WHERE run_id=? ORDER BY seq DESC LIMIT 1', (ticket['run_id'],)).fetchone()
             tickets.classify(current)
             delay = retry_delay(max(1,current['retries']+1)) if last and last[0] == 'retry_scheduled' else 0
+            if last and last[0] == 'retry_backoff':
+                # Infrastructure fault: the workflow chose the backoff; the ticket waits in the Retry queue.
+                delay = max(0, current['state'].get('retry_not_before', 0) - time.time())
             with tickets.db:
                 tickets.db.execute('''UPDATE tickets SET lease_owner=NULL,lease_pid=NULL,lease_model=NULL,
                     not_before=?,updated=? WHERE id=? AND lease_owner=?''', (time.time()+delay,time.time(),ticket_id,owner))
@@ -155,11 +158,33 @@ def execute_assignment(home, ticket_id, owner):
             tickets.store.close()
 
 
+@contextmanager
+def scheduler_lock(home, patience=3.0):
+    """Hold the scheduler lock for the block, waiting out a dashboard's momentary liveness probe.
+
+    The lock is entered exactly once; re-entering a RepoLock would reopen its file and drop the held lock.
+    """
+    deadline = time.monotonic() + patience
+    while True:
+        lock = RepoLock(home, 'scheduler')
+        try:
+            lock.__enter__()
+            break
+        except BusyError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.1)
+    try:
+        yield lock
+    finally:
+        lock.__exit__(None, None, None)
+
+
 def serve_scheduler(home, workers=2, once=False, poll=.5):
     if not 1 <= workers <= 8: raise ValueError('Worker concurrency must be between 1 and 8')
     home = Path(home).resolve()
     children = []
-    with RepoLock(home, 'scheduler'):
+    with scheduler_lock(home):
         tickets = Tickets(home)
         try:
             tickets.set_setting('workers',workers)

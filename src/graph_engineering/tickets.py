@@ -141,6 +141,10 @@ class Tickets:
             if status=='ready' and ticket['node']=='manual_intake':return 'intake','Original report saved; queued for investigation'
         if status == 'waiting_approval' and self.store.approved_head(ticket['run_id']) != ticket['state'].get('head'):
             return 'approval', 'Exact tested commit needs human approval'
+        error = ticket['state'].get('error')
+        if status == 'blocked' and isinstance(error, dict) and error.get('category') == 'infrastructure_exhausted':
+            return 'dead', (f"Infrastructure retries exhausted ({error.get('infrastructure_limit')}) at "
+                            f"{ticket['node'].replace('_',' ')}: {error.get('message')}. Check model servers/OpenCode, then Retry.")
         if status in ('blocked', 'cancelled'):
             limits=execution_limits(ticket)
             return 'investigation', limits['explanation'] if limits['exhausted'] else str(ticket['state'].get('error') or status)
@@ -148,7 +152,13 @@ class Tickets:
             if ticket['state']['config'].get('run_mode') == 'metadata':
                 return 'investigation', 'Read-only observations have verified source references; they are not confirmed bugs'
             return 'approval', 'Scan complete; explicitly enable development to continue'
-        if ticket['not_before'] > current: return 'retry', f"Backoff until {ticket['not_before']:.3f} (Unix seconds)"
+        if ticket['not_before'] > current:
+            last = ticket['state'].get('last_error')
+            when = time.strftime('%H:%M:%S', time.localtime(ticket['not_before']))
+            if isinstance(last, dict) and last.get('category') == 'infrastructure':
+                return 'retry', (f"Automatic infrastructure retry {last.get('infrastructure_failures')}/{last.get('infrastructure_limit')} "
+                                 f"at {when} ({last.get('phase') or 'worker'}): {last.get('message')}")
+            return 'retry', f"Backoff until {when}"
         all_tickets = all_tickets or {t['id']:t for t in self.list()}
         if any(all_tickets.get(dep, {}).get('status') not in TERMINAL for dep in ticket['dependencies']):
             return 'dependency', 'Waiting for all dependency tickets to finish successfully'
@@ -179,7 +189,7 @@ class Tickets:
                 if ticket['lease_owner']: raise ValueError('An active worker cannot be retried')
                 if ticket['status'] not in ('blocked','cancelled','escalated','failed'): raise ValueError('Only unresolved executions may be retried')
                 if ticket['retries'] >= ticket['max_retries']: raise ValueError('Retry budget exhausted')
-                state = ticket['state']; state.pop('error', None)
+                state = ticket['state']; state.pop('error', None); state.pop('infrastructure_failures', None)
                 state.setdefault('attempts', {})[f"{ticket['node']}:{state.get('repairs',0)}"] = 0
                 if state['config'].get('run_mode')=='intake':
                     state['attempts']={key:0 if key.startswith(ticket['node']+':') else count for key,count in state['attempts'].items()}
@@ -215,10 +225,14 @@ class Tickets:
             elif action == 'reassign':
                 if ticket['lease_owner']: raise ValueError('Pause and wait for the active step before reassignment')
                 role, model = data.get('role'), data.get('model')
-                if role not in ('classification','root_investigation','investigation','planning','implementation','review') or model not in ('a','b'):
+                from . import routing
+                state = ticket['state']; models = state['config'].get('models', {})
+                if (role not in ('classification','root_investigation','investigation','planning','implementation','review')
+                        or model not in models or not models[model].get('model_id')):
                     raise ValueError('Invalid role/model assignment')
-                if role in ('root_investigation','planning','implementation') and model != 'a': raise ValueError('Complex engineering roles require model A')
-                state = ticket['state']; state['config'].setdefault('model_overrides',{})[role] = model
+                if role in routing.COMPLEX_ROLES and routing.tier_of(models, model) != routing.LARGE:
+                    raise ValueError('Complex engineering roles require a large-tier model')
+                state['config'].setdefault('model_overrides',{})[role] = model
                 self.db.execute('UPDATE runs SET state=? WHERE id=?', (json.dumps(state),run_id))
             else: raise ValueError('Unsupported ticket command')
             for field, value in updates.items():

@@ -5,7 +5,10 @@ export const columns = ['Backlog','To Do','In Progress','Blocked','Testing','Cod
 export const categories = ['bug','security','performance','reliability','refactoring','test_coverage','technical_debt','documentation','feature','build_ci','architecture_investigation'];
 export const state = {snapshot:null,selected:null,detail:null,view:'board',events:[],control:false,csrf:null,replaying:false};
 export const human = value => String(value ?? '').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
-export const shortModel = value => value?.includes('qwen3.8') ? 'Qwen 27B' : value?.includes('qwen35') || value?.includes('qwen3.5') ? 'Qwen 4B' : value || 'Not assigned';
+// Labels and tiers come from the backend model registry (models.json), never from model-id guessing.
+export const registryModel = key => state.snapshot?.models?.find(m=>m.key===key);
+export const shortModel = (value,key) => registryModel(key)?.label || state.snapshot?.models?.find(m=>m.model_id===value)?.label || value || 'Not assigned';
+export const tierBadge = key => ({large:'L',small:'S'})[registryModel(key)?.tier] || '•';
 export function tag(text,kind='') {return el('span','tag '+kind,text);}
 export function stamp(value) {return new Date(typeof value==='number'?value*1000:value).toLocaleTimeString();}
 export function elapsed(value) {if(!value)return '—'; const s=Math.max(0,Math.floor(Date.now()/1000-value));return s<60?s+'s':Math.floor(s/60)+'m '+s%60+'s';}

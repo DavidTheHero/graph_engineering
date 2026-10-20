@@ -12,6 +12,7 @@ import time
 
 from .models import default_models
 from .repository import discover, git, source_bundle
+from .routing import PROFILES as ROUTING_PROFILES
 from .runtime import RepoLock, digest
 from .tickets import Tickets
 from .workflow import initialise
@@ -91,7 +92,7 @@ def start(tickets, repo_id, data, key):
             or len(dependencies)>50 or any(not isinstance(dep,str) for dep in dependencies)
             or not set(dependencies)<={t['id'] for t in tickets.list()}):
             raise ValueError('Invalid priority or dependency tickets')
-        if data.get('routing','multimodel') not in ('baseline','multimodel'):
+        if data.get('routing','multimodel') not in ROUTING_PROFILES:
             raise ValueError('Invalid model routing')
         config = json.loads(Path(repo['config_path']).read_text(encoding='utf-8-sig'))
         if mode == 'autonomous' and not (config.get('auto_merge') and config.get('auto_merge_paths')):
@@ -117,7 +118,9 @@ def start(tickets, repo_id, data, key):
                           routing=data.get('routing',config.get('routing','multimodel')))
             config['inspect_with_model'] = mode == 'read_only' and data.get('inspect_with_model',False) is True
             config['parallel_quality'] = mode != 'read_only' and data.get('parallel_quality',False) is True
-            if config['routing'] not in ('baseline','multimodel'): raise ValueError('Invalid model routing')
+            if config['routing'] not in ROUTING_PROFILES: raise ValueError('Invalid model routing')
+            if config['routing']=='assigned' and not config.get('role_routes'):
+                raise ValueError('Assigned routing needs role_routes; run graph-engineer models assign --apply')
             # Read-only scans never publish. GitHub development uses the explicitly
             # configured remote, never the local clone source as a push destination.
             if mode == 'read_only': config['backend'] = 'local'

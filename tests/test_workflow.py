@@ -128,3 +128,50 @@ class WorkflowTests(unittest.TestCase):
 
 
 if __name__ == "__main__": unittest.main()
+
+
+class DeclaredGraphTests(unittest.TestCase):
+    """The exported graph must be the executable graph: every literal handler transition is declared."""
+
+    def test_handler_transitions_are_declared_edges(self):
+        import ast, inspect, textwrap
+        from graph_engineering.workflow import REGISTRY, transitions
+
+        def literals(node):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                return {node.value}
+            if isinstance(node, ast.IfExp):
+                return literals(node.body) | literals(node.orelse)
+            return set()
+
+        for name in REGISTRY:
+            tree = ast.parse(textwrap.dedent(inspect.getsource(getattr(Workflow, "node_" + name))))
+            found = set()
+            for ret in ast.walk(tree):
+                if isinstance(ret, ast.Return) and isinstance(ret.value, ast.Tuple) and len(ret.value.elts) == 3:
+                    found |= literals(ret.value.elts[1])
+            with self.subTest(node=name):
+                self.assertLessEqual(found, transitions(name))
+
+    def test_every_declared_destination_is_a_node(self):
+        from graph_engineering.workflow import REGISTRY, transitions
+        for name in REGISTRY:
+            with self.subTest(node=name):
+                self.assertLessEqual(transitions(name) - {"blocked", "done"}, set(REGISTRY))
+
+    def test_undeclared_transition_is_rejected_at_runtime(self):
+        from graph_engineering.workflow import TransitionError
+        with tempfile.TemporaryDirectory() as td:
+            flow = Workflow(Path(td))
+            try:
+                run = flow.store.create_run({"repo": td, "backend": "local", "models": {}, "max_node_attempts": 1,
+                                             "routing": "baseline"}, "edges")
+                flow.store.checkpoint("edges", "repository_discovery", {}, "prioritisation")
+                flow.node_prioritisation = lambda state: ({"priority": "P1"}, "merge", "ready")
+                flow.store.checkpoint("edges", "prioritisation", {"candidate": {"severity": "high"}}, "prioritisation")
+                with patch("graph_engineering.workflow.RepoLock"):
+                    result = flow.execute(run["id"])
+                self.assertEqual((result["node"], result["status"]), ("prioritisation", "blocked"))
+                self.assertIn("Undeclared transition prioritisation -> merge", json.dumps(flow.store.events("edges")))
+            finally:
+                flow.store.close()

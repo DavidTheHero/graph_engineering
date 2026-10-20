@@ -1,0 +1,3661 @@
+[
+ {
+  "seq": 53,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:18.748784+00:00",
+  "node": "manual_intake",
+  "kind": "ticket_created",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": null,
+   "parent_task_id": "GE-EABBDB96",
+   "source": "manual_intake",
+   "destination": "queue:intake",
+   "status": "queued"
+  }
+ },
+ {
+  "seq": 54,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:18.934212+00:00",
+  "node": "queue:intake",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "39c3d13228be47ffa1baf81eb2bbf33d",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:intake",
+   "destination": "manual_intake",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 55,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:19.020531+00:00",
+  "node": "manual_intake",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "39c3d13228be47ffa1baf81eb2bbf33d",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "manual_intake",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "manual_intake:0:g0:s0:v0:r0": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 56,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:19.144050+00:00",
+  "node": "manual_intake",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "39c3d13228be47ffa1baf81eb2bbf33d",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "request_triage",
+   "status": "ready",
+   "updates": {
+    "repository": {
+     "repo": "/Users/daviddoan/git_code/graph_engineering/.runtime/third-party/uuid",
+     "sha": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d",
+     "base": "master",
+     "remote": "https://github.com/google/uuid.git",
+     "git_common_dir": ".git",
+     "clean": true,
+     "adapter": "go",
+     "ecosystems": [
+      "go"
+     ],
+     "package_manager": "go",
+     "adapter_notes": [],
+     "source_suffixes": [
+      ".go"
+     ],
+     "test_command": [
+      "go",
+      "test",
+      "./..."
+     ],
+     "build_commands": [
+      [
+       "go",
+       "vet",
+       "./..."
+      ]
+     ],
+     "source_files": [
+      "dce.go",
+      "doc.go",
+      "hash.go",
+      "marshal.go",
+      "node.go",
+      "node_js.go",
+      "node_net.go",
+      "null.go",
+      "sql.go",
+      "time.go",
+      "util.go",
+      "uuid.go",
+      "version1.go",
+      "version4.go",
+      "version6.go",
+      "version7.go"
+     ],
+     "test_files": [
+      ".github/workflows/tests.yaml",
+      "json_test.go",
+      "null_test.go",
+      "seq_test.go",
+      "sql_test.go",
+      "time_test.go",
+      "uuid_test.go",
+      "version6_test.go"
+     ],
+     "ci_files": [
+      ".github/workflows/apidiff.yaml",
+      ".github/workflows/tests.yaml"
+     ],
+     "policy_files": [
+      ".github/CODEOWNERS",
+      "CONTRIBUTING.md"
+     ],
+     "manifests": [
+      "go.mod"
+     ],
+     "configuration_evidence": {
+      ".github/workflows/apidiff.yaml": "---\nname: apidiff\non:\n  pull_request:\n    branches:\n      - master\npermissions:\n  contents: read\njobs:\n  compat:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/setup-go@v4\n        with:\n          go-version: 1.21\n      - run: go install golang.org/x/exp/cmd/apidiff@latest\n      - uses: actions/checkout@v3\n        with:\n          ref: master\n      - run: apidiff -w uuid.baseline .\n      - uses: actions/checkout@v3\n        with:\n          clean: false\n      - run: |\n          apidiff -incompatible uuid.baseline . > diff.txt\n          cat diff.txt && ! [ -s diff.txt ]\n",
+      ".github/workflows/tests.yaml": "---\nname: tests\non:\n  pull_request:\n    branches:\n      - master\npermissions:\n  contents: read\njobs:\n  unit-tests:\n    strategy:\n      matrix:\n        go-version: [1.19, 1.20.x, 1.21]\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3\n      - uses: actions/setup-go@v4\n        with:\n          go-version: ${{ matrix.go-version }}\n      - run: go test -v ./...\n",
+      ".github/CODEOWNERS": "# Code owners file.\n# This file controls who is tagged for review for any given pull request.\n\n# For syntax help see:\n# https://help.github.com/en/github/creating-cloning-and-archiving-repositories/about-code-owners#codeowners-syntax\n* @google/go-uuid-contributors\n",
+      "CONTRIBUTING.md": "# How to contribute\n\nWe definitely welcome patches and contribution to this project!\n\n### Tips\n\nCommits must be formatted according to the [Conventional Commits Specification](https://www.conventionalcommits.org).\n\nAlways try to include a test case! If it is not possible or not necessary,\nplease explain why in the pull request description.\n\n### Releasing\n\nCommits that would precipitate a SemVer change, as described in the Conventional\nCommits Specification, will trigger [`release-please`](https://github.com/google-github-actions/release-please-action)\nto create a release candidate pull request. Once submitted, `release-please`\nwill create a release.\n\nFor tips on how to work with `release-please`, see its documentation.\n\n### Legal requirements\n\nIn order to protect both you and ourselves, you will need to sign the\n[Contributor License Agreement](https://cla.developers.google.com/clas).\n\nYou may have already signed it for other Google projects.\n",
+      "go.mod": "module github.com/google/uuid\n"
+     },
+     "recent_history": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d feat: Generate V6 from custom time (#172)\n0e97ed3b537927cb4afea366bc4cc36f6eb37e75 feat: add error types for better validation (#166)\nd55c313874fe007c6aaecc68211b6c7c7fc84aad docs: upd links to rfc9562 (#162)\ne8d82d30a3eb641530570da83295395651911778 feat: add Compare function (#163)\n53dda83ebe99c23d0e66c2472abdbf178097c3b8 fix: incorrect timestamp in uuid v6 (#161)\n6e10cd1027e225e3ad7bfcc13c896abd165b02ef fix: use MustParse(\"xxx\") instead of Must(Parse(\"xxxx\")) (#106)\nb5b9aeb1d146751d5a09f1b2ca83fd9731d3a8fa docs: fixing typos (#156)\n0f11ee6918f41a04c201eceeadf612a377bc7fbc chore(master): release 1.6.0 (#151)",
+     "recent_diff": "2d3c2a9 feat: Generate V6 from custom time (#172)\n time.go          | 11 +++++--\n time_test.go     | 44 +++++++++++++++++++++++++++\n version6.go      | 31 ++++++++++++++++---\n version6_test.go | 91 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n 4 files changed, 170 insertions(+), 7 deletions(-)"
+    },
+    "base_sha": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d",
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/manual_intake-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 57,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:19.145777+00:00",
+  "node": "request_triage",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "39c3d13228be47ffa1baf81eb2bbf33d",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "manual_intake",
+   "destination": "queue:normal",
+   "next_node": "request_triage",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 58,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:19.449483+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "45d3e004a2054b2b860878be5700f7bd",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "request_triage",
+   "model_key": "b"
+  }
+ },
+ {
+  "seq": 59,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:19.552739+00:00",
+  "node": "request_triage",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "45d3e004a2054b2b860878be5700f7bd",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "request_triage",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "manual_intake:0:g0:s0:v0:r0": 1,
+     "request_triage:0:g0:s0:v0:r0": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 60,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:19.553971+00:00",
+  "node": "classification",
+  "kind": "model_assigned",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "45d3e004a2054b2b860878be5700f7bd",
+   "parent_task_id": "GE-EABBDB96",
+   "model_key": "b",
+   "model_id": "docker.io/local/qwen35-4b:8k",
+   "role": "classification",
+   "graph_node": "request_triage",
+   "operation": "OpenCode structured proposal",
+   "request_sha256": "6afd37ac2bac6a7269ec59c55ce9832d7ead68d4ca266e88680ff6bd8d63a900"
+  }
+ },
+ {
+  "seq": 80,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:28.384912+00:00",
+  "node": "classification",
+  "kind": "model_call",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "45d3e004a2054b2b860878be5700f7bd",
+   "parent_task_id": "GE-EABBDB96",
+   "model_key": "b",
+   "model_id": "docker.io/local/qwen35-4b:8k",
+   "role": "classification",
+   "run_id": "33746956c519460b",
+   "attempt": 0,
+   "success": true,
+   "tool_calls": 0,
+   "raw_path": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/workers/33746956c519460b/classification-0-1b5da3bf/result.json",
+   "input_bytes": 417,
+   "utc": "2026-10-19T23:46:19.555909+00:00",
+   "opencode_version": "2.0.32",
+   "session_ids": [
+    "ses_ea970e961ffepnDrXdn7lTgCPs"
+   ],
+   "latency_seconds": 8.8279,
+   "artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/workers/33746956c519460b/classification-0-1b5da3bf/result.json",
+   "selected_model": "b",
+   "graph_node": "request_triage"
+  }
+ },
+ {
+  "seq": 81,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:28.387323+00:00",
+  "node": "request_triage",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "45d3e004a2054b2b860878be5700f7bd",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "request_duplicate_check",
+   "status": "ready",
+   "updates": {
+    "triage": {
+     "title": "UUID Parse Validation Inconsistency",
+     "category": "bug",
+     "keywords": [
+      "uuid",
+      "Parse",
+      "ParseBytes",
+      "Validate",
+      "validation",
+      "urn",
+      "braces",
+      "prefix"
+     ],
+     "components": [
+      "uuid"
+     ],
+     "missing_information": [
+      "expected"
+     ],
+     "suggested_priority": "P2"
+    },
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/request_triage-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 82,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:28.389140+00:00",
+  "node": "request_duplicate_check",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "45d3e004a2054b2b860878be5700f7bd",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "request_triage",
+   "destination": "queue:normal",
+   "next_node": "request_duplicate_check",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 83,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:28.585752+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "a758a867c3f1409eaabdb87a19b5b2bb",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "request_duplicate_check",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 84,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:28.675511+00:00",
+  "node": "request_duplicate_check",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "a758a867c3f1409eaabdb87a19b5b2bb",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "request_duplicate_check",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "manual_intake:0:g0:s0:v0:r0": 1,
+     "request_triage:0:g0:s0:v0:r0": 1,
+     "request_duplicate_check:0:g0:s0:v0:r0": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 85,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:28.676783+00:00",
+  "node": "request_duplicate_check",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "a758a867c3f1409eaabdb87a19b5b2bb",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "repository_search",
+   "status": "ready",
+   "updates": {
+    "duplicate_candidates": [],
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/request_duplicate_check-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 86,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:28.678192+00:00",
+  "node": "repository_search",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "a758a867c3f1409eaabdb87a19b5b2bb",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "request_duplicate_check",
+   "destination": "queue:normal",
+   "next_node": "repository_search",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 87,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:29.102565+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "10c44c0d98694e7380183f15a4448945",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "repository_search",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 88,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:29.201882+00:00",
+  "node": "repository_search",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "10c44c0d98694e7380183f15a4448945",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "repository_search",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "manual_intake:0:g0:s0:v0:r0": 1,
+     "request_triage:0:g0:s0:v0:r0": 1,
+     "request_duplicate_check:0:g0:s0:v0:r0": 1,
+     "repository_search:0:g0:s0:v0:r0": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 89,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:29.866610+00:00",
+  "node": "repository_search",
+  "kind": "repository_tool_result",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "10c44c0d98694e7380183f15a4448945",
+   "parent_task_id": "GE-EABBDB96",
+   "operation": "git grep/show/log",
+   "files": [
+    "uuid.go",
+    "uuid_test.go",
+    "dce.go",
+    "hash.go",
+    "node.go",
+    "null.go",
+    "null_test.go",
+    "sql.go",
+    "sql_test.go",
+    "time.go"
+   ],
+   "source_commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+  }
+ },
+ {
+  "seq": 90,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:29.869769+00:00",
+  "node": "repository_search",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "10c44c0d98694e7380183f15a4448945",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "problem_investigation",
+   "status": "ready",
+   "updates": {
+    "retrieved": {
+     "excerpts": [
+      {
+       "file": "uuid.go",
+       "start_line": 1,
+       "end_line": 40,
+       "text": "// Copyright 2018 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"bytes\"\n\t\"crypto/rand\"\n\t\"encoding/hex\"\n\t\"errors\"\n\t\"fmt\"\n\t\"io\"\n\t\"strings\"\n\t\"sync\"\n)\n\n// A UUID is a 128 bit (16 byte) Universal Unique IDentifier as defined in RFC\n// 9562.\ntype UUID [16]byte\n\n// A Version represents a UUID's version.\ntype Version byte\n\n// A Variant represents a UUID's variant.\ntype Variant byte\n\n// Constants returned by Variant.\nconst (\n\tInvalid   = Variant(iota) // Invalid UUID\n\tRFC4122                   // The variant specified in RFC9562(obsoletes RFC4122).\n\tReserved                  // Reserved, NCS backward compatibility.\n\tMicrosoft                 // Reserved, Microsoft Corporation backward compatibility.\n\tFuture                    // Reserved for future definition.\n)\n\n// RFC9562 added V6 and V7 of UUID, but did not change specification of V1 and V4\n// implemented in this module. To avoid creating new major module version,\n// we still use RFC4122 for constant name.\nconst Standard = RFC4122\n",
+       "blob_sha": "dc75ceefca17f2497d1ac8d99d366251924d2189",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "uuid_test.go",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"bytes\"\n\t\"errors\"\n\t\"fmt\"\n\t\"os\"\n\t\"runtime\"\n\t\"strings\"\n\t\"testing\"\n\t\"time\"\n\t\"unsafe\"\n)\n\ntype test struct {\n\tin      string\n\tversion Version\n\tvariant Variant\n\tisuuid  bool\n}\n\nvar tests = []test{\n\t{\"f47ac10b-58cc-0372-8567-0e02b2c3d479\", 0, RFC4122, true},\n\t{\"f47ac10b-58cc-1372-8567-0e02b2c3d479\", 1, RFC4122, true},\n\t{\"f47ac10b-58cc-2372-8567-0e02b2c3d479\", 2, RFC4122, true},\n\t{\"f47ac10b-58cc-3372-8567-0e02b2c3d479\", 3, RFC4122, true},\n\t{\"f47ac10b-58cc-4372-8567-0e02b2c3d479\", 4, RFC4122, true},\n\t{\"f47ac10b-58cc-5372-8567-0e02b2c3d479\", 5, RFC4122, true},\n\t{\"f47ac10b-58cc-6372-8567-0e02b2c3d479\", 6, RFC4122, true},\n\t{\"f47ac10b-58cc-7372-8567-0e02b2c3d479\", 7, RFC4122, true},\n\t{\"f47ac10b-58cc-8372-8567-0e02b2c3d479\", 8, RFC4122, true},\n\t{\"f47ac10b-58cc-9372-8567-0e02b2c3d479\", 9, RFC4122, true},\n\t{\"f47ac10b-58cc-a372-8567-0e02b2c3d479\", 10, RFC4122, true},\n\t{\"f47ac10b-58cc-b372-8567-0e02b2c3d479\", 11, RFC4122, true},\n\t{\"f47ac10b-58cc-c372-8567-0e02b2c3d479\", 12, RFC4122, true},\n\t{\"f47ac10b-58cc-d372-8567-0e02b2c3d479\", 13, RFC4122, true},\n\t{\"f47ac10b-58cc-e372-8567-0e02b2c3d479\", 14, RFC4122, true},",
+       "blob_sha": "906ecbe7f8e2b89a63836dfb1fdbcb5763c625e3",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "dce.go",
+       "start_line": 1,
+       "end_line": 40,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"encoding/binary\"\n\t\"fmt\"\n\t\"os\"\n)\n\n// A Domain represents a Version 2 domain\ntype Domain byte\n\n// Domain constants for DCE Security (Version 2) UUIDs.\nconst (\n\tPerson = Domain(0)\n\tGroup  = Domain(1)\n\tOrg    = Domain(2)\n)\n\n// NewDCESecurity returns a DCE Security (Version 2) UUID.\n//\n// The domain should be one of Person, Group or Org.\n// On a POSIX system the id should be the users UID for the Person\n// domain and the users GID for the Group.  The meaning of id for\n// the domain Org or on non-POSIX systems is site defined.\n//\n// For a given domain/id pair the same token may be returned for up to\n// 7 minutes and 10 seconds.\nfunc NewDCESecurity(domain Domain, id uint32) (UUID, error) {\n\tuuid, err := NewUUID()\n\tif err == nil {\n\t\tuuid[6] = (uuid[6] & 0x0f) | 0x20 // Version 2\n\t\tuuid[9] = byte(domain)\n\t\tbinary.BigEndian.PutUint32(uuid[0:], id)\n\t}\n\treturn uuid, err\n}\n",
+       "blob_sha": "fa820b9d3092b433238026b451eca869387d91fb",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "hash.go",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"crypto/md5\"\n\t\"crypto/sha1\"\n\t\"hash\"\n)\n\n// Well known namespace IDs and UUIDs\nvar (\n\tNameSpaceDNS  = MustParse(\"6ba7b810-9dad-11d1-80b4-00c04fd430c8\")\n\tNameSpaceURL  = MustParse(\"6ba7b811-9dad-11d1-80b4-00c04fd430c8\")\n\tNameSpaceOID  = MustParse(\"6ba7b812-9dad-11d1-80b4-00c04fd430c8\")\n\tNameSpaceX500 = MustParse(\"6ba7b814-9dad-11d1-80b4-00c04fd430c8\")\n\tNil           UUID // empty UUID, all zeros\n\n\t// The Max UUID is special form of UUID that is specified to have all 128 bits set to 1.\n\tMax = UUID{\n\t\t0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,\n\t\t0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,\n\t}\n)\n\n// NewHash returns a new UUID derived from the hash of space concatenated with\n// data generated by h.  The hash should be at least 16 byte in length.  The\n// first 16 bytes of the hash are used to form the UUID.  The version of the\n// UUID will be the lower 4 bits of version.  NewHash is used to implement\n// NewMD5 and NewSHA1.\nfunc NewHash(h hash.Hash, space UUID, data []byte, version int) UUID {\n\th.Reset()\n\th.Write(space[:]) //nolint:errcheck\n\th.Write(data)     //nolint:errcheck\n\ts := h.Sum(nil)\n\tvar uuid UUID\n\tcopy(uuid[:], s)\n\tuuid[6] = (uuid[6] & 0x0f) | uint8((version&0xf)<<4)\n\tuuid[8] = (uuid[8] & 0x3f) | 0x80 // RFC 9562 variant",
+       "blob_sha": "d3bc00a31b83b71bc3907d2d135fce059588baac",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "node.go",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"sync\"\n)\n\nvar (\n\tnodeMu sync.Mutex\n\tifname string  // name of interface being used\n\tnodeID [6]byte // hardware for version 1 UUIDs\n\tzeroID [6]byte // nodeID with only 0's\n)\n\n// NodeInterface returns the name of the interface from which the NodeID was\n// derived.  The interface \"user\" is returned if the NodeID was set by\n// SetNodeID.\nfunc NodeInterface() string {\n\tdefer nodeMu.Unlock()\n\tnodeMu.Lock()\n\treturn ifname\n}\n\n// SetNodeInterface selects the hardware address to be used for Version 1 UUIDs.\n// If name is \"\" then the first usable interface found will be used or a random\n// Node ID will be generated.  If a named interface cannot be found then false\n// is returned.\n//\n// SetNodeInterface never fails when name is \"\".\nfunc SetNodeInterface(name string) bool {\n\tdefer nodeMu.Unlock()\n\tnodeMu.Lock()\n\treturn setNodeInterface(name)\n}\n\nfunc setNodeInterface(name string) bool {\n\tiname, addr := getHardwareInterface(name) // null implementation for js\n\tif iname != \"\" && addr != nil {",
+       "blob_sha": "d651a2b0619fa44b7f24cdaf731197e6c1023863",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "null.go",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "// Copyright 2021 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"bytes\"\n\t\"database/sql/driver\"\n\t\"encoding/json\"\n\t\"fmt\"\n)\n\nvar jsonNull = []byte(\"null\")\n\n// NullUUID represents a UUID that may be null.\n// NullUUID implements the SQL driver.Scanner interface so\n// it can be used as a scan destination:\n//\n//  var u uuid.NullUUID\n//  err := db.QueryRow(\"SELECT name FROM foo WHERE id=?\", id).Scan(&u)\n//  ...\n//  if u.Valid {\n//     // use u.UUID\n//  } else {\n//     // NULL value\n//  }\n//\ntype NullUUID struct {\n\tUUID  UUID\n\tValid bool // Valid is true if UUID is not NULL\n}\n\n// Scan implements the SQL driver.Scanner interface.\nfunc (nu *NullUUID) Scan(value interface{}) error {\n\tif value == nil {\n\t\tnu.UUID, nu.Valid = Nil, false\n\t\treturn nil\n\t}\n\n\terr := nu.UUID.Scan(value)",
+       "blob_sha": "d7fcbf28651697b00add519d8b4402a5ab46ffc2",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "null_test.go",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "// Copyright 2021 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"bytes\"\n\t\"encoding/json\"\n\t\"testing\"\n)\n\nfunc TestNullUUIDScan(t *testing.T) {\n\tvar u UUID\n\tvar nu NullUUID\n\n\tuNilErr := u.Scan(nil)\n\tnuNilErr := nu.Scan(nil)\n\tif uNilErr != nil &&\n\t\tnuNilErr != nil &&\n\t\tuNilErr.Error() != nuNilErr.Error() {\n\t\tt.Errorf(\"expected errors to be equal, got %s, %s\", uNilErr, nuNilErr)\n\t}\n\n\tuInvalidStringErr := u.Scan(\"test\")\n\tnuInvalidStringErr := nu.Scan(\"test\")\n\tif uInvalidStringErr != nil &&\n\t\tnuInvalidStringErr != nil &&\n\t\tuInvalidStringErr.Error() != nuInvalidStringErr.Error() {\n\t\tt.Errorf(\"expected errors to be equal, got %s, %s\", uInvalidStringErr, nuInvalidStringErr)\n\t}\n\n\tvalid := \"12345678-abcd-1234-abcd-0123456789ab\"\n\tuValidErr := u.Scan(valid)\n\tnuValidErr := nu.Scan(valid)\n\tif uValidErr != nuValidErr {\n\t\tt.Errorf(\"expected errors to be equal, got %s, %s\", uValidErr, nuValidErr)\n\t}\n}\n\nfunc TestNullUUIDValue(t *testing.T) {",
+       "blob_sha": "fe0fe8dd20acaed30bf2ef6b21385ebbcb3c8306",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "sql.go",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"database/sql/driver\"\n\t\"fmt\"\n)\n\n// Scan implements sql.Scanner so UUIDs can be read from databases transparently.\n// Currently, database types that map to string and []byte are supported. Please\n// consult database-specific driver documentation for matching types.\nfunc (uuid *UUID) Scan(src interface{}) error {\n\tswitch src := src.(type) {\n\tcase nil:\n\t\treturn nil\n\n\tcase string:\n\t\t// if an empty UUID comes from a table, we return a null UUID\n\t\tif src == \"\" {\n\t\t\treturn nil\n\t\t}\n\n\t\t// see Parse for required string format\n\t\tu, err := Parse(src)\n\t\tif err != nil {\n\t\t\treturn fmt.Errorf(\"Scan: %v\", err)\n\t\t}\n\n\t\t*uuid = u\n\n\tcase []byte:\n\t\t// if an empty UUID comes from a table, we return a null UUID\n\t\tif len(src) == 0 {\n\t\t\treturn nil\n\t\t}\n\n\t\t// assumes a simple slice of bytes if 16 bytes\n\t\t// otherwise attempts to parse",
+       "blob_sha": "2e02ec06c0121d1c82a8b07275091549f9a0c950",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "sql_test.go",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"strings\"\n\t\"testing\"\n)\n\nfunc TestScan(t *testing.T) {\n\tstringTest := \"f47ac10b-58cc-0372-8567-0e02b2c3d479\"\n\tbadTypeTest := 6\n\tinvalidTest := \"f47ac10b-58cc-0372-8567-0e02b2c3d4\"\n\n\tbyteTest := make([]byte, 16)\n\tbyteTestUUID := MustParse(stringTest)\n\tcopy(byteTest, byteTestUUID[:])\n\n\t// sunny day tests\n\n\tvar uuid UUID\n\terr := (&uuid).Scan(stringTest)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\n\terr = (&uuid).Scan([]byte(stringTest))\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\n\terr = (&uuid).Scan(byteTest)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\n\t// bad type tests\n\n\terr = (&uuid).Scan(badTypeTest)",
+       "blob_sha": "929b10f9c9d65a28785c54d9ff70452c1b81472a",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "time.go",
+       "start_line": 1,
+       "end_line": 40,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"encoding/binary\"\n\t\"sync\"\n\t\"time\"\n)\n\n// A Time represents a time as the number of 100's of nanoseconds since 15 Oct\n// 1582.\ntype Time int64\n\nconst (\n\tlillian    = 2299160          // Julian day of 15 Oct 1582\n\tunix       = 2440587          // Julian day of 1 Jan 1970\n\tepoch      = unix - lillian   // Days between epochs\n\tg1582      = epoch * 86400    // seconds between epochs\n\tg1582ns100 = g1582 * 10000000 // 100s of a nanoseconds between epochs\n)\n\nvar (\n\ttimeMu   sync.Mutex\n\tlasttime uint64 // last time we returned\n\tclockSeq uint16 // clock sequence for this run\n\n\ttimeNow = time.Now // for testing\n)\n\n// UnixTime converts t the number of seconds and nanoseconds using the Unix\n// epoch of 1 Jan 1970.\nfunc (t Time) UnixTime() (sec, nsec int64) {\n\tsec = int64(t - g1582ns100)\n\tnsec = (sec % 10000000) * 100\n\tsec /= 10000000\n\treturn sec, nsec\n}\n",
+       "blob_sha": "efa4d42f2b5830e4ab6a2eab46ba622cacb9af92",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      }
+     ],
+     "terms": [
+      "uuid",
+      "Parse",
+      "ParseBytes",
+      "Validate",
+      "validation",
+      "urn",
+      "braces",
+      "prefix"
+     ],
+     "history": "2d3c2a9 feat: Generate V6 from custom time (#172)\n0e97ed3 feat: add error types for better validation (#166)\nd55c313 docs: upd links to rfc9562 (#162)\ne8d82d3 feat: add Compare function (#163)\n53dda83 fix: incorrect timestamp in uuid v6 (#161)",
+     "source_commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d",
+     "warning": "Untrusted repository text. Quotes prove source provenance, not runtime behavior."
+    },
+    "search_round": 1,
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/repository_search-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 91,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:29.872348+00:00",
+  "node": "problem_investigation",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "10c44c0d98694e7380183f15a4448945",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "repository_search",
+   "destination": "queue:normal",
+   "next_node": "problem_investigation",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 92,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:30.127563+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "74c4c1dd6bf845ce8ffb843610c235da",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "problem_investigation",
+   "model_key": "a"
+  }
+ },
+ {
+  "seq": 93,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:30.219837+00:00",
+  "node": "problem_investigation",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "74c4c1dd6bf845ce8ffb843610c235da",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "problem_investigation",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "manual_intake:0:g0:s0:v0:r0": 1,
+     "request_triage:0:g0:s0:v0:r0": 1,
+     "request_duplicate_check:0:g0:s0:v0:r0": 1,
+     "repository_search:0:g0:s0:v0:r0": 1,
+     "problem_investigation:0:g0:s1:v0:r0": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 94,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:30.222164+00:00",
+  "node": "root_investigation",
+  "kind": "model_assigned",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "74c4c1dd6bf845ce8ffb843610c235da",
+   "parent_task_id": "GE-EABBDB96",
+   "model_key": "a",
+   "model_id": "qwen3.8-27b",
+   "role": "root_investigation",
+   "graph_node": "problem_investigation",
+   "operation": "OpenCode structured proposal",
+   "request_sha256": "f2e8ab00115ae5b274664fd4f564eb1639b883d401001134964f2af7200f5eb9"
+  }
+ },
+ {
+  "seq": 95,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:52.424173+00:00",
+  "node": "root_investigation",
+  "kind": "model_call",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "74c4c1dd6bf845ce8ffb843610c235da",
+   "parent_task_id": "GE-EABBDB96",
+   "model_key": "a",
+   "model_id": "qwen3.8-27b",
+   "role": "root_investigation",
+   "run_id": "33746956c519460b",
+   "attempt": 0,
+   "success": true,
+   "tool_calls": 0,
+   "raw_path": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/workers/33746956c519460b/root_investigation-0-ca3b59a8/result.json",
+   "input_bytes": 16906,
+   "utc": "2026-10-19T23:46:30.223862+00:00",
+   "opencode_version": "2.0.32",
+   "session_ids": [
+    "ses_ea970c010ffew6IZHH448Y4LMb"
+   ],
+   "latency_seconds": 22.1991,
+   "artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/workers/33746956c519460b/root_investigation-0-ca3b59a8/result.json",
+   "selected_model": "a",
+   "graph_node": "problem_investigation"
+  }
+ },
+ {
+  "seq": 96,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:52.426530+00:00",
+  "node": "problem_investigation",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "74c4c1dd6bf845ce8ffb843610c235da",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "repository_search",
+   "status": "ready",
+   "updates": {
+    "investigation_result": {
+     "title": "UUID Parse Validation Inconsistency",
+     "problem_statement": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. The investigation must determine which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+     "expected_behaviour": "The expected behaviour is not specified in the provided context. It is unclear whether the intended behaviour is to strictly reject all non-canonical UUID string representations (such as those with braces or URN prefixes) or to accept them as valid alternative formats.",
+     "observed_behaviour": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix.",
+     "findings": [
+      {
+       "file": "uuid.go",
+       "line": 18,
+       "quote": "// A UUID is a 128 bit (16 byte) Universal Unique IDentifier as defined in RFC",
+       "observation": "The UUID type is defined as a 128-bit identifier as defined in RFC 9562, but the specific parsing rules for string representations are not detailed in this excerpt."
+      },
+      {
+       "file": "sql.go",
+       "line": 27,
+       "quote": "u, err := Parse(src)",
+       "observation": "The Scan method in sql.go delegates string parsing to the Parse function, indicating that Parse is the primary entry point for string-to-UUID conversion in database contexts."
+      },
+      {
+       "file": "uuid_test.go",
+       "line": 27,
+       "quote": "{f47ac10b-58cc-0372-8567-0e02b2c3d479, 0, RFC4122, true},",
+       "observation": "The test cases in uuid_test.go only show standard hyphenated UUID strings being accepted, with no visible test cases for braced or URN-prefixed formats in the provided excerpt."
+      }
+     ],
+     "root_cause_hypothesis": "The root cause is hypothesized to be that the Parse function in uuid.go (not fully visible in the provided excerpts) may be implementing a lenient parsing strategy that accepts alternative UUID string representations such as those wrapped in braces or with URN prefixes, while ParseBytes or Validate may enforce stricter canonical format validation, leading to inconsistent behavior between these functions.",
+     "reproduction_steps": [
+      "Call uuid.Parse with a string wrapped in braces, e.g., {f47ac10b-58cc-0372-8567-0e02b2c3d479}.",
+      "Call uuid.Parse with a string prefixed with urn:uuid:, e.g., urn:uuid:f47ac10b-58cc-0372-8567-0e02b2c3d479.",
+      "Compare the results with uuid.ParseBytes and uuid.Validate for the same inputs to identify inconsistencies."
+     ],
+     "proposed_solution": "Review the implementation of Parse, ParseBytes, and Validate in uuid.go to ensure consistent validation logic across all functions. If strict canonical format is required, update Parse to reject non-canonical representations. If alternative formats are intentionally supported, document this behavior and ensure ParseBytes and Validate align with the same acceptance criteria.",
+     "acceptance_criteria": [
+      "uuid.Parse, uuid.ParseBytes, and uuid.Validate must consistently accept or reject the same set of input formats.",
+      "If non-canonical formats (braces, URN prefixes) are to be rejected, all three functions must return an error for such inputs.",
+      "If non-canonical formats are to be accepted, all three functions must successfully parse them and document this behavior.",
+      "Unit tests must be added to cover braced and URN-prefixed UUID strings for Parse, ParseBytes, and Validate."
+     ],
+     "validation_plan": [
+      "Add test cases to uuid_test.go for braced UUID strings, e.g., {f47ac10b-58cc-0372-8567-0e02b2c3d479}.",
+      "Add test cases to uuid_test.go for URN-prefixed UUID strings, e.g., urn:uuid:f47ac10b-58cc-0372-8567-0e02b2c3d479.",
+      "Verify that Parse, ParseBytes, and Validate produce consistent results for these inputs.",
+      "Run the full test suite to ensure no regressions in existing UUID parsing behavior."
+     ],
+     "limitations": [
+      "The full implementation of Parse, ParseBytes, and Validate in uuid.go is not included in the provided excerpts, preventing direct verification of the parsing logic.",
+      "No runtime logs or reproduction receipt is available to confirm the actual behavior of Parse with braced or URN-prefixed inputs.",
+      "The expected behaviour (strict vs. lenient parsing) is not specified, making it difficult to determine whether the observed behavior is a bug or intended functionality."
+     ],
+     "questions": [
+      "Is the intended behaviour for uuid.Parse to strictly reject non-canonical UUID string representations (braces, URN prefixes), or are these formats intentionally supported?",
+      "Can you provide the full source code of the Parse, ParseBytes, and Validate functions from uuid.go to verify the parsing logic?"
+     ],
+     "search_terms": [
+      "func Parse(",
+      "func ParseBytes(",
+      "func Validate(",
+      "strings.TrimPrefix",
+      "strings.TrimSuffix",
+      "urn:uuid",
+      "braces",
+      "Parse error"
+     ],
+     "next_action": "additional_search",
+     "confidence": 0.6
+    },
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/problem_investigation-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 97,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:52.428741+00:00",
+  "node": "repository_search",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "74c4c1dd6bf845ce8ffb843610c235da",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "problem_investigation",
+   "destination": "queue:normal",
+   "next_node": "repository_search",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 98,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:52.491176+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "c268628edebe4850bacb0325cbeb1290",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "repository_search",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 99,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:52.590437+00:00",
+  "node": "repository_search",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "c268628edebe4850bacb0325cbeb1290",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "repository_search",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "manual_intake:0:g0:s0:v0:r0": 1,
+     "request_triage:0:g0:s0:v0:r0": 1,
+     "request_duplicate_check:0:g0:s0:v0:r0": 1,
+     "repository_search:0:g0:s0:v0:r0": 1,
+     "problem_investigation:0:g0:s1:v0:r0": 1,
+     "repository_search:0:g0:s1:v0:r0": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 100,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:53.261405+00:00",
+  "node": "repository_search",
+  "kind": "repository_tool_result",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "c268628edebe4850bacb0325cbeb1290",
+   "parent_task_id": "GE-EABBDB96",
+   "operation": "git grep/show/log",
+   "files": [
+    "uuid.go",
+    "uuid_test.go",
+    ".github/release-please.yml",
+    ".github/workflows/apidiff.yaml",
+    ".github/workflows/tests.yaml",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "README.md",
+    "dce.go",
+    "doc.go"
+   ],
+   "source_commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+  }
+ },
+ {
+  "seq": 101,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:53.264409+00:00",
+  "node": "repository_search",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "c268628edebe4850bacb0325cbeb1290",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "problem_investigation",
+   "status": "ready",
+   "updates": {
+    "retrieved": {
+     "excerpts": [
+      {
+       "file": "uuid.go",
+       "start_line": 81,
+       "end_line": 121,
+       "text": "// IsInvalidLengthError is matcher function for custom error invalidLengthError\nfunc IsInvalidLengthError(err error) bool {\n\treturn errors.Is(err, ErrInvalidLength)\n}\n\n// Parse decodes s into a UUID or returns an error if it cannot be parsed.  Both\n// the standard UUID forms defined in RFC 9562\n// (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx and\n// urn:uuid:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) are decoded.  In addition,\n// Parse accepts non-standard strings such as the raw hex encoding\n// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx and 38 byte \"Microsoft style\" encodings,\n// e.g.  {xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}.  Only the middle 36 bytes are\n// examined in the latter case.  Parse should not be used to validate strings as\n// it parses non-standard encodings as indicated above.\nfunc Parse(s string) (UUID, error) {\n\tvar uuid UUID\n\tswitch len(s) {\n\t// xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\n\tcase 36:\n\n\t// urn:uuid:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\n\tcase 36 + 9:\n\t\tif !strings.EqualFold(s[:9], \"urn:uuid:\") {\n\t\t\treturn uuid, URNPrefixError{s[:9]}\n\t\t}\n\t\ts = s[9:]\n\n\t// {xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}\n\tcase 36 + 2:\n\t\ts = s[1:]\n\n\t// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\tcase 32:\n\t\tvar ok bool\n\t\tfor i := range uuid {\n\t\t\tuuid[i], ok = xtob(s[i*2], s[i*2+1])\n\t\t\tif !ok {\n\t\t\t\treturn uuid, ErrInvalidUUIDFormat\n\t\t\t}\n\t\t}\n\t\treturn uuid, nil",
+       "blob_sha": "dc75ceefca17f2497d1ac8d99d366251924d2189",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "uuid_test.go",
+       "start_line": 36,
+       "end_line": 76,
+       "text": "\t{\"f47ac10b-58cc-9372-8567-0e02b2c3d479\", 9, RFC4122, true},\n\t{\"f47ac10b-58cc-a372-8567-0e02b2c3d479\", 10, RFC4122, true},\n\t{\"f47ac10b-58cc-b372-8567-0e02b2c3d479\", 11, RFC4122, true},\n\t{\"f47ac10b-58cc-c372-8567-0e02b2c3d479\", 12, RFC4122, true},\n\t{\"f47ac10b-58cc-d372-8567-0e02b2c3d479\", 13, RFC4122, true},\n\t{\"f47ac10b-58cc-e372-8567-0e02b2c3d479\", 14, RFC4122, true},\n\t{\"f47ac10b-58cc-f372-8567-0e02b2c3d479\", 15, RFC4122, true},\n\n\t{\"urn:uuid:f47ac10b-58cc-4372-0567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"URN:UUID:f47ac10b-58cc-4372-0567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-0567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-1567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-2567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-3567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-4567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-5567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-6567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-7567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-8567-0e02b2c3d479\", 4, RFC4122, true},\n\t{\"f47ac10b-58cc-4372-9567-0e02b2c3d479\", 4, RFC4122, true},\n\t{\"f47ac10b-58cc-4372-a567-0e02b2c3d479\", 4, RFC4122, true},\n\t{\"f47ac10b-58cc-4372-b567-0e02b2c3d479\", 4, RFC4122, true},\n\t{\"f47ac10b-58cc-4372-c567-0e02b2c3d479\", 4, Microsoft, true},\n\t{\"f47ac10b-58cc-4372-d567-0e02b2c3d479\", 4, Microsoft, true},\n\t{\"f47ac10b-58cc-4372-e567-0e02b2c3d479\", 4, Future, true},\n\t{\"f47ac10b-58cc-4372-f567-0e02b2c3d479\", 4, Future, true},\n\n\t{\"f47ac10b158cc-5372-a567-0e02b2c3d479\", 0, Invalid, false},\n\t{\"f47ac10b-58cc25372-a567-0e02b2c3d479\", 0, Invalid, false},\n\t{\"f47ac10b-58cc-53723a567-0e02b2c3d479\", 0, Invalid, false},\n\t{\"f47ac10b-58cc-5372-a56740e02b2c3d479\", 0, Invalid, false},\n\t{\"f47ac10b-58cc-5372-a567-0e02-2c3d479\", 0, Invalid, false},\n\t{\"g47ac10b-58cc-4372-a567-0e02b2c3d479\", 0, Invalid, false},\n\n\t{\"{f47ac10b-58cc-0372-8567-0e02b2c3d479}\", 0, RFC4122, true},\n\t{\"{f47ac10b-58cc-0372-8567-0e02b2c3d479\", 0, Invalid, false},\n\t{\"f47ac10b-58cc-0372-8567-0e02b2c3d479}\", 0, Invalid, false},\n\n\t{\"f47ac10b58cc037285670e02b2c3d479\", 0, RFC4122, true},\n\t{\"f47ac10b58cc037285670e02b2c3d4790\", 0, Invalid, false},\n\t{\"f47ac10b58cc037285670e02b2c3d47\", 0, Invalid, false},",
+       "blob_sha": "906ecbe7f8e2b89a63836dfb1fdbcb5763c625e3",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": ".github/release-please.yml",
+       "start_line": 1,
+       "end_line": 2,
+       "text": "handleGHRelease: true\nreleaseType: go",
+       "blob_sha": "e1bcc3c9b7f29ea58ea89b8f4df052052de426a2",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": ".github/workflows/apidiff.yaml",
+       "start_line": 1,
+       "end_line": 26,
+       "text": "---\nname: apidiff\non:\n  pull_request:\n    branches:\n      - master\npermissions:\n  contents: read\njobs:\n  compat:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/setup-go@v4\n        with:\n          go-version: 1.21\n      - run: go install golang.org/x/exp/cmd/apidiff@latest\n      - uses: actions/checkout@v3\n        with:\n          ref: master\n      - run: apidiff -w uuid.baseline .\n      - uses: actions/checkout@v3\n        with:\n          clean: false\n      - run: |\n          apidiff -incompatible uuid.baseline . > diff.txt\n          cat diff.txt && ! [ -s diff.txt ]",
+       "blob_sha": "37c0b5f9b868b8e281c6c1a1565160f218df8151",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": ".github/workflows/tests.yaml",
+       "start_line": 1,
+       "end_line": 20,
+       "text": "---\nname: tests\non:\n  pull_request:\n    branches:\n      - master\npermissions:\n  contents: read\njobs:\n  unit-tests:\n    strategy:\n      matrix:\n        go-version: [1.19, 1.20.x, 1.21]\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3\n      - uses: actions/setup-go@v4\n        with:\n          go-version: ${{ matrix.go-version }}\n      - run: go test -v ./...",
+       "blob_sha": "138397cb69b73f9c7949c0adc8e12039cb735d19",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "CHANGELOG.md",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "# Changelog\n\n## [1.6.0](https://github.com/google/uuid/compare/v1.5.0...v1.6.0) (2024-01-16)\n\n\n### Features\n\n* add Max UUID constant ([#149](https://github.com/google/uuid/issues/149)) ([c58770e](https://github.com/google/uuid/commit/c58770eb495f55fe2ced6284f93c5158a62e53e3))\n\n\n### Bug Fixes\n\n* fix typo in version 7 uuid documentation ([#153](https://github.com/google/uuid/issues/153)) ([016b199](https://github.com/google/uuid/commit/016b199544692f745ffc8867b914129ecb47ef06))\n* Monotonicity in UUIDv7 ([#150](https://github.com/google/uuid/issues/150)) ([a2b2b32](https://github.com/google/uuid/commit/a2b2b32373ff0b1a312b7fdf6d38a977099698a6))\n\n## [1.5.0](https://github.com/google/uuid/compare/v1.4.0...v1.5.0) (2023-12-12)\n\n\n### Features\n\n* Validate UUID without creating new UUID ([#141](https://github.com/google/uuid/issues/141)) ([9ee7366](https://github.com/google/uuid/commit/9ee7366e66c9ad96bab89139418a713dc584ae29))\n\n## [1.4.0](https://github.com/google/uuid/compare/v1.3.1...v1.4.0) (2023-10-26)\n\n\n### Features\n\n* UUIDs slice type with Strings() convenience method ([#133](https://github.com/google/uuid/issues/133)) ([cd5fbbd](https://github.com/google/uuid/commit/cd5fbbdd02f3e3467ac18940e07e062be1f864b4))\n\n### Fixes\n\n* Clarify that Parse's job is to parse but not necessarily validate strings. (Documents current behavior)\n\n## [1.3.1](https://github.com/google/uuid/compare/v1.3.0...v1.3.1) (2023-08-18)\n\n\n### Bug Fixes\n\n* Use .EqualFold() to parse urn prefixed UUIDs ([#118](https://github.com/google/uuid/issues/118)) ([574e687](https://github.com/google/uuid/commit/574e6874943741fb99d41764c705173ada5293f0))\n\n## Changelog",
+       "blob_sha": "7ec5ac7ea9090372537f98b6d4a206485b902248",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "CONTRIBUTING.md",
+       "start_line": 1,
+       "end_line": 26,
+       "text": "# How to contribute\n\nWe definitely welcome patches and contribution to this project!\n\n### Tips\n\nCommits must be formatted according to the [Conventional Commits Specification](https://www.conventionalcommits.org).\n\nAlways try to include a test case! If it is not possible or not necessary,\nplease explain why in the pull request description.\n\n### Releasing\n\nCommits that would precipitate a SemVer change, as described in the Conventional\nCommits Specification, will trigger [`release-please`](https://github.com/google-github-actions/release-please-action)\nto create a release candidate pull request. Once submitted, `release-please`\nwill create a release.\n\nFor tips on how to work with `release-please`, see its documentation.\n\n### Legal requirements\n\nIn order to protect both you and ourselves, you will need to sign the\n[Contributor License Agreement](https://cla.developers.google.com/clas).\n\nYou may have already signed it for other Google projects.",
+       "blob_sha": "a502fdc515ac9a531558f10a70b32a47615e0c5a",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "README.md",
+       "start_line": 1,
+       "end_line": 21,
+       "text": "# uuid\nThe uuid package generates and inspects UUIDs based on\n[RFC 9562](https://datatracker.ietf.org/doc/html/rfc9562)\nand DCE 1.1: Authentication and Security Services. \n\nThis package is based on the github.com/pborman/uuid package (previously named\ncode.google.com/p/go-uuid).  It differs from these earlier packages in that\na UUID is a 16 byte array rather than a byte slice.  One loss due to this\nchange is the ability to represent an invalid UUID (vs a NIL UUID).\n\n###### Install\n```sh\ngo get github.com/google/uuid\n```\n\n###### Documentation \n[![Go Reference](https://pkg.go.dev/badge/github.com/google/uuid.svg)](https://pkg.go.dev/github.com/google/uuid)\n\nFull `go doc` style documentation for the package can be viewed online without\ninstalling this package by using the GoDoc site here: \nhttps://pkg.go.dev/github.com/google/uuid",
+       "blob_sha": "d78d1caf469561b8d56d713f11ddb43fcc501c0c",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "dce.go",
+       "start_line": 1,
+       "end_line": 40,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"encoding/binary\"\n\t\"fmt\"\n\t\"os\"\n)\n\n// A Domain represents a Version 2 domain\ntype Domain byte\n\n// Domain constants for DCE Security (Version 2) UUIDs.\nconst (\n\tPerson = Domain(0)\n\tGroup  = Domain(1)\n\tOrg    = Domain(2)\n)\n\n// NewDCESecurity returns a DCE Security (Version 2) UUID.\n//\n// The domain should be one of Person, Group or Org.\n// On a POSIX system the id should be the users UID for the Person\n// domain and the users GID for the Group.  The meaning of id for\n// the domain Org or on non-POSIX systems is site defined.\n//\n// For a given domain/id pair the same token may be returned for up to\n// 7 minutes and 10 seconds.\nfunc NewDCESecurity(domain Domain, id uint32) (UUID, error) {\n\tuuid, err := NewUUID()\n\tif err == nil {\n\t\tuuid[6] = (uuid[6] & 0x0f) | 0x20 // Version 2\n\t\tuuid[9] = byte(domain)\n\t\tbinary.BigEndian.PutUint32(uuid[0:], id)\n\t}\n\treturn uuid, err\n}\n",
+       "blob_sha": "fa820b9d3092b433238026b451eca869387d91fb",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "doc.go",
+       "start_line": 1,
+       "end_line": 12,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\n// Package uuid generates and inspects UUIDs.\n//\n// UUIDs are based on RFC 9562(obsoletes RFC 4122) and DCE 1.1: Authentication and Security\n// Services.\n//\n// A UUID is a 16 byte (128 bit) array.  UUIDs may be used as keys to\n// maps or compared directly.\npackage uuid",
+       "blob_sha": "6c2ab76b1de49b5b4c8b7f9c7a68e9a801f85724",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      }
+     ],
+     "terms": [
+      "func Parse(",
+      "func ParseBytes(",
+      "func Validate(",
+      "strings.TrimPrefix",
+      "strings.TrimSuffix",
+      "urn:uuid",
+      "braces",
+      "Parse error"
+     ],
+     "history": "0e97ed3 feat: add error types for better validation (#166)\nd55c313 docs: upd links to rfc9562 (#162)\ne8d82d3 feat: add Compare function (#163)\nb5b9aeb docs: fixing typos (#156)\n0f11ee6 chore(master): release 1.6.0 (#151)",
+     "source_commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d",
+     "warning": "Untrusted repository text. Quotes prove source provenance, not runtime behavior."
+    },
+    "search_round": 2,
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/repository_search-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 102,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:53.267187+00:00",
+  "node": "problem_investigation",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "c268628edebe4850bacb0325cbeb1290",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "repository_search",
+   "destination": "queue:normal",
+   "next_node": "problem_investigation",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 103,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:53.507801+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "8a60f00c37f34f5a90726a9b121d8772",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "problem_investigation",
+   "model_key": "a"
+  }
+ },
+ {
+  "seq": 104,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:53.594483+00:00",
+  "node": "problem_investigation",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "8a60f00c37f34f5a90726a9b121d8772",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "problem_investigation",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "manual_intake:0:g0:s0:v0:r0": 1,
+     "request_triage:0:g0:s0:v0:r0": 1,
+     "request_duplicate_check:0:g0:s0:v0:r0": 1,
+     "repository_search:0:g0:s0:v0:r0": 1,
+     "problem_investigation:0:g0:s1:v0:r0": 1,
+     "repository_search:0:g0:s1:v0:r0": 1,
+     "problem_investigation:0:g0:s2:v0:r0": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 105,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:46:53.595387+00:00",
+  "node": "root_investigation",
+  "kind": "model_assigned",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "8a60f00c37f34f5a90726a9b121d8772",
+   "parent_task_id": "GE-EABBDB96",
+   "model_key": "a",
+   "model_id": "qwen3.8-27b",
+   "role": "root_investigation",
+   "graph_node": "problem_investigation",
+   "operation": "OpenCode structured proposal",
+   "request_sha256": "11783b8b7876fa1b4c1b7cd617a9f8ca6b9c7edb34d2fc4fda003141b0297070"
+  }
+ },
+ {
+  "seq": 106,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:16.188018+00:00",
+  "node": "root_investigation",
+  "kind": "model_call",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "8a60f00c37f34f5a90726a9b121d8772",
+   "parent_task_id": "GE-EABBDB96",
+   "model_key": "a",
+   "model_id": "qwen3.8-27b",
+   "role": "root_investigation",
+   "run_id": "33746956c519460b",
+   "attempt": 0,
+   "success": true,
+   "tool_calls": 0,
+   "raw_path": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/workers/33746956c519460b/root_investigation-0-7b9f8a3f/result.json",
+   "input_bytes": 14938,
+   "utc": "2026-10-19T23:46:53.597098+00:00",
+   "opencode_version": "2.0.32",
+   "session_ids": [
+    "ses_ea9706468ffeomm50Ya8ZbAk6d"
+   ],
+   "latency_seconds": 22.5894,
+   "artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/workers/33746956c519460b/root_investigation-0-7b9f8a3f/result.json",
+   "selected_model": "a",
+   "graph_node": "problem_investigation"
+  }
+ },
+ {
+  "seq": 107,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:16.190672+00:00",
+  "node": "problem_investigation",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "8a60f00c37f34f5a90726a9b121d8772",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "ticket_enhancement",
+   "status": "ready",
+   "updates": {
+    "investigation_result": {
+     "title": "UUID Parse Validation Inconsistency",
+     "problem_statement": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. The investigation must determine which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+     "expected_behaviour": "The user expected uuid.Parse to reject non-standard input formats such as strings wrapped in braces or with a urn prefix, or at least to behave consistently with ParseBytes and Validate.",
+     "observed_behaviour": "The user observed that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix.",
+     "findings": [
+      {
+       "file": "uuid.go",
+       "line": 86,
+       "quote": "// Parse decodes s into a UUID or returns an error if it cannot be parsed.  Both",
+       "observation": "The doc comment for Parse explicitly states that it decodes both standard UUID forms defined in RFC 9562, including the urn:uuid: prefix form."
+      },
+      {
+       "file": "uuid.go",
+       "line": 89,
+       "quote": "// Parse accepts non-standard strings such as the raw hex encoding",
+       "observation": "The doc comment explicitly states that Parse accepts non-standard strings such as raw hex encoding and 38 byte \"Microsoft style\" encodings with braces."
+      },
+      {
+       "file": "uuid.go",
+       "line": 93,
+       "quote": "// it parses non-standard encodings as indicated above.",
+       "observation": "The doc comment explicitly warns that Parse should not be used to validate strings because it parses non-standard encodings."
+      },
+      {
+       "file": "uuid.go",
+       "line": 103,
+       "quote": "if !strings.EqualFold(s[:9], ",
+       "observation": "The code at line 103 checks for the urn:uuid: prefix using strings.EqualFold, which means it accepts case-insensitive urn prefixes."
+      },
+      {
+       "file": "uuid_test.go",
+       "line": 44,
+       "quote": "t{",
+       "observation": "The test file includes test cases for urn:uuid: prefixed UUIDs, confirming that this format is expected to be parsed."
+      },
+      {
+       "file": "uuid_test.go",
+       "line": 70,
+       "quote": "t{",
+       "observation": "The test file includes test cases for braced UUIDs, confirming that this format is expected to be parsed."
+      }
+     ],
+     "root_cause_hypothesis": "The root cause is that uuid.Parse is designed to accept non-standard encodings (such as urn:uuid: prefixes and braced formats) for parsing purposes, but users may expect it to behave as a strict validator. The doc comment explicitly warns against using Parse for validation, suggesting that users should use Validate or ParseBytes for strict validation instead.",
+     "reproduction_steps": [
+      "Call uuid.Parse with a string wrapped in braces, e.g., {f47ac10b-58cc-0372-8567-0e02b2c3d479}.",
+      "Call uuid.Parse with a string prefixed with urn:uuid:, e.g., urn:uuid:f47ac10b-58cc-4372-0567-0e02b2c3d479.",
+      "Observe that both inputs are accepted by Parse, which may be unexpected if the user expected strict validation."
+     ],
+     "proposed_solution": "Clarify in the documentation that Parse is intended for parsing, not validation, and recommend using Validate or ParseBytes for strict validation. If strict validation is required, users should use the Validate function or ParseBytes, which may have different behavior regarding non-standard encodings.",
+     "acceptance_criteria": [
+      "The documentation for Parse clearly states that it accepts non-standard encodings and should not be used for validation.",
+      "Users are directed to use Validate or ParseBytes for strict validation of UUID strings.",
+      "Test cases confirm that Parse accepts urn:uuid: prefixes and braced formats as documented."
+     ],
+     "validation_plan": [
+      "Review the doc comment for Parse to ensure it clearly warns against using it for validation.",
+      "Check the behavior of Validate and ParseBytes to confirm they reject non-standard encodings if strict validation is required.",
+      "Add or update test cases to explicitly document the expected behavior of Parse, Validate, and ParseBytes regarding non-standard encodings."
+     ],
+     "limitations": [
+      "The provided excerpts do not include the implementation of ParseBytes or Validate, so their exact behavior regarding non-standard encodings cannot be confirmed from the supplied data.",
+      "No runtime logs or reproduction receipt are provided, so the actual runtime behavior of Parse, ParseBytes, and Validate cannot be verified from the supplied data."
+     ],
+     "questions": [
+      "What is the expected behavior of ParseBytes and Validate regarding non-standard encodings such as urn:uuid: prefixes and braced formats?",
+      "Should Parse be modified to reject non-standard encodings, or should the documentation be clarified to direct users to Validate or ParseBytes for strict validation?"
+     ],
+     "search_terms": [
+      "func ParseBytes(",
+      "func Validate(",
+      "strings.TrimPrefix",
+      "strings.TrimSuffix",
+      "urn:uuid",
+      "braces",
+      "Parse error"
+     ],
+     "next_action": "additional_search",
+     "confidence": 0.8
+    },
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/problem_investigation-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 108,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:16.193121+00:00",
+  "node": "ticket_enhancement",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "8a60f00c37f34f5a90726a9b121d8772",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "problem_investigation",
+   "destination": "queue:normal",
+   "next_node": "ticket_enhancement",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 109,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:16.309310+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "040b11c3a1d44f67828d30aaedd9a23b",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "ticket_enhancement",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 110,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:16.464099+00:00",
+  "node": "ticket_enhancement",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "040b11c3a1d44f67828d30aaedd9a23b",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "ticket_enhancement",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "manual_intake:0:g0:s0:v0:r0": 1,
+     "request_triage:0:g0:s0:v0:r0": 1,
+     "request_duplicate_check:0:g0:s0:v0:r0": 1,
+     "repository_search:0:g0:s0:v0:r0": 1,
+     "problem_investigation:0:g0:s1:v0:r0": 1,
+     "repository_search:0:g0:s1:v0:r0": 1,
+     "problem_investigation:0:g0:s2:v0:r0": 1,
+     "ticket_enhancement:0:g0:s2:v0:r0": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 111,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:16.466467+00:00",
+  "node": "ticket_enhancement",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "040b11c3a1d44f67828d30aaedd9a23b",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "reproduction_check",
+   "status": "ready",
+   "updates": {
+    "enhanced": {
+     "title": "UUID Parse Validation Inconsistency",
+     "problem_statement": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. The investigation must determine which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+     "expected_behaviour": "The user expected uuid.Parse to reject non-standard input formats such as strings wrapped in braces or with a urn prefix, or at least to behave consistently with ParseBytes and Validate.",
+     "observed_behaviour": "The user observed that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix.",
+     "findings": [
+      {
+       "file": "uuid.go",
+       "line": 86,
+       "quote": "// Parse decodes s into a UUID or returns an error if it cannot be parsed.  Both",
+       "observation": "The doc comment for Parse explicitly states that it decodes both standard UUID forms defined in RFC 9562, including the urn:uuid: prefix form."
+      },
+      {
+       "file": "uuid.go",
+       "line": 89,
+       "quote": "// Parse accepts non-standard strings such as the raw hex encoding",
+       "observation": "The doc comment explicitly states that Parse accepts non-standard strings such as raw hex encoding and 38 byte \"Microsoft style\" encodings with braces."
+      },
+      {
+       "file": "uuid.go",
+       "line": 93,
+       "quote": "// it parses non-standard encodings as indicated above.",
+       "observation": "The doc comment explicitly warns that Parse should not be used to validate strings because it parses non-standard encodings."
+      },
+      {
+       "file": "uuid.go",
+       "line": 103,
+       "quote": "if !strings.EqualFold(s[:9], ",
+       "observation": "The code at line 103 checks for the urn:uuid: prefix using strings.EqualFold, which means it accepts case-insensitive urn prefixes."
+      },
+      {
+       "file": "uuid_test.go",
+       "line": 44,
+       "quote": "t{",
+       "observation": "The test file includes test cases for urn:uuid: prefixed UUIDs, confirming that this format is expected to be parsed."
+      },
+      {
+       "file": "uuid_test.go",
+       "line": 70,
+       "quote": "t{",
+       "observation": "The test file includes test cases for braced UUIDs, confirming that this format is expected to be parsed."
+      }
+     ],
+     "root_cause_hypothesis": "The root cause is that uuid.Parse is designed to accept non-standard encodings (such as urn:uuid: prefixes and braced formats) for parsing purposes, but users may expect it to behave as a strict validator. The doc comment explicitly warns against using Parse for validation, suggesting that users should use Validate or ParseBytes for strict validation instead.",
+     "reproduction_steps": [
+      "Call uuid.Parse with a string wrapped in braces, e.g., {f47ac10b-58cc-0372-8567-0e02b2c3d479}.",
+      "Call uuid.Parse with a string prefixed with urn:uuid:, e.g., urn:uuid:f47ac10b-58cc-4372-0567-0e02b2c3d479.",
+      "Observe that both inputs are accepted by Parse, which may be unexpected if the user expected strict validation."
+     ],
+     "proposed_solution": "Clarify in the documentation that Parse is intended for parsing, not validation, and recommend using Validate or ParseBytes for strict validation. If strict validation is required, users should use the Validate function or ParseBytes, which may have different behavior regarding non-standard encodings.",
+     "acceptance_criteria": [
+      "The documentation for Parse clearly states that it accepts non-standard encodings and should not be used for validation.",
+      "Users are directed to use Validate or ParseBytes for strict validation of UUID strings.",
+      "Test cases confirm that Parse accepts urn:uuid: prefixes and braced formats as documented."
+     ],
+     "validation_plan": [
+      "Review the doc comment for Parse to ensure it clearly warns against using it for validation.",
+      "Check the behavior of Validate and ParseBytes to confirm they reject non-standard encodings if strict validation is required.",
+      "Add or update test cases to explicitly document the expected behavior of Parse, Validate, and ParseBytes regarding non-standard encodings."
+     ],
+     "limitations": [
+      "The provided excerpts do not include the implementation of ParseBytes or Validate, so their exact behavior regarding non-standard encodings cannot be confirmed from the supplied data.",
+      "No runtime logs or reproduction receipt are provided, so the actual runtime behavior of Parse, ParseBytes, and Validate cannot be verified from the supplied data."
+     ],
+     "questions": [
+      "What is the expected behavior of ParseBytes and Validate regarding non-standard encodings such as urn:uuid: prefixes and braced formats?",
+      "Should Parse be modified to reject non-standard encodings, or should the documentation be clarified to direct users to Validate or ParseBytes for strict validation?"
+     ],
+     "search_terms": [
+      "func ParseBytes(",
+      "func Validate(",
+      "strings.TrimPrefix",
+      "strings.TrimSuffix",
+      "urn:uuid",
+      "braces",
+      "Parse error"
+     ],
+     "next_action": "additional_search",
+     "confidence": 0.8,
+     "original_user_description": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. Investigate which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+     "source_commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d",
+     "root_cause_status": "hypothesis",
+     "evidence_status": "Proposal only; deterministic reference validation is recorded separately",
+     "affected_components": [
+      "uuid.go",
+      "uuid_test.go"
+     ],
+     "observed_behaviour_attribution": "User report and source inspection; runtime reproduction is recorded separately"
+    },
+    "revision": 1,
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/ticket_enhancement-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 112,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:16.468464+00:00",
+  "node": "reproduction_check",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "040b11c3a1d44f67828d30aaedd9a23b",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "ticket_enhancement",
+   "destination": "queue:normal",
+   "next_node": "reproduction_check",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 113,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:16.818415+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "a4d9336d384c4d4ba0b30d71c2348680",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "reproduction_check",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 114,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:16.901790+00:00",
+  "node": "reproduction_check",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "a4d9336d384c4d4ba0b30d71c2348680",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "reproduction_check",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "manual_intake:0:g0:s0:v0:r0": 1,
+     "request_triage:0:g0:s0:v0:r0": 1,
+     "request_duplicate_check:0:g0:s0:v0:r0": 1,
+     "repository_search:0:g0:s0:v0:r0": 1,
+     "problem_investigation:0:g0:s1:v0:r0": 1,
+     "repository_search:0:g0:s1:v0:r0": 1,
+     "problem_investigation:0:g0:s2:v0:r0": 1,
+     "ticket_enhancement:0:g0:s2:v0:r0": 1,
+     "reproduction_check:0:g0:s2:v0:r1": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 115,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:16.903291+00:00",
+  "node": "reproduction_check",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "a4d9336d384c4d4ba0b30d71c2348680",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "finding_validation",
+   "status": "ready",
+   "updates": {
+    "reproduction": {
+     "executed": false,
+     "passed": null,
+     "reason": "Read-only investigation; repository code was not executed"
+    },
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/reproduction_check-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 116,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:16.904810+00:00",
+  "node": "finding_validation",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "a4d9336d384c4d4ba0b30d71c2348680",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "reproduction_check",
+   "destination": "queue:normal",
+   "next_node": "finding_validation",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 117,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:17.327067+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "8867b447d1bc4c4daf6ef3510ad4c0af",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "finding_validation",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 118,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:17.415782+00:00",
+  "node": "finding_validation",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "8867b447d1bc4c4daf6ef3510ad4c0af",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "finding_validation",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "manual_intake:0:g0:s0:v0:r0": 1,
+     "request_triage:0:g0:s0:v0:r0": 1,
+     "request_duplicate_check:0:g0:s0:v0:r0": 1,
+     "repository_search:0:g0:s0:v0:r0": 1,
+     "problem_investigation:0:g0:s1:v0:r0": 1,
+     "repository_search:0:g0:s1:v0:r0": 1,
+     "problem_investigation:0:g0:s2:v0:r0": 1,
+     "ticket_enhancement:0:g0:s2:v0:r0": 1,
+     "reproduction_check:0:g0:s2:v0:r1": 1,
+     "finding_validation:0:g0:s2:v0:r1": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 119,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:17.418249+00:00",
+  "node": "finding_validation",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "8867b447d1bc4c4daf6ef3510ad4c0af",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "problem_investigation",
+   "status": "ready",
+   "updates": {
+    "finding_validation": {
+     "source_references_valid": false,
+     "verified_references": 2,
+     "rejected": [
+      {
+       "file": "uuid.go",
+       "line": 89,
+       "reason": "File, line or exact quote is absent from captured evidence"
+      },
+      {
+       "file": "uuid.go",
+       "line": 93,
+       "reason": "File, line or exact quote is absent from captured evidence"
+      },
+      {
+       "file": "uuid_test.go",
+       "line": 44,
+       "reason": "File, line or exact quote is absent from captured evidence"
+      },
+      {
+       "file": "uuid_test.go",
+       "line": 70,
+       "reason": "File, line or exact quote is absent from captured evidence"
+      }
+     ],
+     "runtime_causality_verified": false,
+     "root_cause_status": "hypothesis",
+     "quote_format_corrections": []
+    },
+    "validation_round": 1,
+    "enhanced": {
+     "title": "UUID Parse Validation Inconsistency",
+     "problem_statement": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. The investigation must determine which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+     "expected_behaviour": "The user expected uuid.Parse to reject non-standard input formats such as strings wrapped in braces or with a urn prefix, or at least to behave consistently with ParseBytes and Validate.",
+     "observed_behaviour": "The user observed that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix.",
+     "findings": [
+      {
+       "file": "uuid.go",
+       "line": 86,
+       "quote": "// Parse decodes s into a UUID or returns an error if it cannot be parsed.  Both",
+       "observation": "The doc comment for Parse explicitly states that it decodes both standard UUID forms defined in RFC 9562, including the urn:uuid: prefix form."
+      },
+      {
+       "file": "uuid.go",
+       "line": 89,
+       "quote": "// Parse accepts non-standard strings such as the raw hex encoding",
+       "observation": "The doc comment explicitly states that Parse accepts non-standard strings such as raw hex encoding and 38 byte \"Microsoft style\" encodings with braces."
+      },
+      {
+       "file": "uuid.go",
+       "line": 93,
+       "quote": "// it parses non-standard encodings as indicated above.",
+       "observation": "The doc comment explicitly warns that Parse should not be used to validate strings because it parses non-standard encodings."
+      },
+      {
+       "file": "uuid.go",
+       "line": 103,
+       "quote": "if !strings.EqualFold(s[:9], ",
+       "observation": "The code at line 103 checks for the urn:uuid: prefix using strings.EqualFold, which means it accepts case-insensitive urn prefixes."
+      },
+      {
+       "file": "uuid_test.go",
+       "line": 44,
+       "quote": "t{",
+       "observation": "The test file includes test cases for urn:uuid: prefixed UUIDs, confirming that this format is expected to be parsed."
+      },
+      {
+       "file": "uuid_test.go",
+       "line": 70,
+       "quote": "t{",
+       "observation": "The test file includes test cases for braced UUIDs, confirming that this format is expected to be parsed."
+      }
+     ],
+     "root_cause_hypothesis": "The root cause is that uuid.Parse is designed to accept non-standard encodings (such as urn:uuid: prefixes and braced formats) for parsing purposes, but users may expect it to behave as a strict validator. The doc comment explicitly warns against using Parse for validation, suggesting that users should use Validate or ParseBytes for strict validation instead.",
+     "reproduction_steps": [
+      "Call uuid.Parse with a string wrapped in braces, e.g., {f47ac10b-58cc-0372-8567-0e02b2c3d479}.",
+      "Call uuid.Parse with a string prefixed with urn:uuid:, e.g., urn:uuid:f47ac10b-58cc-4372-0567-0e02b2c3d479.",
+      "Observe that both inputs are accepted by Parse, which may be unexpected if the user expected strict validation."
+     ],
+     "proposed_solution": "Clarify in the documentation that Parse is intended for parsing, not validation, and recommend using Validate or ParseBytes for strict validation. If strict validation is required, users should use the Validate function or ParseBytes, which may have different behavior regarding non-standard encodings.",
+     "acceptance_criteria": [
+      "The documentation for Parse clearly states that it accepts non-standard encodings and should not be used for validation.",
+      "Users are directed to use Validate or ParseBytes for strict validation of UUID strings.",
+      "Test cases confirm that Parse accepts urn:uuid: prefixes and braced formats as documented."
+     ],
+     "validation_plan": [
+      "Review the doc comment for Parse to ensure it clearly warns against using it for validation.",
+      "Check the behavior of Validate and ParseBytes to confirm they reject non-standard encodings if strict validation is required.",
+      "Add or update test cases to explicitly document the expected behavior of Parse, Validate, and ParseBytes regarding non-standard encodings."
+     ],
+     "limitations": [
+      "The provided excerpts do not include the implementation of ParseBytes or Validate, so their exact behavior regarding non-standard encodings cannot be confirmed from the supplied data.",
+      "No runtime logs or reproduction receipt are provided, so the actual runtime behavior of Parse, ParseBytes, and Validate cannot be verified from the supplied data."
+     ],
+     "questions": [
+      "What is the expected behavior of ParseBytes and Validate regarding non-standard encodings such as urn:uuid: prefixes and braced formats?",
+      "Should Parse be modified to reject non-standard encodings, or should the documentation be clarified to direct users to Validate or ParseBytes for strict validation?"
+     ],
+     "search_terms": [
+      "func ParseBytes(",
+      "func Validate(",
+      "strings.TrimPrefix",
+      "strings.TrimSuffix",
+      "urn:uuid",
+      "braces",
+      "Parse error"
+     ],
+     "next_action": "additional_search",
+     "confidence": 0.8,
+     "original_user_description": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. Investigate which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+     "source_commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d",
+     "root_cause_status": "hypothesis",
+     "evidence_status": "Proposal only; deterministic reference validation is recorded separately",
+     "affected_components": [
+      "uuid.go",
+      "uuid_test.go"
+     ],
+     "observed_behaviour_attribution": "User report and source inspection; runtime reproduction is recorded separately"
+    },
+    "revision": 1,
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/finding_validation-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 120,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:17.420861+00:00",
+  "node": "problem_investigation",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "8867b447d1bc4c4daf6ef3510ad4c0af",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "finding_validation",
+   "destination": "queue:normal",
+   "next_node": "problem_investigation",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 121,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:17.841307+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "e4e5a648562c4bed8c88e2e24c764b38",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "problem_investigation",
+   "model_key": "a"
+  }
+ },
+ {
+  "seq": 122,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:17.937269+00:00",
+  "node": "problem_investigation",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "e4e5a648562c4bed8c88e2e24c764b38",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "problem_investigation",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "manual_intake:0:g0:s0:v0:r0": 1,
+     "request_triage:0:g0:s0:v0:r0": 1,
+     "request_duplicate_check:0:g0:s0:v0:r0": 1,
+     "repository_search:0:g0:s0:v0:r0": 1,
+     "problem_investigation:0:g0:s1:v0:r0": 1,
+     "repository_search:0:g0:s1:v0:r0": 1,
+     "problem_investigation:0:g0:s2:v0:r0": 1,
+     "ticket_enhancement:0:g0:s2:v0:r0": 1,
+     "reproduction_check:0:g0:s2:v0:r1": 1,
+     "finding_validation:0:g0:s2:v0:r1": 1,
+     "problem_investigation:0:g0:s2:v1:r1": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 123,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:17.938353+00:00",
+  "node": "root_investigation",
+  "kind": "model_assigned",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "e4e5a648562c4bed8c88e2e24c764b38",
+   "parent_task_id": "GE-EABBDB96",
+   "model_key": "a",
+   "model_id": "qwen3.8-27b",
+   "role": "root_investigation",
+   "graph_node": "problem_investigation",
+   "operation": "OpenCode structured proposal",
+   "request_sha256": "27856adcd31a7693c7922430a9bc47ccced9b6e82274b8f8ed27f91d78a789fc"
+  }
+ },
+ {
+  "seq": 124,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:41.904848+00:00",
+  "node": "root_investigation",
+  "kind": "model_call",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "e4e5a648562c4bed8c88e2e24c764b38",
+   "parent_task_id": "GE-EABBDB96",
+   "model_key": "a",
+   "model_id": "qwen3.8-27b",
+   "role": "root_investigation",
+   "run_id": "33746956c519460b",
+   "attempt": 0,
+   "success": true,
+   "tool_calls": 0,
+   "raw_path": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/workers/33746956c519460b/root_investigation-0-4730c4c9/result.json",
+   "input_bytes": 15624,
+   "utc": "2026-10-19T23:47:17.940610+00:00",
+   "opencode_version": "2.0.32",
+   "session_ids": [
+    "ses_ea9700556ffeT5pF0JTPykPlgX"
+   ],
+   "latency_seconds": 23.9631,
+   "artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/workers/33746956c519460b/root_investigation-0-4730c4c9/result.json",
+   "selected_model": "a",
+   "graph_node": "problem_investigation"
+  }
+ },
+ {
+  "seq": 125,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:41.906868+00:00",
+  "node": "problem_investigation",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "e4e5a648562c4bed8c88e2e24c764b38",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "ticket_enhancement",
+   "status": "ready",
+   "updates": {
+    "investigation_result": {
+     "title": "UUID Parse Validation Inconsistency",
+     "problem_statement": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. The investigation confirms that Parse intentionally accepts non-standard encodings, including urn:uuid: prefixed and brace-wrapped strings, and that the documentation explicitly warns that Parse should not be used to validate strings.",
+     "expected_behaviour": "Users expected Parse to reject non-standard UUID encodings such as urn:uuid: prefixed strings and strings wrapped in braces, treating them as invalid UUIDs.",
+     "observed_behaviour": "Parse accepts urn:uuid: prefixed strings, brace-wrapped strings, and raw 32-character hex strings in addition to the standard 36-character hyphenated form. The function documentation states that Parse should not be used to validate strings as it parses non-standard encodings.",
+     "findings": [
+      {
+       "file": "uuid.go",
+       "line": 86,
+       "quote": "// Parse decodes s into a UUID or returns an error if it cannot be parsed.  Both",
+       "observation": "The Parse function documentation begins by stating it decodes s into a UUID or returns an error if it cannot be parsed."
+      },
+      {
+       "file": "uuid.go",
+       "line": 89,
+       "quote": "// Parse accepts non-standard strings such as the raw hex encoding",
+       "observation": "The documentation explicitly states that Parse accepts non-standard strings such as the raw hex encoding."
+      },
+      {
+       "file": "uuid.go",
+       "line": 91,
+       "quote": "// e.g.  {xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}.  Only the middle 36 bytes are",
+       "observation": "The documentation gives an example of a brace-wrapped encoding and notes that only the middle 36 bytes are examined in that case."
+      },
+      {
+       "file": "uuid.go",
+       "line": 93,
+       "quote": "// it parses non-standard encodings as indicated above.",
+       "observation": "The documentation warns that Parse should not be used to validate strings as it parses non-standard encodings."
+      },
+      {
+       "file": "uuid.go",
+       "line": 103,
+       "quote": "if !strings.EqualFold(s[:9], ",
+       "observation": "The Parse function checks for a urn:uuid: prefix using strings.EqualFold for 36+9 length inputs."
+      },
+      {
+       "file": "uuid.go",
+       "line": 110,
+       "quote": "s = s[1:]",
+       "observation": "For 36+2 length inputs, Parse strips the first character (opening brace) before further processing."
+      }
+     ],
+     "root_cause_hypothesis": "The observed behavior is by design: Parse is implemented to accept multiple non-standard encodings (urn:uuid: prefix, braces, raw hex) in addition to the standard RFC 9562 form, and the documentation explicitly warns that Parse should not be used for validation. Users who expect Parse to reject non-standard encodings are using it for validation, which is not its intended purpose.",
+     "reproduction_steps": [
+      "Call uuid.Parse with a string wrapped in braces, e.g. {f47ac10b-58cc-0372-8567-0e02b2c3d479}.",
+      "Call uuid.Parse with a string prefixed with urn:uuid:, e.g. urn:uuid:f47ac10b-58cc-4372-0567-0e02b2c3d479.",
+      "Observe that both inputs are accepted and return a valid UUID without error."
+     ],
+     "proposed_solution": "Users who need to validate that a string is a standard RFC 9562 UUID should use the Validate function instead of Parse. The documentation already warns that Parse should not be used for validation. No code change is proposed because the current behavior is documented and intentional.",
+     "acceptance_criteria": [
+      "Users who need strict validation of standard UUID format use Validate instead of Parse.",
+      "Documentation for Parse continues to warn that it should not be used to validate strings."
+     ],
+     "validation_plan": [
+      "Review the documentation for Parse and Validate to confirm the distinction between parsing and validation is clear.",
+      "Confirm that Validate rejects non-standard encodings such as urn:uuid: prefixed and brace-wrapped strings."
+     ],
+     "limitations": [
+      "No runtime logs or reproduction receipt were provided; the analysis is based solely on the captured source code excerpts.",
+      "The Validate function implementation is not included in the supplied excerpts, so its exact behavior cannot be verified from the provided evidence."
+     ],
+     "questions": [
+      "Is the user's expectation that Parse should reject non-standard encodings, or is the issue that Validate does not reject them as expected?"
+     ],
+     "search_terms": [
+      "func Validate(",
+      "func ParseBytes(",
+      "strings.TrimPrefix",
+      "strings.TrimSuffix"
+     ],
+     "next_action": "additional_search",
+     "confidence": 0.85
+    },
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/problem_investigation-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 126,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:41.909047+00:00",
+  "node": "ticket_enhancement",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "e4e5a648562c4bed8c88e2e24c764b38",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "problem_investigation",
+   "destination": "queue:normal",
+   "next_node": "ticket_enhancement",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 127,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:42.140382+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "4dcfbddb152546b68acb4b0ef1448195",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "ticket_enhancement",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 128,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:42.228264+00:00",
+  "node": "ticket_enhancement",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "4dcfbddb152546b68acb4b0ef1448195",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "ticket_enhancement",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "manual_intake:0:g0:s0:v0:r0": 1,
+     "request_triage:0:g0:s0:v0:r0": 1,
+     "request_duplicate_check:0:g0:s0:v0:r0": 1,
+     "repository_search:0:g0:s0:v0:r0": 1,
+     "problem_investigation:0:g0:s1:v0:r0": 1,
+     "repository_search:0:g0:s1:v0:r0": 1,
+     "problem_investigation:0:g0:s2:v0:r0": 1,
+     "ticket_enhancement:0:g0:s2:v0:r0": 1,
+     "reproduction_check:0:g0:s2:v0:r1": 1,
+     "finding_validation:0:g0:s2:v0:r1": 1,
+     "problem_investigation:0:g0:s2:v1:r1": 1,
+     "ticket_enhancement:0:g0:s2:v1:r1": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 129,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:42.230516+00:00",
+  "node": "ticket_enhancement",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "4dcfbddb152546b68acb4b0ef1448195",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "reproduction_check",
+   "status": "ready",
+   "updates": {
+    "enhanced": {
+     "title": "UUID Parse Validation Inconsistency",
+     "problem_statement": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. The investigation confirms that Parse intentionally accepts non-standard encodings, including urn:uuid: prefixed and brace-wrapped strings, and that the documentation explicitly warns that Parse should not be used to validate strings.",
+     "expected_behaviour": "Users expected Parse to reject non-standard UUID encodings such as urn:uuid: prefixed strings and strings wrapped in braces, treating them as invalid UUIDs.",
+     "observed_behaviour": "Parse accepts urn:uuid: prefixed strings, brace-wrapped strings, and raw 32-character hex strings in addition to the standard 36-character hyphenated form. The function documentation states that Parse should not be used to validate strings as it parses non-standard encodings.",
+     "findings": [
+      {
+       "file": "uuid.go",
+       "line": 86,
+       "quote": "// Parse decodes s into a UUID or returns an error if it cannot be parsed.  Both",
+       "observation": "The Parse function documentation begins by stating it decodes s into a UUID or returns an error if it cannot be parsed."
+      },
+      {
+       "file": "uuid.go",
+       "line": 89,
+       "quote": "// Parse accepts non-standard strings such as the raw hex encoding",
+       "observation": "The documentation explicitly states that Parse accepts non-standard strings such as the raw hex encoding."
+      },
+      {
+       "file": "uuid.go",
+       "line": 91,
+       "quote": "// e.g.  {xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}.  Only the middle 36 bytes are",
+       "observation": "The documentation gives an example of a brace-wrapped encoding and notes that only the middle 36 bytes are examined in that case."
+      },
+      {
+       "file": "uuid.go",
+       "line": 93,
+       "quote": "// it parses non-standard encodings as indicated above.",
+       "observation": "The documentation warns that Parse should not be used to validate strings as it parses non-standard encodings."
+      },
+      {
+       "file": "uuid.go",
+       "line": 103,
+       "quote": "if !strings.EqualFold(s[:9], ",
+       "observation": "The Parse function checks for a urn:uuid: prefix using strings.EqualFold for 36+9 length inputs."
+      },
+      {
+       "file": "uuid.go",
+       "line": 110,
+       "quote": "s = s[1:]",
+       "observation": "For 36+2 length inputs, Parse strips the first character (opening brace) before further processing."
+      }
+     ],
+     "root_cause_hypothesis": "The observed behavior is by design: Parse is implemented to accept multiple non-standard encodings (urn:uuid: prefix, braces, raw hex) in addition to the standard RFC 9562 form, and the documentation explicitly warns that Parse should not be used for validation. Users who expect Parse to reject non-standard encodings are using it for validation, which is not its intended purpose.",
+     "reproduction_steps": [
+      "Call uuid.Parse with a string wrapped in braces, e.g. {f47ac10b-58cc-0372-8567-0e02b2c3d479}.",
+      "Call uuid.Parse with a string prefixed with urn:uuid:, e.g. urn:uuid:f47ac10b-58cc-4372-0567-0e02b2c3d479.",
+      "Observe that both inputs are accepted and return a valid UUID without error."
+     ],
+     "proposed_solution": "Users who need to validate that a string is a standard RFC 9562 UUID should use the Validate function instead of Parse. The documentation already warns that Parse should not be used for validation. No code change is proposed because the current behavior is documented and intentional.",
+     "acceptance_criteria": [
+      "Users who need strict validation of standard UUID format use Validate instead of Parse.",
+      "Documentation for Parse continues to warn that it should not be used to validate strings."
+     ],
+     "validation_plan": [
+      "Review the documentation for Parse and Validate to confirm the distinction between parsing and validation is clear.",
+      "Confirm that Validate rejects non-standard encodings such as urn:uuid: prefixed and brace-wrapped strings."
+     ],
+     "limitations": [
+      "No runtime logs or reproduction receipt were provided; the analysis is based solely on the captured source code excerpts.",
+      "The Validate function implementation is not included in the supplied excerpts, so its exact behavior cannot be verified from the provided evidence."
+     ],
+     "questions": [
+      "Is the user's expectation that Parse should reject non-standard encodings, or is the issue that Validate does not reject them as expected?"
+     ],
+     "search_terms": [
+      "func Validate(",
+      "func ParseBytes(",
+      "strings.TrimPrefix",
+      "strings.TrimSuffix"
+     ],
+     "next_action": "additional_search",
+     "confidence": 0.85,
+     "original_user_description": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. Investigate which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+     "source_commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d",
+     "root_cause_status": "hypothesis",
+     "evidence_status": "Proposal only; deterministic reference validation is recorded separately",
+     "affected_components": [
+      "uuid.go"
+     ],
+     "observed_behaviour_attribution": "User report and source inspection; runtime reproduction is recorded separately"
+    },
+    "revision": 2,
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/ticket_enhancement-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 130,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:42.232972+00:00",
+  "node": "reproduction_check",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "4dcfbddb152546b68acb4b0ef1448195",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "ticket_enhancement",
+   "destination": "queue:normal",
+   "next_node": "reproduction_check",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 131,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:42.648537+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "d5bdccb901144ba197fbd2612d774e9a",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "reproduction_check",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 132,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:42.732384+00:00",
+  "node": "reproduction_check",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "d5bdccb901144ba197fbd2612d774e9a",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "reproduction_check",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "manual_intake:0:g0:s0:v0:r0": 1,
+     "request_triage:0:g0:s0:v0:r0": 1,
+     "request_duplicate_check:0:g0:s0:v0:r0": 1,
+     "repository_search:0:g0:s0:v0:r0": 1,
+     "problem_investigation:0:g0:s1:v0:r0": 1,
+     "repository_search:0:g0:s1:v0:r0": 1,
+     "problem_investigation:0:g0:s2:v0:r0": 1,
+     "ticket_enhancement:0:g0:s2:v0:r0": 1,
+     "reproduction_check:0:g0:s2:v0:r1": 1,
+     "finding_validation:0:g0:s2:v0:r1": 1,
+     "problem_investigation:0:g0:s2:v1:r1": 1,
+     "ticket_enhancement:0:g0:s2:v1:r1": 1,
+     "reproduction_check:0:g0:s2:v1:r2": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 133,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:42.733969+00:00",
+  "node": "reproduction_check",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "d5bdccb901144ba197fbd2612d774e9a",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "finding_validation",
+   "status": "ready",
+   "updates": {
+    "reproduction": {
+     "executed": false,
+     "passed": null,
+     "reason": "Read-only investigation; repository code was not executed"
+    },
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/reproduction_check-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 134,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:42.736128+00:00",
+  "node": "finding_validation",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "d5bdccb901144ba197fbd2612d774e9a",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "reproduction_check",
+   "destination": "queue:normal",
+   "next_node": "finding_validation",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 135,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:43.159191+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "eaab0771aace4c8d9132a027b38eb79f",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "finding_validation",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 136,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:43.246394+00:00",
+  "node": "finding_validation",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "eaab0771aace4c8d9132a027b38eb79f",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "finding_validation",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "manual_intake:0:g0:s0:v0:r0": 1,
+     "request_triage:0:g0:s0:v0:r0": 1,
+     "request_duplicate_check:0:g0:s0:v0:r0": 1,
+     "repository_search:0:g0:s0:v0:r0": 1,
+     "problem_investigation:0:g0:s1:v0:r0": 1,
+     "repository_search:0:g0:s1:v0:r0": 1,
+     "problem_investigation:0:g0:s2:v0:r0": 1,
+     "ticket_enhancement:0:g0:s2:v0:r0": 1,
+     "reproduction_check:0:g0:s2:v0:r1": 1,
+     "finding_validation:0:g0:s2:v0:r1": 1,
+     "problem_investigation:0:g0:s2:v1:r1": 1,
+     "ticket_enhancement:0:g0:s2:v1:r1": 1,
+     "reproduction_check:0:g0:s2:v1:r2": 1,
+     "finding_validation:0:g0:s2:v1:r2": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 137,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:43.248446+00:00",
+  "node": "finding_validation",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "eaab0771aace4c8d9132a027b38eb79f",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "ticket_finalisation",
+   "status": "ready",
+   "updates": {
+    "finding_validation": {
+     "source_references_valid": false,
+     "verified_references": 3,
+     "rejected": [
+      {
+       "file": "uuid.go",
+       "line": 89,
+       "reason": "File, line or exact quote is absent from captured evidence"
+      },
+      {
+       "file": "uuid.go",
+       "line": 91,
+       "reason": "File, line or exact quote is absent from captured evidence"
+      },
+      {
+       "file": "uuid.go",
+       "line": 93,
+       "reason": "File, line or exact quote is absent from captured evidence"
+      }
+     ],
+     "runtime_causality_verified": false,
+     "root_cause_status": "hypothesis",
+     "quote_format_corrections": []
+    },
+    "validation_round": 2,
+    "enhanced": {
+     "title": "UUID Parse Validation Inconsistency",
+     "problem_statement": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. The investigation confirms that Parse intentionally accepts non-standard encodings, including urn:uuid: prefixed and brace-wrapped strings, and that the documentation explicitly warns that Parse should not be used to validate strings.",
+     "expected_behaviour": "Users expected Parse to reject non-standard UUID encodings such as urn:uuid: prefixed strings and strings wrapped in braces, treating them as invalid UUIDs.",
+     "observed_behaviour": "Parse accepts urn:uuid: prefixed strings, brace-wrapped strings, and raw 32-character hex strings in addition to the standard 36-character hyphenated form. The function documentation states that Parse should not be used to validate strings as it parses non-standard encodings.",
+     "findings": [
+      {
+       "file": "uuid.go",
+       "line": 86,
+       "quote": "// Parse decodes s into a UUID or returns an error if it cannot be parsed.  Both",
+       "observation": "The Parse function documentation begins by stating it decodes s into a UUID or returns an error if it cannot be parsed."
+      },
+      {
+       "file": "uuid.go",
+       "line": 89,
+       "quote": "// Parse accepts non-standard strings such as the raw hex encoding",
+       "observation": "The documentation explicitly states that Parse accepts non-standard strings such as the raw hex encoding."
+      },
+      {
+       "file": "uuid.go",
+       "line": 91,
+       "quote": "// e.g.  {xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}.  Only the middle 36 bytes are",
+       "observation": "The documentation gives an example of a brace-wrapped encoding and notes that only the middle 36 bytes are examined in that case."
+      },
+      {
+       "file": "uuid.go",
+       "line": 93,
+       "quote": "// it parses non-standard encodings as indicated above.",
+       "observation": "The documentation warns that Parse should not be used to validate strings as it parses non-standard encodings."
+      },
+      {
+       "file": "uuid.go",
+       "line": 103,
+       "quote": "if !strings.EqualFold(s[:9], ",
+       "observation": "The Parse function checks for a urn:uuid: prefix using strings.EqualFold for 36+9 length inputs."
+      },
+      {
+       "file": "uuid.go",
+       "line": 110,
+       "quote": "s = s[1:]",
+       "observation": "For 36+2 length inputs, Parse strips the first character (opening brace) before further processing."
+      }
+     ],
+     "root_cause_hypothesis": "The observed behavior is by design: Parse is implemented to accept multiple non-standard encodings (urn:uuid: prefix, braces, raw hex) in addition to the standard RFC 9562 form, and the documentation explicitly warns that Parse should not be used for validation. Users who expect Parse to reject non-standard encodings are using it for validation, which is not its intended purpose.",
+     "reproduction_steps": [
+      "Call uuid.Parse with a string wrapped in braces, e.g. {f47ac10b-58cc-0372-8567-0e02b2c3d479}.",
+      "Call uuid.Parse with a string prefixed with urn:uuid:, e.g. urn:uuid:f47ac10b-58cc-4372-0567-0e02b2c3d479.",
+      "Observe that both inputs are accepted and return a valid UUID without error."
+     ],
+     "proposed_solution": "Users who need to validate that a string is a standard RFC 9562 UUID should use the Validate function instead of Parse. The documentation already warns that Parse should not be used for validation. No code change is proposed because the current behavior is documented and intentional.",
+     "acceptance_criteria": [
+      "Users who need strict validation of standard UUID format use Validate instead of Parse.",
+      "Documentation for Parse continues to warn that it should not be used to validate strings."
+     ],
+     "validation_plan": [
+      "Review the documentation for Parse and Validate to confirm the distinction between parsing and validation is clear.",
+      "Confirm that Validate rejects non-standard encodings such as urn:uuid: prefixed and brace-wrapped strings."
+     ],
+     "limitations": [
+      "No runtime logs or reproduction receipt were provided; the analysis is based solely on the captured source code excerpts.",
+      "The Validate function implementation is not included in the supplied excerpts, so its exact behavior cannot be verified from the provided evidence."
+     ],
+     "questions": [
+      "Is the user's expectation that Parse should reject non-standard encodings, or is the issue that Validate does not reject them as expected?"
+     ],
+     "search_terms": [
+      "func Validate(",
+      "func ParseBytes(",
+      "strings.TrimPrefix",
+      "strings.TrimSuffix"
+     ],
+     "next_action": "additional_search",
+     "confidence": 0.85,
+     "original_user_description": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. Investigate which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+     "source_commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d",
+     "root_cause_status": "hypothesis",
+     "evidence_status": "Proposal only; deterministic reference validation is recorded separately",
+     "affected_components": [
+      "uuid.go"
+     ],
+     "observed_behaviour_attribution": "User report and source inspection; runtime reproduction is recorded separately"
+    },
+    "revision": 2,
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/finding_validation-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 138,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:43.250786+00:00",
+  "node": "ticket_finalisation",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "eaab0771aace4c8d9132a027b38eb79f",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "finding_validation",
+   "destination": "queue:normal",
+   "next_node": "ticket_finalisation",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 139,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:43.670414+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "bee3e6a60d2f4e1297ef0f509bd686e9",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "ticket_finalisation",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 140,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:43.743920+00:00",
+  "node": "ticket_finalisation",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "bee3e6a60d2f4e1297ef0f509bd686e9",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "ticket_finalisation",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "manual_intake:0:g0:s0:v0:r0": 1,
+     "request_triage:0:g0:s0:v0:r0": 1,
+     "request_duplicate_check:0:g0:s0:v0:r0": 1,
+     "repository_search:0:g0:s0:v0:r0": 1,
+     "problem_investigation:0:g0:s1:v0:r0": 1,
+     "repository_search:0:g0:s1:v0:r0": 1,
+     "problem_investigation:0:g0:s2:v0:r0": 1,
+     "ticket_enhancement:0:g0:s2:v0:r0": 1,
+     "reproduction_check:0:g0:s2:v0:r1": 1,
+     "finding_validation:0:g0:s2:v0:r1": 1,
+     "problem_investigation:0:g0:s2:v1:r1": 1,
+     "ticket_enhancement:0:g0:s2:v1:r1": 1,
+     "reproduction_check:0:g0:s2:v1:r2": 1,
+     "finding_validation:0:g0:s2:v1:r2": 1,
+     "ticket_finalisation:0:g0:s2:v2:r2": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 141,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:43.745449+00:00",
+  "node": "ticket_finalisation",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "bee3e6a60d2f4e1297ef0f509bd686e9",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "ticket_finalisation",
+   "status": "needs_information",
+   "updates": {
+    "intake_phase": "Needs Information",
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/ticket_finalisation-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 142,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:47:43.747814+00:00",
+  "node": "ticket_finalisation",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "bee3e6a60d2f4e1297ef0f509bd686e9",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "ticket_finalisation",
+   "destination": "queue:clarification",
+   "next_node": "ticket_finalisation",
+   "status": "needs_information"
+  }
+ },
+ {
+  "seq": 144,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:49:57.360749+00:00",
+  "node": "ticket_finalisation",
+  "kind": "intake_reinvestigate",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": null,
+   "parent_task_id": "GE-EABBDB96",
+   "actor": "mcp:codex-acceptance",
+   "revision": 2,
+   "source": "ticket_finalisation",
+   "destination": "repository_search",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 146,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:49:57.464781+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "ec0bbefc5f53458d9b93de19a46852bb",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "repository_search",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 147,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:49:57.541315+00:00",
+  "node": "repository_search",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "ec0bbefc5f53458d9b93de19a46852bb",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "repository_search",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "repository_search:0:g1:s0:v0:r2": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 148,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:49:58.204957+00:00",
+  "node": "repository_search",
+  "kind": "repository_tool_result",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "ec0bbefc5f53458d9b93de19a46852bb",
+   "parent_task_id": "GE-EABBDB96",
+   "operation": "git grep/show/log",
+   "files": [
+    "uuid.go",
+    "uuid_test.go",
+    "dce.go",
+    "hash.go",
+    "node.go",
+    "null.go",
+    "null_test.go",
+    "sql.go",
+    "sql_test.go",
+    "time.go"
+   ],
+   "source_commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+  }
+ },
+ {
+  "seq": 149,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:49:58.208565+00:00",
+  "node": "repository_search",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "ec0bbefc5f53458d9b93de19a46852bb",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "problem_investigation",
+   "status": "ready",
+   "updates": {
+    "retrieved": {
+     "excerpts": [
+      {
+       "file": "uuid.go",
+       "start_line": 1,
+       "end_line": 40,
+       "text": "// Copyright 2018 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"bytes\"\n\t\"crypto/rand\"\n\t\"encoding/hex\"\n\t\"errors\"\n\t\"fmt\"\n\t\"io\"\n\t\"strings\"\n\t\"sync\"\n)\n\n// A UUID is a 128 bit (16 byte) Universal Unique IDentifier as defined in RFC\n// 9562.\ntype UUID [16]byte\n\n// A Version represents a UUID's version.\ntype Version byte\n\n// A Variant represents a UUID's variant.\ntype Variant byte\n\n// Constants returned by Variant.\nconst (\n\tInvalid   = Variant(iota) // Invalid UUID\n\tRFC4122                   // The variant specified in RFC9562(obsoletes RFC4122).\n\tReserved                  // Reserved, NCS backward compatibility.\n\tMicrosoft                 // Reserved, Microsoft Corporation backward compatibility.\n\tFuture                    // Reserved for future definition.\n)\n\n// RFC9562 added V6 and V7 of UUID, but did not change specification of V1 and V4\n// implemented in this module. To avoid creating new major module version,\n// we still use RFC4122 for constant name.\nconst Standard = RFC4122\n",
+       "blob_sha": "dc75ceefca17f2497d1ac8d99d366251924d2189",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "uuid_test.go",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"bytes\"\n\t\"errors\"\n\t\"fmt\"\n\t\"os\"\n\t\"runtime\"\n\t\"strings\"\n\t\"testing\"\n\t\"time\"\n\t\"unsafe\"\n)\n\ntype test struct {\n\tin      string\n\tversion Version\n\tvariant Variant\n\tisuuid  bool\n}\n\nvar tests = []test{\n\t{\"f47ac10b-58cc-0372-8567-0e02b2c3d479\", 0, RFC4122, true},\n\t{\"f47ac10b-58cc-1372-8567-0e02b2c3d479\", 1, RFC4122, true},\n\t{\"f47ac10b-58cc-2372-8567-0e02b2c3d479\", 2, RFC4122, true},\n\t{\"f47ac10b-58cc-3372-8567-0e02b2c3d479\", 3, RFC4122, true},\n\t{\"f47ac10b-58cc-4372-8567-0e02b2c3d479\", 4, RFC4122, true},\n\t{\"f47ac10b-58cc-5372-8567-0e02b2c3d479\", 5, RFC4122, true},\n\t{\"f47ac10b-58cc-6372-8567-0e02b2c3d479\", 6, RFC4122, true},\n\t{\"f47ac10b-58cc-7372-8567-0e02b2c3d479\", 7, RFC4122, true},\n\t{\"f47ac10b-58cc-8372-8567-0e02b2c3d479\", 8, RFC4122, true},\n\t{\"f47ac10b-58cc-9372-8567-0e02b2c3d479\", 9, RFC4122, true},\n\t{\"f47ac10b-58cc-a372-8567-0e02b2c3d479\", 10, RFC4122, true},\n\t{\"f47ac10b-58cc-b372-8567-0e02b2c3d479\", 11, RFC4122, true},\n\t{\"f47ac10b-58cc-c372-8567-0e02b2c3d479\", 12, RFC4122, true},\n\t{\"f47ac10b-58cc-d372-8567-0e02b2c3d479\", 13, RFC4122, true},\n\t{\"f47ac10b-58cc-e372-8567-0e02b2c3d479\", 14, RFC4122, true},",
+       "blob_sha": "906ecbe7f8e2b89a63836dfb1fdbcb5763c625e3",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "dce.go",
+       "start_line": 1,
+       "end_line": 40,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"encoding/binary\"\n\t\"fmt\"\n\t\"os\"\n)\n\n// A Domain represents a Version 2 domain\ntype Domain byte\n\n// Domain constants for DCE Security (Version 2) UUIDs.\nconst (\n\tPerson = Domain(0)\n\tGroup  = Domain(1)\n\tOrg    = Domain(2)\n)\n\n// NewDCESecurity returns a DCE Security (Version 2) UUID.\n//\n// The domain should be one of Person, Group or Org.\n// On a POSIX system the id should be the users UID for the Person\n// domain and the users GID for the Group.  The meaning of id for\n// the domain Org or on non-POSIX systems is site defined.\n//\n// For a given domain/id pair the same token may be returned for up to\n// 7 minutes and 10 seconds.\nfunc NewDCESecurity(domain Domain, id uint32) (UUID, error) {\n\tuuid, err := NewUUID()\n\tif err == nil {\n\t\tuuid[6] = (uuid[6] & 0x0f) | 0x20 // Version 2\n\t\tuuid[9] = byte(domain)\n\t\tbinary.BigEndian.PutUint32(uuid[0:], id)\n\t}\n\treturn uuid, err\n}\n",
+       "blob_sha": "fa820b9d3092b433238026b451eca869387d91fb",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "hash.go",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"crypto/md5\"\n\t\"crypto/sha1\"\n\t\"hash\"\n)\n\n// Well known namespace IDs and UUIDs\nvar (\n\tNameSpaceDNS  = MustParse(\"6ba7b810-9dad-11d1-80b4-00c04fd430c8\")\n\tNameSpaceURL  = MustParse(\"6ba7b811-9dad-11d1-80b4-00c04fd430c8\")\n\tNameSpaceOID  = MustParse(\"6ba7b812-9dad-11d1-80b4-00c04fd430c8\")\n\tNameSpaceX500 = MustParse(\"6ba7b814-9dad-11d1-80b4-00c04fd430c8\")\n\tNil           UUID // empty UUID, all zeros\n\n\t// The Max UUID is special form of UUID that is specified to have all 128 bits set to 1.\n\tMax = UUID{\n\t\t0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,\n\t\t0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,\n\t}\n)\n\n// NewHash returns a new UUID derived from the hash of space concatenated with\n// data generated by h.  The hash should be at least 16 byte in length.  The\n// first 16 bytes of the hash are used to form the UUID.  The version of the\n// UUID will be the lower 4 bits of version.  NewHash is used to implement\n// NewMD5 and NewSHA1.\nfunc NewHash(h hash.Hash, space UUID, data []byte, version int) UUID {\n\th.Reset()\n\th.Write(space[:]) //nolint:errcheck\n\th.Write(data)     //nolint:errcheck\n\ts := h.Sum(nil)\n\tvar uuid UUID\n\tcopy(uuid[:], s)\n\tuuid[6] = (uuid[6] & 0x0f) | uint8((version&0xf)<<4)\n\tuuid[8] = (uuid[8] & 0x3f) | 0x80 // RFC 9562 variant",
+       "blob_sha": "d3bc00a31b83b71bc3907d2d135fce059588baac",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "node.go",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"sync\"\n)\n\nvar (\n\tnodeMu sync.Mutex\n\tifname string  // name of interface being used\n\tnodeID [6]byte // hardware for version 1 UUIDs\n\tzeroID [6]byte // nodeID with only 0's\n)\n\n// NodeInterface returns the name of the interface from which the NodeID was\n// derived.  The interface \"user\" is returned if the NodeID was set by\n// SetNodeID.\nfunc NodeInterface() string {\n\tdefer nodeMu.Unlock()\n\tnodeMu.Lock()\n\treturn ifname\n}\n\n// SetNodeInterface selects the hardware address to be used for Version 1 UUIDs.\n// If name is \"\" then the first usable interface found will be used or a random\n// Node ID will be generated.  If a named interface cannot be found then false\n// is returned.\n//\n// SetNodeInterface never fails when name is \"\".\nfunc SetNodeInterface(name string) bool {\n\tdefer nodeMu.Unlock()\n\tnodeMu.Lock()\n\treturn setNodeInterface(name)\n}\n\nfunc setNodeInterface(name string) bool {\n\tiname, addr := getHardwareInterface(name) // null implementation for js\n\tif iname != \"\" && addr != nil {",
+       "blob_sha": "d651a2b0619fa44b7f24cdaf731197e6c1023863",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "null.go",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "// Copyright 2021 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"bytes\"\n\t\"database/sql/driver\"\n\t\"encoding/json\"\n\t\"fmt\"\n)\n\nvar jsonNull = []byte(\"null\")\n\n// NullUUID represents a UUID that may be null.\n// NullUUID implements the SQL driver.Scanner interface so\n// it can be used as a scan destination:\n//\n//  var u uuid.NullUUID\n//  err := db.QueryRow(\"SELECT name FROM foo WHERE id=?\", id).Scan(&u)\n//  ...\n//  if u.Valid {\n//     // use u.UUID\n//  } else {\n//     // NULL value\n//  }\n//\ntype NullUUID struct {\n\tUUID  UUID\n\tValid bool // Valid is true if UUID is not NULL\n}\n\n// Scan implements the SQL driver.Scanner interface.\nfunc (nu *NullUUID) Scan(value interface{}) error {\n\tif value == nil {\n\t\tnu.UUID, nu.Valid = Nil, false\n\t\treturn nil\n\t}\n\n\terr := nu.UUID.Scan(value)",
+       "blob_sha": "d7fcbf28651697b00add519d8b4402a5ab46ffc2",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "null_test.go",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "// Copyright 2021 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"bytes\"\n\t\"encoding/json\"\n\t\"testing\"\n)\n\nfunc TestNullUUIDScan(t *testing.T) {\n\tvar u UUID\n\tvar nu NullUUID\n\n\tuNilErr := u.Scan(nil)\n\tnuNilErr := nu.Scan(nil)\n\tif uNilErr != nil &&\n\t\tnuNilErr != nil &&\n\t\tuNilErr.Error() != nuNilErr.Error() {\n\t\tt.Errorf(\"expected errors to be equal, got %s, %s\", uNilErr, nuNilErr)\n\t}\n\n\tuInvalidStringErr := u.Scan(\"test\")\n\tnuInvalidStringErr := nu.Scan(\"test\")\n\tif uInvalidStringErr != nil &&\n\t\tnuInvalidStringErr != nil &&\n\t\tuInvalidStringErr.Error() != nuInvalidStringErr.Error() {\n\t\tt.Errorf(\"expected errors to be equal, got %s, %s\", uInvalidStringErr, nuInvalidStringErr)\n\t}\n\n\tvalid := \"12345678-abcd-1234-abcd-0123456789ab\"\n\tuValidErr := u.Scan(valid)\n\tnuValidErr := nu.Scan(valid)\n\tif uValidErr != nuValidErr {\n\t\tt.Errorf(\"expected errors to be equal, got %s, %s\", uValidErr, nuValidErr)\n\t}\n}\n\nfunc TestNullUUIDValue(t *testing.T) {",
+       "blob_sha": "fe0fe8dd20acaed30bf2ef6b21385ebbcb3c8306",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "sql.go",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"database/sql/driver\"\n\t\"fmt\"\n)\n\n// Scan implements sql.Scanner so UUIDs can be read from databases transparently.\n// Currently, database types that map to string and []byte are supported. Please\n// consult database-specific driver documentation for matching types.\nfunc (uuid *UUID) Scan(src interface{}) error {\n\tswitch src := src.(type) {\n\tcase nil:\n\t\treturn nil\n\n\tcase string:\n\t\t// if an empty UUID comes from a table, we return a null UUID\n\t\tif src == \"\" {\n\t\t\treturn nil\n\t\t}\n\n\t\t// see Parse for required string format\n\t\tu, err := Parse(src)\n\t\tif err != nil {\n\t\t\treturn fmt.Errorf(\"Scan: %v\", err)\n\t\t}\n\n\t\t*uuid = u\n\n\tcase []byte:\n\t\t// if an empty UUID comes from a table, we return a null UUID\n\t\tif len(src) == 0 {\n\t\t\treturn nil\n\t\t}\n\n\t\t// assumes a simple slice of bytes if 16 bytes\n\t\t// otherwise attempts to parse",
+       "blob_sha": "2e02ec06c0121d1c82a8b07275091549f9a0c950",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "sql_test.go",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"strings\"\n\t\"testing\"\n)\n\nfunc TestScan(t *testing.T) {\n\tstringTest := \"f47ac10b-58cc-0372-8567-0e02b2c3d479\"\n\tbadTypeTest := 6\n\tinvalidTest := \"f47ac10b-58cc-0372-8567-0e02b2c3d4\"\n\n\tbyteTest := make([]byte, 16)\n\tbyteTestUUID := MustParse(stringTest)\n\tcopy(byteTest, byteTestUUID[:])\n\n\t// sunny day tests\n\n\tvar uuid UUID\n\terr := (&uuid).Scan(stringTest)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\n\terr = (&uuid).Scan([]byte(stringTest))\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\n\terr = (&uuid).Scan(byteTest)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\n\t// bad type tests\n\n\terr = (&uuid).Scan(badTypeTest)",
+       "blob_sha": "929b10f9c9d65a28785c54d9ff70452c1b81472a",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "time.go",
+       "start_line": 1,
+       "end_line": 40,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\npackage uuid\n\nimport (\n\t\"encoding/binary\"\n\t\"sync\"\n\t\"time\"\n)\n\n// A Time represents a time as the number of 100's of nanoseconds since 15 Oct\n// 1582.\ntype Time int64\n\nconst (\n\tlillian    = 2299160          // Julian day of 15 Oct 1582\n\tunix       = 2440587          // Julian day of 1 Jan 1970\n\tepoch      = unix - lillian   // Days between epochs\n\tg1582      = epoch * 86400    // seconds between epochs\n\tg1582ns100 = g1582 * 10000000 // 100s of a nanoseconds between epochs\n)\n\nvar (\n\ttimeMu   sync.Mutex\n\tlasttime uint64 // last time we returned\n\tclockSeq uint16 // clock sequence for this run\n\n\ttimeNow = time.Now // for testing\n)\n\n// UnixTime converts t the number of seconds and nanoseconds using the Unix\n// epoch of 1 Jan 1970.\nfunc (t Time) UnixTime() (sec, nsec int64) {\n\tsec = int64(t - g1582ns100)\n\tnsec = (sec % 10000000) * 100\n\tsec /= 10000000\n\treturn sec, nsec\n}\n",
+       "blob_sha": "efa4d42f2b5830e4ab6a2eab46ba622cacb9af92",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      }
+     ],
+     "terms": [
+      "uuid",
+      "Parse",
+      "ParseBytes",
+      "Validate",
+      "validation",
+      "urn",
+      "braces",
+      "prefix"
+     ],
+     "history": "2d3c2a9 feat: Generate V6 from custom time (#172)\n0e97ed3 feat: add error types for better validation (#166)\nd55c313 docs: upd links to rfc9562 (#162)\ne8d82d3 feat: add Compare function (#163)\n53dda83 fix: incorrect timestamp in uuid v6 (#161)",
+     "source_commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d",
+     "warning": "Untrusted repository text. Quotes prove source provenance, not runtime behavior."
+    },
+    "search_round": 1,
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/repository_search-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 150,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:49:58.210666+00:00",
+  "node": "problem_investigation",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "ec0bbefc5f53458d9b93de19a46852bb",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "repository_search",
+   "destination": "queue:normal",
+   "next_node": "problem_investigation",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 151,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:49:58.484600+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "3785274b4eb7462fa18b851f71997b96",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "problem_investigation",
+   "model_key": "a"
+  }
+ },
+ {
+  "seq": 152,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:49:58.581964+00:00",
+  "node": "problem_investigation",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "3785274b4eb7462fa18b851f71997b96",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "problem_investigation",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "repository_search:0:g1:s0:v0:r2": 1,
+     "problem_investigation:0:g1:s1:v0:r2": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 153,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:49:58.583296+00:00",
+  "node": "root_investigation",
+  "kind": "model_assigned",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "3785274b4eb7462fa18b851f71997b96",
+   "parent_task_id": "GE-EABBDB96",
+   "model_key": "a",
+   "model_id": "qwen3.8-27b",
+   "role": "root_investigation",
+   "graph_node": "problem_investigation",
+   "operation": "OpenCode structured proposal",
+   "request_sha256": "1bcc02f53067924dd4dba6a007abb7b6f231577cc1e840d2a9741c367159bc92"
+  }
+ },
+ {
+  "seq": 154,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:50:56.105846+00:00",
+  "node": "problem_investigation",
+  "kind": "worker_recovered",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "3785274b4eb7462fa18b851f71997b96",
+   "parent_task_id": "GE-EABBDB96"
+  }
+ },
+ {
+  "seq": 155,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:50:58.181408+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "871386db00ea4f73872ff71d430ecc43",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "problem_investigation",
+   "model_key": "a"
+  }
+ },
+ {
+  "seq": 156,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:50:58.280168+00:00",
+  "node": "problem_investigation",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "871386db00ea4f73872ff71d430ecc43",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "problem_investigation",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "repository_search:0:g1:s0:v0:r2": 1,
+     "problem_investigation:0:g1:s1:v0:r2": 2
+    }
+   }
+  }
+ },
+ {
+  "seq": 157,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:50:58.281984+00:00",
+  "node": "root_investigation",
+  "kind": "model_assigned",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "871386db00ea4f73872ff71d430ecc43",
+   "parent_task_id": "GE-EABBDB96",
+   "model_key": "a",
+   "model_id": "qwen3.8-27b",
+   "role": "root_investigation",
+   "graph_node": "problem_investigation",
+   "operation": "OpenCode structured proposal",
+   "request_sha256": "1bcc02f53067924dd4dba6a007abb7b6f231577cc1e840d2a9741c367159bc92"
+  }
+ },
+ {
+  "seq": 158,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:17.439327+00:00",
+  "node": "root_investigation",
+  "kind": "model_call",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "871386db00ea4f73872ff71d430ecc43",
+   "parent_task_id": "GE-EABBDB96",
+   "model_key": "a",
+   "model_id": "qwen3.8-27b",
+   "role": "root_investigation",
+   "run_id": "33746956c519460b",
+   "attempt": 0,
+   "success": true,
+   "tool_calls": 0,
+   "raw_path": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/workers/33746956c519460b/root_investigation-0-2f33e24b/result.json",
+   "input_bytes": 17231,
+   "utc": "2026-10-19T23:50:58.283452+00:00",
+   "opencode_version": "2.0.32",
+   "session_ids": [
+    "ses_ea96ca8c0ffeb61A4JF7i6Jchu"
+   ],
+   "latency_seconds": 19.1545,
+   "artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/workers/33746956c519460b/root_investigation-0-2f33e24b/result.json",
+   "selected_model": "a",
+   "graph_node": "problem_investigation"
+  }
+ },
+ {
+  "seq": 159,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:17.442087+00:00",
+  "node": "problem_investigation",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "871386db00ea4f73872ff71d430ecc43",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "repository_search",
+   "status": "ready",
+   "updates": {
+    "investigation_result": {
+     "title": "UUID Parse Validation Inconsistency",
+     "problem_statement": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. The investigation must determine which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+     "expected_behaviour": "Parse, ParseBytes, and Validate should consistently reject non-standard UUID string formats such as those wrapped in braces or prefixed with urn:.",
+     "observed_behaviour": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix.",
+     "findings": [
+      {
+       "file": "uuid.go",
+       "line": 18,
+       "quote": "// A UUID is a 128 bit (16 byte) Universal Unique IDentifier as defined in RFC",
+       "observation": "The UUID type is defined as a 16-byte array, but the provided excerpt does not contain the Parse, ParseBytes, or Validate function implementations."
+      },
+      {
+       "file": "sql.go",
+       "line": 27,
+       "quote": "u, err := Parse(src)",
+       "observation": "The Scan method delegates string parsing to Parse, indicating that Parse is the primary entry point for string-based UUID validation."
+      },
+      {
+       "file": "uuid_test.go",
+       "line": 27,
+       "quote": "{f47ac10b-58cc-0372-8567-0e02b2c3d479, 0, RFC4122, true},",
+       "observation": "The test data includes standard hyphenated UUID formats, but the provided excerpt does not include test cases for braces, urn prefixes, or raw hex formats."
+      }
+     ],
+     "root_cause_hypothesis": "The provided excerpts do not contain the source code for the Parse, ParseBytes, or Validate functions. Therefore, it is impossible to determine from the supplied evidence whether Parse accepts non-standard formats like braces or urn prefixes, or whether its validation logic is inconsistent with ParseBytes or Validate.",
+     "reproduction_steps": [
+      "Call uuid.Parse with a string wrapped in braces, e.g., {f47ac10b-58cc-0372-8567-0e02b2c3d479}.",
+      "Call uuid.Parse with a string prefixed with urn, e.g., urn:uuid:f47ac10b-58cc-0372-8567-0e02b2c3d479.",
+      "Compare the acceptance/rejection behavior of Parse against ParseBytes and Validate for the same inputs."
+     ],
+     "proposed_solution": "No code changes can be proposed because the relevant function implementations are missing from the provided excerpts.",
+     "acceptance_criteria": [
+      "Parse, ParseBytes, and Validate must consistently reject UUID strings wrapped in braces.",
+      "Parse, ParseBytes, and Validate must consistently reject UUID strings with a urn: prefix.",
+      "Parse, ParseBytes, and Validate must consistently reject raw 32-character hex strings without hyphens if that is the intended strict format."
+     ],
+     "validation_plan": [
+      "Add unit tests to uuid_test.go that explicitly test Parse, ParseBytes, and Validate with brace-wrapped, urn-prefixed, and raw hex inputs.",
+      "Verify that all three functions return the same error or success status for each non-standard input format."
+     ],
+     "limitations": [
+      "The provided excerpts do not include the source code for Parse, ParseBytes, or Validate.",
+      "No runtime logs or reproduction receipt is available to confirm actual behavior.",
+      "The test file excerpt does not include test cases for the specific non-standard formats reported by users."
+     ],
+     "questions": [
+      "Can you provide the source code for the Parse, ParseBytes, and Validate functions from uuid.go or related files?",
+      "Can you provide the full uuid_test.go file to see if there are existing tests for non-standard formats?"
+     ],
+     "search_terms": [
+      "func Parse(",
+      "func ParseBytes(",
+      "func (u UUID) Validate(",
+      "strings.TrimPrefix",
+      "strings.TrimLeft",
+      "urn:uuid:",
+      "strings.HasPrefix"
+     ],
+     "next_action": "additional_search",
+     "confidence": 0.2
+    },
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/problem_investigation-0-2.json"
+   }
+  }
+ },
+ {
+  "seq": 160,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:17.444420+00:00",
+  "node": "repository_search",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "871386db00ea4f73872ff71d430ecc43",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "problem_investigation",
+   "destination": "queue:normal",
+   "next_node": "repository_search",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 161,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:17.478420+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "21ba7ed277674eb1a56fa8ea1fa45d64",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "repository_search",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 162,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:17.596830+00:00",
+  "node": "repository_search",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "21ba7ed277674eb1a56fa8ea1fa45d64",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "repository_search",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "repository_search:0:g1:s0:v0:r2": 1,
+     "problem_investigation:0:g1:s1:v0:r2": 2,
+     "repository_search:0:g1:s1:v0:r2": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 163,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:18.260565+00:00",
+  "node": "repository_search",
+  "kind": "repository_tool_result",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "21ba7ed277674eb1a56fa8ea1fa45d64",
+   "parent_task_id": "GE-EABBDB96",
+   "operation": "git grep/show/log",
+   "files": [
+    "uuid.go",
+    "uuid_test.go",
+    "dce.go",
+    ".github/release-please.yml",
+    ".github/workflows/apidiff.yaml",
+    ".github/workflows/tests.yaml",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "README.md",
+    "doc.go"
+   ],
+   "source_commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+  }
+ },
+ {
+  "seq": 164,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:18.263307+00:00",
+  "node": "repository_search",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "21ba7ed277674eb1a56fa8ea1fa45d64",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "problem_investigation",
+   "status": "ready",
+   "updates": {
+    "retrieved": {
+     "excerpts": [
+      {
+       "file": "uuid.go",
+       "start_line": 81,
+       "end_line": 121,
+       "text": "// IsInvalidLengthError is matcher function for custom error invalidLengthError\nfunc IsInvalidLengthError(err error) bool {\n\treturn errors.Is(err, ErrInvalidLength)\n}\n\n// Parse decodes s into a UUID or returns an error if it cannot be parsed.  Both\n// the standard UUID forms defined in RFC 9562\n// (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx and\n// urn:uuid:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) are decoded.  In addition,\n// Parse accepts non-standard strings such as the raw hex encoding\n// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx and 38 byte \"Microsoft style\" encodings,\n// e.g.  {xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}.  Only the middle 36 bytes are\n// examined in the latter case.  Parse should not be used to validate strings as\n// it parses non-standard encodings as indicated above.\nfunc Parse(s string) (UUID, error) {\n\tvar uuid UUID\n\tswitch len(s) {\n\t// xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\n\tcase 36:\n\n\t// urn:uuid:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\n\tcase 36 + 9:\n\t\tif !strings.EqualFold(s[:9], \"urn:uuid:\") {\n\t\t\treturn uuid, URNPrefixError{s[:9]}\n\t\t}\n\t\ts = s[9:]\n\n\t// {xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}\n\tcase 36 + 2:\n\t\ts = s[1:]\n\n\t// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\tcase 32:\n\t\tvar ok bool\n\t\tfor i := range uuid {\n\t\t\tuuid[i], ok = xtob(s[i*2], s[i*2+1])\n\t\t\tif !ok {\n\t\t\t\treturn uuid, ErrInvalidUUIDFormat\n\t\t\t}\n\t\t}\n\t\treturn uuid, nil",
+       "blob_sha": "dc75ceefca17f2497d1ac8d99d366251924d2189",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "uuid_test.go",
+       "start_line": 36,
+       "end_line": 76,
+       "text": "\t{\"f47ac10b-58cc-9372-8567-0e02b2c3d479\", 9, RFC4122, true},\n\t{\"f47ac10b-58cc-a372-8567-0e02b2c3d479\", 10, RFC4122, true},\n\t{\"f47ac10b-58cc-b372-8567-0e02b2c3d479\", 11, RFC4122, true},\n\t{\"f47ac10b-58cc-c372-8567-0e02b2c3d479\", 12, RFC4122, true},\n\t{\"f47ac10b-58cc-d372-8567-0e02b2c3d479\", 13, RFC4122, true},\n\t{\"f47ac10b-58cc-e372-8567-0e02b2c3d479\", 14, RFC4122, true},\n\t{\"f47ac10b-58cc-f372-8567-0e02b2c3d479\", 15, RFC4122, true},\n\n\t{\"urn:uuid:f47ac10b-58cc-4372-0567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"URN:UUID:f47ac10b-58cc-4372-0567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-0567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-1567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-2567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-3567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-4567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-5567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-6567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-7567-0e02b2c3d479\", 4, Reserved, true},\n\t{\"f47ac10b-58cc-4372-8567-0e02b2c3d479\", 4, RFC4122, true},\n\t{\"f47ac10b-58cc-4372-9567-0e02b2c3d479\", 4, RFC4122, true},\n\t{\"f47ac10b-58cc-4372-a567-0e02b2c3d479\", 4, RFC4122, true},\n\t{\"f47ac10b-58cc-4372-b567-0e02b2c3d479\", 4, RFC4122, true},\n\t{\"f47ac10b-58cc-4372-c567-0e02b2c3d479\", 4, Microsoft, true},\n\t{\"f47ac10b-58cc-4372-d567-0e02b2c3d479\", 4, Microsoft, true},\n\t{\"f47ac10b-58cc-4372-e567-0e02b2c3d479\", 4, Future, true},\n\t{\"f47ac10b-58cc-4372-f567-0e02b2c3d479\", 4, Future, true},\n\n\t{\"f47ac10b158cc-5372-a567-0e02b2c3d479\", 0, Invalid, false},\n\t{\"f47ac10b-58cc25372-a567-0e02b2c3d479\", 0, Invalid, false},\n\t{\"f47ac10b-58cc-53723a567-0e02b2c3d479\", 0, Invalid, false},\n\t{\"f47ac10b-58cc-5372-a56740e02b2c3d479\", 0, Invalid, false},\n\t{\"f47ac10b-58cc-5372-a567-0e02-2c3d479\", 0, Invalid, false},\n\t{\"g47ac10b-58cc-4372-a567-0e02b2c3d479\", 0, Invalid, false},\n\n\t{\"{f47ac10b-58cc-0372-8567-0e02b2c3d479}\", 0, RFC4122, true},\n\t{\"{f47ac10b-58cc-0372-8567-0e02b2c3d479\", 0, Invalid, false},\n\t{\"f47ac10b-58cc-0372-8567-0e02b2c3d479}\", 0, Invalid, false},\n\n\t{\"f47ac10b58cc037285670e02b2c3d479\", 0, RFC4122, true},\n\t{\"f47ac10b58cc037285670e02b2c3d4790\", 0, Invalid, false},\n\t{\"f47ac10b58cc037285670e02b2c3d47\", 0, Invalid, false},",
+       "blob_sha": "906ecbe7f8e2b89a63836dfb1fdbcb5763c625e3",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "dce.go",
+       "start_line": 18,
+       "end_line": 58,
+       "text": "\tPerson = Domain(0)\n\tGroup  = Domain(1)\n\tOrg    = Domain(2)\n)\n\n// NewDCESecurity returns a DCE Security (Version 2) UUID.\n//\n// The domain should be one of Person, Group or Org.\n// On a POSIX system the id should be the users UID for the Person\n// domain and the users GID for the Group.  The meaning of id for\n// the domain Org or on non-POSIX systems is site defined.\n//\n// For a given domain/id pair the same token may be returned for up to\n// 7 minutes and 10 seconds.\nfunc NewDCESecurity(domain Domain, id uint32) (UUID, error) {\n\tuuid, err := NewUUID()\n\tif err == nil {\n\t\tuuid[6] = (uuid[6] & 0x0f) | 0x20 // Version 2\n\t\tuuid[9] = byte(domain)\n\t\tbinary.BigEndian.PutUint32(uuid[0:], id)\n\t}\n\treturn uuid, err\n}\n\n// NewDCEPerson returns a DCE Security (Version 2) UUID in the person\n// domain with the id returned by os.Getuid.\n//\n//  NewDCESecurity(Person, uint32(os.Getuid()))\nfunc NewDCEPerson() (UUID, error) {\n\treturn NewDCESecurity(Person, uint32(os.Getuid()))\n}\n\n// NewDCEGroup returns a DCE Security (Version 2) UUID in the group\n// domain with the id returned by os.Getgid.\n//\n//  NewDCESecurity(Group, uint32(os.Getgid()))\nfunc NewDCEGroup() (UUID, error) {\n\treturn NewDCESecurity(Group, uint32(os.Getgid()))\n}\n\n// Domain returns the domain for a Version 2 UUID.  Domains are only defined",
+       "blob_sha": "fa820b9d3092b433238026b451eca869387d91fb",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": ".github/release-please.yml",
+       "start_line": 1,
+       "end_line": 2,
+       "text": "handleGHRelease: true\nreleaseType: go",
+       "blob_sha": "e1bcc3c9b7f29ea58ea89b8f4df052052de426a2",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": ".github/workflows/apidiff.yaml",
+       "start_line": 1,
+       "end_line": 26,
+       "text": "---\nname: apidiff\non:\n  pull_request:\n    branches:\n      - master\npermissions:\n  contents: read\njobs:\n  compat:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/setup-go@v4\n        with:\n          go-version: 1.21\n      - run: go install golang.org/x/exp/cmd/apidiff@latest\n      - uses: actions/checkout@v3\n        with:\n          ref: master\n      - run: apidiff -w uuid.baseline .\n      - uses: actions/checkout@v3\n        with:\n          clean: false\n      - run: |\n          apidiff -incompatible uuid.baseline . > diff.txt\n          cat diff.txt && ! [ -s diff.txt ]",
+       "blob_sha": "37c0b5f9b868b8e281c6c1a1565160f218df8151",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": ".github/workflows/tests.yaml",
+       "start_line": 1,
+       "end_line": 20,
+       "text": "---\nname: tests\non:\n  pull_request:\n    branches:\n      - master\npermissions:\n  contents: read\njobs:\n  unit-tests:\n    strategy:\n      matrix:\n        go-version: [1.19, 1.20.x, 1.21]\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3\n      - uses: actions/setup-go@v4\n        with:\n          go-version: ${{ matrix.go-version }}\n      - run: go test -v ./...",
+       "blob_sha": "138397cb69b73f9c7949c0adc8e12039cb735d19",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "CHANGELOG.md",
+       "start_line": 1,
+       "end_line": 41,
+       "text": "# Changelog\n\n## [1.6.0](https://github.com/google/uuid/compare/v1.5.0...v1.6.0) (2024-01-16)\n\n\n### Features\n\n* add Max UUID constant ([#149](https://github.com/google/uuid/issues/149)) ([c58770e](https://github.com/google/uuid/commit/c58770eb495f55fe2ced6284f93c5158a62e53e3))\n\n\n### Bug Fixes\n\n* fix typo in version 7 uuid documentation ([#153](https://github.com/google/uuid/issues/153)) ([016b199](https://github.com/google/uuid/commit/016b199544692f745ffc8867b914129ecb47ef06))\n* Monotonicity in UUIDv7 ([#150](https://github.com/google/uuid/issues/150)) ([a2b2b32](https://github.com/google/uuid/commit/a2b2b32373ff0b1a312b7fdf6d38a977099698a6))\n\n## [1.5.0](https://github.com/google/uuid/compare/v1.4.0...v1.5.0) (2023-12-12)\n\n\n### Features\n\n* Validate UUID without creating new UUID ([#141](https://github.com/google/uuid/issues/141)) ([9ee7366](https://github.com/google/uuid/commit/9ee7366e66c9ad96bab89139418a713dc584ae29))\n\n## [1.4.0](https://github.com/google/uuid/compare/v1.3.1...v1.4.0) (2023-10-26)\n\n\n### Features\n\n* UUIDs slice type with Strings() convenience method ([#133](https://github.com/google/uuid/issues/133)) ([cd5fbbd](https://github.com/google/uuid/commit/cd5fbbdd02f3e3467ac18940e07e062be1f864b4))\n\n### Fixes\n\n* Clarify that Parse's job is to parse but not necessarily validate strings. (Documents current behavior)\n\n## [1.3.1](https://github.com/google/uuid/compare/v1.3.0...v1.3.1) (2023-08-18)\n\n\n### Bug Fixes\n\n* Use .EqualFold() to parse urn prefixed UUIDs ([#118](https://github.com/google/uuid/issues/118)) ([574e687](https://github.com/google/uuid/commit/574e6874943741fb99d41764c705173ada5293f0))\n\n## Changelog",
+       "blob_sha": "7ec5ac7ea9090372537f98b6d4a206485b902248",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "CONTRIBUTING.md",
+       "start_line": 1,
+       "end_line": 26,
+       "text": "# How to contribute\n\nWe definitely welcome patches and contribution to this project!\n\n### Tips\n\nCommits must be formatted according to the [Conventional Commits Specification](https://www.conventionalcommits.org).\n\nAlways try to include a test case! If it is not possible or not necessary,\nplease explain why in the pull request description.\n\n### Releasing\n\nCommits that would precipitate a SemVer change, as described in the Conventional\nCommits Specification, will trigger [`release-please`](https://github.com/google-github-actions/release-please-action)\nto create a release candidate pull request. Once submitted, `release-please`\nwill create a release.\n\nFor tips on how to work with `release-please`, see its documentation.\n\n### Legal requirements\n\nIn order to protect both you and ourselves, you will need to sign the\n[Contributor License Agreement](https://cla.developers.google.com/clas).\n\nYou may have already signed it for other Google projects.",
+       "blob_sha": "a502fdc515ac9a531558f10a70b32a47615e0c5a",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "README.md",
+       "start_line": 1,
+       "end_line": 21,
+       "text": "# uuid\nThe uuid package generates and inspects UUIDs based on\n[RFC 9562](https://datatracker.ietf.org/doc/html/rfc9562)\nand DCE 1.1: Authentication and Security Services. \n\nThis package is based on the github.com/pborman/uuid package (previously named\ncode.google.com/p/go-uuid).  It differs from these earlier packages in that\na UUID is a 16 byte array rather than a byte slice.  One loss due to this\nchange is the ability to represent an invalid UUID (vs a NIL UUID).\n\n###### Install\n```sh\ngo get github.com/google/uuid\n```\n\n###### Documentation \n[![Go Reference](https://pkg.go.dev/badge/github.com/google/uuid.svg)](https://pkg.go.dev/github.com/google/uuid)\n\nFull `go doc` style documentation for the package can be viewed online without\ninstalling this package by using the GoDoc site here: \nhttps://pkg.go.dev/github.com/google/uuid",
+       "blob_sha": "d78d1caf469561b8d56d713f11ddb43fcc501c0c",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      },
+      {
+       "file": "doc.go",
+       "start_line": 1,
+       "end_line": 12,
+       "text": "// Copyright 2016 Google Inc.  All rights reserved.\n// Use of this source code is governed by a BSD-style\n// license that can be found in the LICENSE file.\n\n// Package uuid generates and inspects UUIDs.\n//\n// UUIDs are based on RFC 9562(obsoletes RFC 4122) and DCE 1.1: Authentication and Security\n// Services.\n//\n// A UUID is a 16 byte (128 bit) array.  UUIDs may be used as keys to\n// maps or compared directly.\npackage uuid",
+       "blob_sha": "6c2ab76b1de49b5b4c8b7f9c7a68e9a801f85724",
+       "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d"
+      }
+     ],
+     "terms": [
+      "func Parse(",
+      "func ParseBytes(",
+      "func (u UUID) Validate(",
+      "strings.TrimPrefix",
+      "strings.TrimLeft",
+      "urn:uuid:",
+      "strings.HasPrefix",
+      "Users"
+     ],
+     "history": "0e97ed3 feat: add error types for better validation (#166)\nd55c313 docs: upd links to rfc9562 (#162)\ne8d82d3 feat: add Compare function (#163)\nb5b9aeb docs: fixing typos (#156)\n0f11ee6 chore(master): release 1.6.0 (#151)",
+     "source_commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d",
+     "warning": "Untrusted repository text. Quotes prove source provenance, not runtime behavior."
+    },
+    "search_round": 2,
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/repository_search-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 165,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:18.266218+00:00",
+  "node": "problem_investigation",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "21ba7ed277674eb1a56fa8ea1fa45d64",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "repository_search",
+   "destination": "queue:normal",
+   "next_node": "problem_investigation",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 166,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:18.491507+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "3c36eea627814f45952460539cff909d",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "problem_investigation",
+   "model_key": "a"
+  }
+ },
+ {
+  "seq": 167,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:18.568531+00:00",
+  "node": "problem_investigation",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "3c36eea627814f45952460539cff909d",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "problem_investigation",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "repository_search:0:g1:s0:v0:r2": 1,
+     "problem_investigation:0:g1:s1:v0:r2": 2,
+     "repository_search:0:g1:s1:v0:r2": 1,
+     "problem_investigation:0:g1:s2:v0:r2": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 168,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:18.570281+00:00",
+  "node": "root_investigation",
+  "kind": "model_assigned",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "3c36eea627814f45952460539cff909d",
+   "parent_task_id": "GE-EABBDB96",
+   "model_key": "a",
+   "model_id": "qwen3.8-27b",
+   "role": "root_investigation",
+   "graph_node": "problem_investigation",
+   "operation": "OpenCode structured proposal",
+   "request_sha256": "66a56ab079dd51f200f4d13c611db8c6d53257b645df8d64d37c6bbcfb4e38c8"
+  }
+ },
+ {
+  "seq": 169,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:39.352564+00:00",
+  "node": "root_investigation",
+  "kind": "model_call",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "3c36eea627814f45952460539cff909d",
+   "parent_task_id": "GE-EABBDB96",
+   "model_key": "a",
+   "model_id": "qwen3.8-27b",
+   "role": "root_investigation",
+   "run_id": "33746956c519460b",
+   "attempt": 0,
+   "success": true,
+   "tool_calls": 0,
+   "raw_path": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/workers/33746956c519460b/root_investigation-0-b560d304/result.json",
+   "input_bytes": 15532,
+   "utc": "2026-10-19T23:51:18.573023+00:00",
+   "opencode_version": "2.0.32",
+   "session_ids": [
+    "ses_ea96c596bffetWeezPD3Pbg2Vq"
+   ],
+   "latency_seconds": 20.7781,
+   "artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/workers/33746956c519460b/root_investigation-0-b560d304/result.json",
+   "selected_model": "a",
+   "graph_node": "problem_investigation"
+  }
+ },
+ {
+  "seq": 170,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:39.354875+00:00",
+  "node": "problem_investigation",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "3c36eea627814f45952460539cff909d",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "ticket_enhancement",
+   "status": "ready",
+   "updates": {
+    "investigation_result": {
+     "title": "UUID Parse Validation Inconsistency",
+     "problem_statement": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. The investigation must determine which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+     "expected_behaviour": "The user expects uuid.Parse to reject non-standard input formats such as strings wrapped in braces or with a urn prefix, or at least to behave consistently with ParseBytes and Validate.",
+     "observed_behaviour": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix.",
+     "findings": [
+      {
+       "file": "uuid.go",
+       "line": 86,
+       "quote": "// Parse decodes s into a UUID or returns an error if it cannot be parsed.  Both",
+       "observation": "The doc comment for Parse explicitly states it decodes both standard and non-standard forms."
+      },
+      {
+       "file": "uuid.go",
+       "line": 89,
+       "quote": "// Parse accepts non-standard strings such as the raw hex encoding",
+       "observation": "The doc comment confirms Parse accepts non-standard strings including raw hex."
+      },
+      {
+       "file": "uuid.go",
+       "line": 91,
+       "quote": "// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx and 38 byte \u201cMicrosoft style\u201d encodings,",
+       "observation": "The doc comment confirms Parse accepts 38 byte Microsoft style encodings with braces."
+      },
+      {
+       "file": "uuid.go",
+       "line": 93,
+       "quote": "// it parses non-standard encodings as indicated above.",
+       "observation": "The doc comment explicitly warns that Parse should not be used to validate strings."
+      },
+      {
+       "file": "uuid.go",
+       "line": 102,
+       "quote": "case 36 + 9:",
+       "observation": "Parse handles 45-character strings (36 + 9) for URN prefix."
+      },
+      {
+       "file": "uuid.go",
+       "line": 103,
+       "quote": "if !strings.EqualFold(s[:9], \u201curn:uuid:\u201d) {",
+       "observation": "Parse checks for the urn:uuid: prefix case-insensitively."
+      }
+     ],
+     "root_cause_hypothesis": "The root cause is a mismatch between user expectations and the documented behavior of Parse. Parse is intentionally designed to accept non-standard encodings (braces, URN prefix, raw hex) as documented in uuid.go lines 86-94, but users may expect it to behave as a strict validator. The inconsistency with Validate (which likely only accepts standard RFC 9562 forms) is by design, as Parse is for decoding and Validate is for strict validation.",
+     "reproduction_steps": [
+      "Call uuid.Parse with a string wrapped in braces, e.g., \u201c{f47ac10b-58cc-0372-8567-0e02b2c3d479}\u201d.",
+      "Call uuid.Parse with a string prefixed with urn:uuid:, e.g., \u201curn:uuid:f47ac10b-58cc-4372-0567-0e02b2c3d479\u201d.",
+      "Call uuid.Parse with a raw 32-character hex string, e.g., \u201cf47ac10b58cc037285670e02b2c3d479\u201d.",
+      "Compare results with uuid.Validate on the same inputs."
+     ],
+     "proposed_solution": "No code change is required if the current behavior is intentional. The documentation in uuid.go lines 86-94 already warns that Parse should not be used for validation. If users need strict validation, they should use uuid.Validate instead. If the behavior is considered a bug, Parse could be modified to reject non-standard forms, but this would be a breaking change and contradict the documented intent.",
+     "acceptance_criteria": [
+      "uuid.Parse accepts strings wrapped in braces, with urn:uuid: prefix, and raw 32-character hex strings as documented.",
+      "uuid.Validate rejects non-standard forms that Parse accepts, if strict validation is required.",
+      "Documentation clearly distinguishes between Parse (decoding) and Validate (strict validation)."
+     ],
+     "validation_plan": [
+      "Review uuid.go lines 86-94 to confirm documented behavior.",
+      "Review uuid_test.go lines 44-76 to confirm test coverage for non-standard forms.",
+      "Compare Parse and Validate behavior on non-standard inputs to confirm inconsistency is by design."
+     ],
+     "limitations": [
+      "No runtime logs or reproduction receipt is available; behavior is inferred from source code and test cases only.",
+      "The exact implementation of Validate is not provided in the excerpts, so its behavior on non-standard forms cannot be directly verified."
+     ],
+     "questions": [
+      "Should Parse be modified to reject non-standard forms, or is the current behavior (accepting them) intentional and documented?",
+      "Is there a specific use case where users expect Parse to behave as a strict validator?"
+     ],
+     "search_terms": [
+      "func Parse(",
+      "func ParseBytes(",
+      "func (u UUID) Validate(",
+      "strings.TrimPrefix",
+      "strings.TrimLeft",
+      "urn:uuid:",
+      "strings.HasPrefix",
+      "Users"
+     ],
+     "next_action": "clarification",
+     "confidence": 0.85
+    },
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/problem_investigation-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 171,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:39.356681+00:00",
+  "node": "ticket_enhancement",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "3c36eea627814f45952460539cff909d",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "problem_investigation",
+   "destination": "queue:normal",
+   "next_node": "ticket_enhancement",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 172,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:39.791500+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "8dd55d495c2f471d9474d63cbd752820",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "ticket_enhancement",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 173,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:39.912300+00:00",
+  "node": "ticket_enhancement",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "8dd55d495c2f471d9474d63cbd752820",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "ticket_enhancement",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "repository_search:0:g1:s0:v0:r2": 1,
+     "problem_investigation:0:g1:s1:v0:r2": 2,
+     "repository_search:0:g1:s1:v0:r2": 1,
+     "problem_investigation:0:g1:s2:v0:r2": 1,
+     "ticket_enhancement:0:g1:s2:v0:r2": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 174,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:39.915346+00:00",
+  "node": "ticket_enhancement",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "8dd55d495c2f471d9474d63cbd752820",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "reproduction_check",
+   "status": "ready",
+   "updates": {
+    "enhanced": {
+     "title": "UUID Parse Validation Inconsistency",
+     "problem_statement": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. The investigation must determine which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+     "expected_behaviour": "The user expects uuid.Parse to reject non-standard input formats such as strings wrapped in braces or with a urn prefix, or at least to behave consistently with ParseBytes and Validate.",
+     "observed_behaviour": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix.",
+     "findings": [
+      {
+       "file": "uuid.go",
+       "line": 86,
+       "quote": "// Parse decodes s into a UUID or returns an error if it cannot be parsed.  Both",
+       "observation": "The doc comment for Parse explicitly states it decodes both standard and non-standard forms."
+      },
+      {
+       "file": "uuid.go",
+       "line": 89,
+       "quote": "// Parse accepts non-standard strings such as the raw hex encoding",
+       "observation": "The doc comment confirms Parse accepts non-standard strings including raw hex."
+      },
+      {
+       "file": "uuid.go",
+       "line": 91,
+       "quote": "// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx and 38 byte \u201cMicrosoft style\u201d encodings,",
+       "observation": "The doc comment confirms Parse accepts 38 byte Microsoft style encodings with braces."
+      },
+      {
+       "file": "uuid.go",
+       "line": 93,
+       "quote": "// it parses non-standard encodings as indicated above.",
+       "observation": "The doc comment explicitly warns that Parse should not be used to validate strings."
+      },
+      {
+       "file": "uuid.go",
+       "line": 102,
+       "quote": "case 36 + 9:",
+       "observation": "Parse handles 45-character strings (36 + 9) for URN prefix."
+      },
+      {
+       "file": "uuid.go",
+       "line": 103,
+       "quote": "if !strings.EqualFold(s[:9], \u201curn:uuid:\u201d) {",
+       "observation": "Parse checks for the urn:uuid: prefix case-insensitively."
+      }
+     ],
+     "root_cause_hypothesis": "The root cause is a mismatch between user expectations and the documented behavior of Parse. Parse is intentionally designed to accept non-standard encodings (braces, URN prefix, raw hex) as documented in uuid.go lines 86-94, but users may expect it to behave as a strict validator. The inconsistency with Validate (which likely only accepts standard RFC 9562 forms) is by design, as Parse is for decoding and Validate is for strict validation.",
+     "reproduction_steps": [
+      "Call uuid.Parse with a string wrapped in braces, e.g., \u201c{f47ac10b-58cc-0372-8567-0e02b2c3d479}\u201d.",
+      "Call uuid.Parse with a string prefixed with urn:uuid:, e.g., \u201curn:uuid:f47ac10b-58cc-4372-0567-0e02b2c3d479\u201d.",
+      "Call uuid.Parse with a raw 32-character hex string, e.g., \u201cf47ac10b58cc037285670e02b2c3d479\u201d.",
+      "Compare results with uuid.Validate on the same inputs."
+     ],
+     "proposed_solution": "No code change is required if the current behavior is intentional. The documentation in uuid.go lines 86-94 already warns that Parse should not be used for validation. If users need strict validation, they should use uuid.Validate instead. If the behavior is considered a bug, Parse could be modified to reject non-standard forms, but this would be a breaking change and contradict the documented intent.",
+     "acceptance_criteria": [
+      "uuid.Parse accepts strings wrapped in braces, with urn:uuid: prefix, and raw 32-character hex strings as documented.",
+      "uuid.Validate rejects non-standard forms that Parse accepts, if strict validation is required.",
+      "Documentation clearly distinguishes between Parse (decoding) and Validate (strict validation)."
+     ],
+     "validation_plan": [
+      "Review uuid.go lines 86-94 to confirm documented behavior.",
+      "Review uuid_test.go lines 44-76 to confirm test coverage for non-standard forms.",
+      "Compare Parse and Validate behavior on non-standard inputs to confirm inconsistency is by design."
+     ],
+     "limitations": [
+      "No runtime logs or reproduction receipt is available; behavior is inferred from source code and test cases only.",
+      "The exact implementation of Validate is not provided in the excerpts, so its behavior on non-standard forms cannot be directly verified."
+     ],
+     "questions": [
+      "Should Parse be modified to reject non-standard forms, or is the current behavior (accepting them) intentional and documented?",
+      "Is there a specific use case where users expect Parse to behave as a strict validator?"
+     ],
+     "search_terms": [
+      "func Parse(",
+      "func ParseBytes(",
+      "func (u UUID) Validate(",
+      "strings.TrimPrefix",
+      "strings.TrimLeft",
+      "urn:uuid:",
+      "strings.HasPrefix",
+      "Users"
+     ],
+     "next_action": "clarification",
+     "confidence": 0.85,
+     "original_user_description": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. Investigate which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+     "source_commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d",
+     "root_cause_status": "hypothesis",
+     "evidence_status": "Proposal only; deterministic reference validation is recorded separately",
+     "affected_components": [
+      "uuid.go"
+     ],
+     "observed_behaviour_attribution": "User report and source inspection; runtime reproduction is recorded separately"
+    },
+    "revision": 3,
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/ticket_enhancement-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 175,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:39.917531+00:00",
+  "node": "reproduction_check",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "8dd55d495c2f471d9474d63cbd752820",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "ticket_enhancement",
+   "destination": "queue:normal",
+   "next_node": "reproduction_check",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 176,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:40.306703+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "0e10959d5d3d4052b0d2c4647c42fe41",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "reproduction_check",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 177,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:40.393849+00:00",
+  "node": "reproduction_check",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "0e10959d5d3d4052b0d2c4647c42fe41",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "reproduction_check",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "repository_search:0:g1:s0:v0:r2": 1,
+     "problem_investigation:0:g1:s1:v0:r2": 2,
+     "repository_search:0:g1:s1:v0:r2": 1,
+     "problem_investigation:0:g1:s2:v0:r2": 1,
+     "ticket_enhancement:0:g1:s2:v0:r2": 1,
+     "reproduction_check:0:g1:s2:v0:r3": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 178,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:40.395973+00:00",
+  "node": "reproduction_check",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "0e10959d5d3d4052b0d2c4647c42fe41",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "finding_validation",
+   "status": "ready",
+   "updates": {
+    "reproduction": {
+     "executed": false,
+     "passed": null,
+     "reason": "Read-only investigation; repository code was not executed"
+    },
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/reproduction_check-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 179,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:40.398077+00:00",
+  "node": "finding_validation",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "0e10959d5d3d4052b0d2c4647c42fe41",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "reproduction_check",
+   "destination": "queue:normal",
+   "next_node": "finding_validation",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 180,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:40.818010+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "96b790eaff964275a1e5c62831bbeb35",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "finding_validation",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 181,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:40.903671+00:00",
+  "node": "finding_validation",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "96b790eaff964275a1e5c62831bbeb35",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "finding_validation",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "repository_search:0:g1:s0:v0:r2": 1,
+     "problem_investigation:0:g1:s1:v0:r2": 2,
+     "repository_search:0:g1:s1:v0:r2": 1,
+     "problem_investigation:0:g1:s2:v0:r2": 1,
+     "ticket_enhancement:0:g1:s2:v0:r2": 1,
+     "reproduction_check:0:g1:s2:v0:r3": 1,
+     "finding_validation:0:g1:s2:v0:r3": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 182,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:40.906806+00:00",
+  "node": "finding_validation",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "96b790eaff964275a1e5c62831bbeb35",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "ticket_finalisation",
+   "status": "ready",
+   "updates": {
+    "finding_validation": {
+     "source_references_valid": true,
+     "verified_references": 6,
+     "rejected": [],
+     "runtime_causality_verified": false,
+     "root_cause_status": "hypothesis",
+     "quote_format_corrections": [
+      {
+       "file": "uuid.go",
+       "line": 89,
+       "corrected_line": 90,
+       "proposed_quote": "// Parse accepts non-standard strings such as the raw hex encoding",
+       "captured_quote": "// Parse accepts non-standard strings such as the raw hex encoding",
+       "kind": "line_offset"
+      },
+      {
+       "file": "uuid.go",
+       "line": 91,
+       "proposed_quote": "// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx and 38 byte \u201cMicrosoft style\u201d encodings,",
+       "captured_quote": "// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx and 38 byte \"Microsoft style\" encodings,",
+       "kind": "typographic_quotes"
+      },
+      {
+       "file": "uuid.go",
+       "line": 93,
+       "corrected_line": 94,
+       "proposed_quote": "// it parses non-standard encodings as indicated above.",
+       "captured_quote": "// it parses non-standard encodings as indicated above.",
+       "kind": "line_offset"
+      },
+      {
+       "file": "uuid.go",
+       "line": 103,
+       "proposed_quote": "if !strings.EqualFold(s[:9], \u201curn:uuid:\u201d) {",
+       "captured_quote": "if !strings.EqualFold(s[:9], \"urn:uuid:\") {",
+       "kind": "typographic_quotes"
+      }
+     ]
+    },
+    "validation_round": 0,
+    "enhanced": {
+     "title": "UUID Parse Validation Inconsistency",
+     "problem_statement": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. The investigation must determine which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+     "expected_behaviour": "The user expects uuid.Parse to reject non-standard input formats such as strings wrapped in braces or with a urn prefix, or at least to behave consistently with ParseBytes and Validate.",
+     "observed_behaviour": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix.",
+     "findings": [
+      {
+       "file": "uuid.go",
+       "line": 86,
+       "quote": "// Parse decodes s into a UUID or returns an error if it cannot be parsed.  Both",
+       "observation": "The doc comment for Parse explicitly states it decodes both standard and non-standard forms."
+      },
+      {
+       "file": "uuid.go",
+       "line": 90,
+       "quote": "// Parse accepts non-standard strings such as the raw hex encoding",
+       "observation": "The doc comment confirms Parse accepts non-standard strings including raw hex."
+      },
+      {
+       "file": "uuid.go",
+       "line": 91,
+       "quote": "// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx and 38 byte \"Microsoft style\" encodings,",
+       "observation": "The doc comment confirms Parse accepts 38 byte Microsoft style encodings with braces."
+      },
+      {
+       "file": "uuid.go",
+       "line": 94,
+       "quote": "// it parses non-standard encodings as indicated above.",
+       "observation": "The doc comment explicitly warns that Parse should not be used to validate strings."
+      },
+      {
+       "file": "uuid.go",
+       "line": 102,
+       "quote": "case 36 + 9:",
+       "observation": "Parse handles 45-character strings (36 + 9) for URN prefix."
+      },
+      {
+       "file": "uuid.go",
+       "line": 103,
+       "quote": "if !strings.EqualFold(s[:9], \"urn:uuid:\") {",
+       "observation": "Parse checks for the urn:uuid: prefix case-insensitively."
+      }
+     ],
+     "root_cause_hypothesis": "The root cause is a mismatch between user expectations and the documented behavior of Parse. Parse is intentionally designed to accept non-standard encodings (braces, URN prefix, raw hex) as documented in uuid.go lines 86-94, but users may expect it to behave as a strict validator. The inconsistency with Validate (which likely only accepts standard RFC 9562 forms) is by design, as Parse is for decoding and Validate is for strict validation.",
+     "reproduction_steps": [
+      "Call uuid.Parse with a string wrapped in braces, e.g., \u201c{f47ac10b-58cc-0372-8567-0e02b2c3d479}\u201d.",
+      "Call uuid.Parse with a string prefixed with urn:uuid:, e.g., \u201curn:uuid:f47ac10b-58cc-4372-0567-0e02b2c3d479\u201d.",
+      "Call uuid.Parse with a raw 32-character hex string, e.g., \u201cf47ac10b58cc037285670e02b2c3d479\u201d.",
+      "Compare results with uuid.Validate on the same inputs."
+     ],
+     "proposed_solution": "No code change is required if the current behavior is intentional. The documentation in uuid.go lines 86-94 already warns that Parse should not be used for validation. If users need strict validation, they should use uuid.Validate instead. If the behavior is considered a bug, Parse could be modified to reject non-standard forms, but this would be a breaking change and contradict the documented intent.",
+     "acceptance_criteria": [
+      "uuid.Parse accepts strings wrapped in braces, with urn:uuid: prefix, and raw 32-character hex strings as documented.",
+      "uuid.Validate rejects non-standard forms that Parse accepts, if strict validation is required.",
+      "Documentation clearly distinguishes between Parse (decoding) and Validate (strict validation)."
+     ],
+     "validation_plan": [
+      "Review uuid.go lines 86-94 to confirm documented behavior.",
+      "Review uuid_test.go lines 44-76 to confirm test coverage for non-standard forms.",
+      "Compare Parse and Validate behavior on non-standard inputs to confirm inconsistency is by design."
+     ],
+     "limitations": [
+      "No runtime logs or reproduction receipt is available; behavior is inferred from source code and test cases only.",
+      "The exact implementation of Validate is not provided in the excerpts, so its behavior on non-standard forms cannot be directly verified."
+     ],
+     "questions": [
+      "Should Parse be modified to reject non-standard forms, or is the current behavior (accepting them) intentional and documented?",
+      "Is there a specific use case where users expect Parse to behave as a strict validator?"
+     ],
+     "search_terms": [
+      "func Parse(",
+      "func ParseBytes(",
+      "func (u UUID) Validate(",
+      "strings.TrimPrefix",
+      "strings.TrimLeft",
+      "urn:uuid:",
+      "strings.HasPrefix",
+      "Users"
+     ],
+     "next_action": "clarification",
+     "confidence": 0.85,
+     "original_user_description": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. Investigate which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+     "source_commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d",
+     "root_cause_status": "hypothesis",
+     "evidence_status": "Proposal only; deterministic reference validation is recorded separately",
+     "affected_components": [
+      "uuid.go"
+     ],
+     "observed_behaviour_attribution": "User report and source inspection; runtime reproduction is recorded separately"
+    },
+    "revision": 4,
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/finding_validation-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 183,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:40.909177+00:00",
+  "node": "ticket_finalisation",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "96b790eaff964275a1e5c62831bbeb35",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "finding_validation",
+   "destination": "queue:normal",
+   "next_node": "ticket_finalisation",
+   "status": "ready"
+  }
+ },
+ {
+  "seq": 184,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:41.328644+00:00",
+  "node": "queue:normal",
+  "kind": "queue_dispatched",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "4dfda7cd0c684b268ffc5034d1a41c9e",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "queue:normal",
+   "destination": "ticket_finalisation",
+   "model_key": null
+  }
+ },
+ {
+  "seq": 185,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:41.405572+00:00",
+  "node": "ticket_finalisation",
+  "kind": "started",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "4dfda7cd0c684b268ffc5034d1a41c9e",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "ticket_finalisation",
+   "status": "running",
+   "updates": {
+    "attempts": {
+     "repository_search:0:g1:s0:v0:r2": 1,
+     "problem_investigation:0:g1:s1:v0:r2": 2,
+     "repository_search:0:g1:s1:v0:r2": 1,
+     "problem_investigation:0:g1:s2:v0:r2": 1,
+     "ticket_enhancement:0:g1:s2:v0:r2": 1,
+     "reproduction_check:0:g1:s2:v0:r3": 1,
+     "finding_validation:0:g1:s2:v0:r3": 1,
+     "ticket_finalisation:0:g1:s2:v0:r4": 1
+    }
+   }
+  }
+ },
+ {
+  "seq": 186,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:41.407572+00:00",
+  "node": "ticket_finalisation",
+  "kind": "completed",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "4dfda7cd0c684b268ffc5034d1a41c9e",
+   "parent_task_id": "GE-EABBDB96",
+   "next": "ticket_finalisation",
+   "status": "needs_information",
+   "updates": {
+    "intake_phase": "Needs Information",
+    "last_artifact": "/Users/daviddoan/git_code/graph_engineering/.runtime/acceptance-20261020/runs/33746956c519460b/ticket_finalisation-0-1.json"
+   }
+  }
+ },
+ {
+  "seq": 187,
+  "run_id": "33746956c519460b",
+  "at": "2026-10-19T23:51:41.409766+00:00",
+  "node": "ticket_finalisation",
+  "kind": "dispatch_checkpoint",
+  "data": {
+   "ticket_id": "GE-EABBDB96",
+   "execution_attempt_id": "4dfda7cd0c684b268ffc5034d1a41c9e",
+   "parent_task_id": "GE-EABBDB96",
+   "source": "ticket_finalisation",
+   "destination": "queue:clarification",
+   "next_node": "ticket_finalisation",
+   "status": "needs_information"
+  }
+ }
+]

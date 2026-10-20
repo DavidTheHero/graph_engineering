@@ -1,0 +1,50 @@
+{
+  "utc": "2026-10-19T23:50:33Z",
+  "trials": 10,
+  "models": {
+    "a": {
+      "model_id": "qwen3.8-27b",
+      "tier": "large",
+      "reachable": true,
+      "opencode_structured_output": {
+        "trials": 10,
+        "valid": 10,
+        "rate": 1.0,
+        "latency_median_s": 2.0,
+        "latency_max_s": 6.26,
+        "classification_accuracy": 1.0,
+        "failures": []
+      },
+      "native_tool_calling": {
+        "trials": 5,
+        "valid": 5,
+        "rate": 1.0,
+        "latency_median_s": 0.74,
+        "latency_max_s": 7.28,
+        "failures": []
+      }
+    },
+    "b": {
+      "model_id": "docker.io/local/qwen35-4b:8k",
+      "tier": "small",
+      "reachable": true,
+      "opencode_structured_output": {
+        "trials": 10,
+        "valid": 10,
+        "rate": 1.0,
+        "latency_median_s": 4.51,
+        "latency_max_s": 5.24,
+        "classification_accuracy": 1.0,
+        "failures": []
+      },
+      "native_tool_calling": {
+        "trials": 5,
+        "valid": 5,
+        "rate": 1.0,
+        "latency_median_s": 1.2,
+        "latency_max_s": 1.99,
+        "failures": []
+      }
+    }
+  }
+}

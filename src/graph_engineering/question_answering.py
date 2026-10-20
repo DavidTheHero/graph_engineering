@@ -1,6 +1,7 @@
 """Bounded answers to persisted ticket questions using the lightweight worker."""
 from __future__ import annotations
 
+from . import routing
 from .investigation import obj
 from .models import ModelError
 from .report_store import report
@@ -62,9 +63,6 @@ class QuestionAnsweringNodes:
             raise ValueError('Question answering requires one to eight persisted ticket questions')
         if request.get('return_node') == 'question_answering':
             raise ValueError('Question answering cannot return to itself')
-        model=state['config'].get('models', {}).get('b', {})
-        if not model.get('model_id'):
-            raise ModelError('Qwen 4B has no discovered model identifier')
         original=report(self.store.db, state['intake']['ticket_id']) or {}
         prompt={
             'task': ('Answer each ticket question from recorded operator statements or repository evidence. '
@@ -77,14 +75,12 @@ class QuestionAnsweringNodes:
             'operator_notes': _notes(state),
             'repository_evidence': _evidence(state),
         }
-        # This node exists specifically for the bounded 4B worker, independent of
-        # the repository's broader baseline/multimodel routing profile.
-        configured=state['config'].get('model_overrides', {})
-        routed=state | {'config': state['config'] | {'model_overrides': configured | {'question_answering': 'b'}}}
-        result=self.ask(routed, 'question_answering', prompt, QUESTION_ANSWER_SCHEMA, 'b')
+        # routing.SMALL_FIRST_ROLES keeps this bounded worker on the small tier in every profile.
+        result=self.ask(state, 'question_answering', prompt, QUESTION_ANSWER_SCHEMA, routing.SMALL)
+        model=state['config']['models'][self.last_model]
         if [answer['question'] for answer in result['answers']] != questions:
             raise ValueError('Question-answer response did not preserve the persisted questions exactly')
-        artifact=result | {'answered_at': now(), 'model_key': 'b', 'model_id': model['model_id'],
+        artifact=result | {'answered_at': now(), 'model_key': self.last_model, 'model_id': model['model_id'],
                            'proposal_only': True}
         updates={'question_answers': artifact, 'error': request.get('return_error')}
         return updates, request['return_node'], 'blocked'

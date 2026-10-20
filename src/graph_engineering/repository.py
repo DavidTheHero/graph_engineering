@@ -1,19 +1,18 @@
 """Repository adapters and controller-owned Git/test operations. Never shell=True."""
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
 import os
 from pathlib import Path, PurePosixPath
 import re
-import shutil
 import signal
 import subprocess
 import sys
 import tempfile
 import time
-from typing import Callable, Protocol
+from typing import Callable
 
+from .adapters import CODE_SUFFIXES, detect, is_test
 from .runtime import digest, redact, remaining_timeout
 from .processes import background_options
 
@@ -100,79 +99,22 @@ def tracked(repo: Path) -> list[str]:
     return output.split("\0") if output else []
 
 
-@dataclass(frozen=True)
-class Adapter:
-    name: str
-    test_command: list[str]
-    build_commands: list[list[str]]
-    source_suffixes: tuple[str, ...]
-
-
-class RepositoryAdapter(Protocol):
-    name: str
-
-    @staticmethod
-    def detect(repo: Path, files: list[str]) -> Adapter | None: ...
-
-
-class PythonAdapter:
-    name = "python"
-
-    @staticmethod
-    def detect(repo: Path, files: list[str]) -> Adapter | None:
-        if not any(f.endswith(".py") for f in files):
-            return None
-        pytest = any((repo / f).is_file() and "import pytest" in (repo / f).read_text(encoding="utf-8", errors="replace")[:12000]
-                     for f in files if f.endswith(".py") and is_test(f))
-        test = [sys.executable, "-m", "pytest", "-q"] if pytest else [sys.executable, "-m", "unittest", "discover", "-v"]
-        if not pytest and any(f.startswith("tests/") and f.endswith(".py") for f in files):
-            test = [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"]
-        return Adapter("python", test, [], (".py",))
-
-
-class JavaScriptAdapter:
-    name = "javascript"
-
-    @staticmethod
-    def detect(repo: Path, files: list[str]) -> Adapter | None:
-        if "package.json" not in files:
-            return None
-        manifest = json.loads((repo / "package.json").read_text(encoding="utf-8-sig"))
-        scripts = manifest.get("scripts", {})
-        npm = shutil.which("npm")
-        # Windows batch shims are not passed to a shell. Invoke npm's JS CLI with Node.
-        npm_prefix = ["npm"]
-        if os.name == "nt" and npm:
-            npm_js = Path(npm).parent / "node_modules" / "npm" / "bin" / "npm-cli.js"
-            if npm_js.exists():
-                npm_prefix = [shutil.which("node") or "node", str(npm_js)]
-        test = ["node", "--test"] if scripts.get("test") == "node --test" or "test" not in scripts else npm_prefix + ["test"]
-        builds = [npm_prefix + ["run", name] for name in ("build", "lint", "typecheck") if name in scripts]
-        return Adapter("javascript", test, builds, (".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx"))
-
-
-def is_test(path: str) -> bool:
-    p = PurePosixPath(path)
-    name = p.name.lower()
-    return (name.startswith(("test", "spec")) or bool(re.search(r"[._-](?:test|spec)[._-]", name))
-            or bool({part.lower() for part in p.parts} & {"tests", "test", "__tests__", "spec", "specs", "testing", "e2e", "integration_tests"}))
-
-
 def discover(repo: Path) -> dict:
     repo = Path(repo).resolve()
     top = Path(git(repo, "rev-parse", "--show-toplevel")).resolve()
     if repo != top:
         raise ValueError("Supply the Git repository root")
     files = tracked(repo)
-    adapter = JavaScriptAdapter.detect(repo, files) or PythonAdapter.detect(repo, files)
-    if adapter is None:
-        raise ValueError("No supported adapter detected; configure a generic argv test command")
+    adapter, detected = detect(repo, files)
+    suffixes = tuple(dict.fromkeys(suffix for found in detected for suffix in found.source_suffixes))
     default = git(repo, "symbolic-ref", "refs/remotes/origin/HEAD", check=False)
     base = default.removeprefix("refs/remotes/origin/") if default.startswith("refs/") else git(repo, "branch", "--show-current")
     ci = [f for f in files if f.startswith(".github/workflows/")]
     policies = [f for f in files if PurePosixPath(f).name in {"AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "CODEOWNERS"}]
     manifests = [f for f in files if PurePosixPath(f).name in {
-        "pyproject.toml", "package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "requirements.txt", "pytest.ini", "setup.cfg", ".eslintrc.json", "ruff.toml"}]
+        "pyproject.toml", "package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "requirements.txt", "pytest.ini", "setup.cfg", ".eslintrc.json", "ruff.toml",
+        "uv.lock", "poetry.lock", "go.mod", "go.sum", "Cargo.toml", "Cargo.lock", "pom.xml", "build.gradle", "build.gradle.kts",
+        "settings.gradle", "gradlew", "Gemfile", "Gemfile.lock", "Makefile", "bun.lockb", "bun.lock"} or f.endswith((".csproj", ".fsproj", ".sln"))]
     evidence = {}
     for name in (ci + policies + manifests)[:30]:
         path = repo / name
@@ -182,8 +124,10 @@ def discover(repo: Path) -> dict:
             "remote": git(repo, "remote", "get-url", "origin", check=False),
             "git_common_dir": git(repo, "rev-parse", "--git-common-dir"),
             "clean": not bool(git(repo, "status", "--porcelain")), "adapter": adapter.name,
+            "ecosystems": [found.name for found in detected], "package_manager": adapter.package_manager,
+            "adapter_notes": [note for found in detected for note in found.notes], "source_suffixes": list(suffixes),
             "test_command": adapter.test_command, "build_commands": adapter.build_commands,
-            "source_files": [f for f in files if f.endswith(adapter.source_suffixes) and not is_test(f)],
+            "source_files": [f for f in files if f.endswith(suffixes) and not is_test(f)],
             "test_files": [f for f in files if is_test(f)], "ci_files": ci,
             "policy_files": policies, "manifests": manifests, "configuration_evidence": evidence,
             "recent_history": git(repo, "log", "-8", "--format=%H %s"),
@@ -194,6 +138,8 @@ def run_check(repo: Path, argv: list[str], trusted: bool = False, timeout: int =
               cancelled: Callable[[], bool] | None = None) -> dict:
     if not trusted:
         raise PermissionError("Code execution disabled. Explicit trusted_local policy or an external sandbox is required")
+    if not argv:
+        raise ValueError("No test command is configured for this repository; set an explicit test_command argv")
     result = command(argv, repo, timeout, cancelled)
     result["passed"] = result["returncode"] == 0 and not result["timed_out"]
     # An empty test suite must not become evidence of correctness.
@@ -222,7 +168,7 @@ def validate_edits(repo: Path, edits: list[dict], allowed: list[str], max_files:
             raise ValueError("Symlink/escaping path")
         if name not in allowed or is_test(name) or name in seen:
             raise ValueError("Path outside approved implementation scope")
-        if PurePosixPath(name).suffix not in {".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx"}:
+        if PurePosixPath(name).suffix not in CODE_SUFFIXES:
             raise ValueError("Only approved source code may be edited")
         seen.add(name)
     return edits
