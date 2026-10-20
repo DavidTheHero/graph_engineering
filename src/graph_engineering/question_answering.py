@@ -18,8 +18,8 @@ import re
 
 from . import routing
 from .adapters import CODE_SUFFIXES, is_test
-from .investigation import obj, read_blob, retrieve
-from .repository import git
+from .investigation import committed_files, obj, read_blob
+from .repository import command
 from .models import ModelError
 from .report_store import report
 from .runtime import now
@@ -91,9 +91,8 @@ PROPOSAL_ACTOR = 'Qwen 4B (model proposal, verified references)'
 
 
 def source_files(repo, sha, limit=FILE_LIST_CHARACTERS):
-    """Committed source paths (no tests), shallowest first, within a small-model-sized character budget."""
-    names = [n for n in git(Path(repo), 'ls-tree', '-r', '--name-only', sha).splitlines()
-             if n.endswith(CODE_SUFFIXES) and not is_test(n)]
+    """Committed source paths a model may read (no tests, no secret-looking or huge files), shallowest first."""
+    names = [n for n in committed_files(Path(repo), sha) if n.endswith(CODE_SUFFIXES) and not is_test(n)]
     chosen, used = [], 0
     for name in sorted(names, key=lambda n: (n.count('/'), n)):
         if used + len(name) + 1 > limit:
@@ -103,60 +102,81 @@ def source_files(repo, sha, limit=FILE_LIST_CHARACTERS):
     return sorted(chosen)
 
 
-def occurrences(repo, sha, terms, per_term=6):
-    """Which committed files contain each literal term (git grep -l): deterministic evidence of presence/absence."""
-    from .repository import command
-    found = {}
-    for term in terms:
-        result = command(['git', 'grep', '-l', '-I', '-F', '-i', '-e', term, sha, '--'], Path(repo), timeout=15)
-        if result['returncode'] not in (0, 1) or result['timed_out']:
+def search_terms(proposed):
+    """Literal grep phrases: whitespace collapsed, unsafe characters removed, multi-word phrases kept intact.
+
+    A path offered as a term is dropped (paths are chosen through ``files``)."""
+    terms = []
+    for term in proposed:
+        if '/' in term:
             continue
-        names = [line.split(':', 1)[1] for line in result['output'].splitlines() if ':' in line]
-        found[term] = names[:per_term] + ([f'+{len(names) - per_term} more'] if len(names) > per_term else [])
-    return found
+        cleaned = re.sub(r'[^\w .:=()-]', '', ' '.join(term.split())).strip()[:40]
+        if len(cleaned) >= 3 and cleaned.casefold() not in {t.casefold() for t in terms}:
+            terms.append(cleaned)
+    return terms
 
 
 def focused_evidence(repo, sha, terms, picked, limit=EVIDENCE_CHARACTERS):
-    """Numbered lines from the model-picked files first, then from literal-search hits.
+    """Evidence for the small model from ONE literal git grep over committed, filtered files.
 
-    Only lines that contain a term (plus one line of context) are kept; a picked file with no
-    term hit contributes its first lines. Only the given literal terms are searched: generic
-    words from the questions are deliberately not added (they crowd out the real identifiers).
+    The grep output supplies matching lines, the per-term file list (presence/absence evidence) and file
+    ranking. Picked files are read (they passed ``committed_files``) to add one line of context around hits,
+    or their first lines when nothing matched. Returns the bundle and exactly the lines shown, by file and
+    line number, which is what citations are verified against.
     """
-    lowered = [t.casefold() for t in terms]
-    grep = retrieve(Path(repo), sha, terms, ' '.join(picked)) if terms else {'excerpts': []}
-    order = list(dict.fromkeys([*picked, *(e['file'] for e in grep['excerpts'])]))
-    sources, blobs, used = [], {}, 0
+    allowed = committed_files(Path(repo), sha)
+    picked = [name for name in picked if name in allowed]
+    hits, term_files = {}, {term: [] for term in terms}
+    if terms:
+        argv = ['git', 'grep', '-n', '-I', '-i', '-F', *[x for term in terms for x in ('-e', term)], sha, '--']
+        result = command(argv, Path(repo), timeout=20)
+        if result['returncode'] not in (0, 1) or result['timed_out']:
+            raise ValueError('Repository search failed or exceeded its budget')
+        for line in result['output'].splitlines()[:3000]:
+            match = re.match(re.escape(sha) + r':(.+?):(\d+):(.*)$', line)
+            if not match or match[1] not in allowed:
+                continue
+            hits.setdefault(match[1], {})[int(match[2])] = match[3]
+            for term in terms:
+                if term.casefold() in match[3].casefold() and match[1] not in term_files[term]:
+                    term_files[term].append(match[1])
+    order = list(dict.fromkeys([*picked, *sorted(hits, key=lambda n: (-len(hits[n]), n))]))
+    sources, shown, used = [], {}, 0
     for name in order:
-        try:
+        if name in picked:
             lines = read_blob(repo, sha, name).splitlines()
-        except ValueError:
-            continue
-        blobs[name] = lines
-        hits = [i for i, line in enumerate(lines) if any(t in line.casefold() for t in lowered)]
-        keep = sorted({j for i in hits[:6] for j in (i - 1, i, i + 1) if 0 <= j < len(lines)}) or \
-            (list(range(min(12, len(lines)))) if name in picked else [])
-        text = '\n'.join(f'{j + 1}: {lines[j][:160]}' for j in keep)
+            numbers = sorted(hits.get(name, {}))[:6]
+            keep = sorted({j for n in numbers for j in (n - 1, n, n + 1) if 1 <= j <= len(lines)}) \
+                or list(range(1, min(12, len(lines)) + 1))
+            numbered = {j: lines[j - 1] for j in keep}
+        else:
+            numbered = dict(sorted(hits[name].items())[:6])
+        text = '\n'.join(f'{j}: {line[:160]}' for j, line in numbered.items())
         if not text or used + len(text) > limit:
             continue
         # Key is 'sources', not 'files': ask() trims small-model evidence shaped as {path, content} files.
         sources.append({'file': name, 'numbered_lines': text})
+        shown[name] = numbered
         used += len(text)
+    occurrences = {term: files[:6] + ([f'+{len(files) - 6} more'] if len(files) > 6 else [])
+                   for term, files in term_files.items()}
     return {'source_commit': sha, 'terms': terms, 'picked_files': picked, 'sources': sources,
-            'files_containing_term': occurrences(repo, sha, terms)}, blobs
+            'files_containing_term': occurrences}, shown
 
 
-def verify_reference(reference, blobs):
-    """Exact quote on the cited line of a supplied file; a unique match within three lines corrects drift."""
-    lines = blobs.get(reference['file'])
+MIN_QUOTE = 10  # A citation must quote something specific, not "def" or "return".
+
+
+def verify_reference(reference, shown):
+    """The quote must be substantive and appear on a line the model was actually shown (unique ±3 drift allowed)."""
+    lines = shown.get(reference['file'], {})
     quote = reference['quote'].strip()
-    if not lines or not quote:
+    if len(quote) < MIN_QUOTE or not lines:
         return None
-    index = reference['line'] - 1
-    if 0 <= index < len(lines) and quote in lines[index]:
+    if quote in lines.get(reference['line'], ''):
         return reference
-    nearby = [i for i in range(max(0, index - 3), min(len(lines), index + 4)) if quote in lines[i]]
-    return reference | {'line': nearby[0] + 1, 'corrected_from': reference['line']} if len(nearby) == 1 else None
+    nearby = [n for n, text in lines.items() if abs(n - reference['line']) <= 3 and quote in text]
+    return reference | {'line': nearby[0], 'corrected_from': reference['line']} if len(nearby) == 1 else None
 
 
 class QuestionAnsweringNodes:
@@ -206,11 +226,9 @@ class QuestionAnsweringNodes:
             'questions': questions, 'report': str(original.get('original', ''))[:600], 'repository_files': listing},
             SEARCH_SCHEMA, routing.SMALL)
         picked = [f for f in search['files'] if f in listing]  # Never a path the model invented.
-        # File paths are picked through `files`; a path offered as a search term is dropped, not mangled.
-        terms = [re.sub(r'[^\w.:-]', '', t)[:40] for t in search['search_terms'] if '/' not in t]
-        terms = [t for t in terms if len(t) >= 3]
+        terms = search_terms(search['search_terms'])
         # Step 2: deterministic reads and literal search of the committed snapshot, sized for the small model.
-        evidence, blobs = focused_evidence(state['config']['repo'], state['base_sha'], terms, picked)
+        evidence, shown = focused_evidence(state['config']['repo'], state['base_sha'], terms, picked)
         self.store.event(self.run_id, 'question_answering', 'repository_tool_result', {'operation': 'git grep/show',
             'terms': evidence['terms'], 'picked_files': picked, 'files': [f['file'] for f in evidence['sources']],
             'source_commit': state['base_sha']})
@@ -228,7 +246,7 @@ class QuestionAnsweringNodes:
             raise ValueError('Question-answer response did not preserve the persisted questions exactly')
         answers = []
         for answer in result['answers']:
-            checked = [verify_reference(r, blobs) for r in answer['references']]
+            checked = [verify_reference(r, shown) for r in answer['references']]
             verified = [r for r in checked if r]
             usable = (answer['status'] in ('answered_from_repository', 'partially_answered')
                       and bool(verified) and len(verified) == len(checked))

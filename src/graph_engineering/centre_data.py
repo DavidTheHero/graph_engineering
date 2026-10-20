@@ -147,13 +147,14 @@ def snapshot(home):
                 parent = next((t for t in rows if t['run_id']==row['run_id']),None)
                 children[child] = normalize_event(event,parent)
         cursor = tickets.db.execute('SELECT COALESCE(MAX(seq),0) FROM events').fetchone()[0]
+        attention = attention_items(tickets, rows)  # Same read transaction as the tickets above.
         tickets.db.commit()
         return redact({'tickets':result,'children':list(children.values()),'queues':[{'id':k,'label':v,'count':sum(t['queue']==k for t in result)} for k,v in QUEUES.items()],
             'repositories':repositories(tickets),'models':health,'cursor':cursor,'topology':topology(),
             'scheduler':{'paused':tickets.setting('paused'),'workers':tickets.setting('workers'),
                          'active':sum(bool(t['execution_id']) for t in result),'model_capacity':tickets.setting('model_capacity'),
                          'service':tickets.setting('worker_service')},
-            'attention':attention_items(tickets),
+            'attention':attention,
             'statistics':{'completed':sum(t['board_status']=='Done' for t in result),
                           'failed':sum(t['board_status']=='Failed' for t in result),
                           'retried':sum(t['retries']+t['repairs'] for t in result)},

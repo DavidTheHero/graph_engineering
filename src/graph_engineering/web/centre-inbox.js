@@ -50,7 +50,7 @@ function card(item,openTicket,refresh){
   article.append(head,el('h3','inbox-headline',item.headline));
   if(item.context?.length){const list=el('ul','inbox-context');for(const line of item.context)list.append(el('li','',line));article.append(list);}
   const answers=item.questions.map((q,i)=>questionBlock(item,q,i));
-  for(const a of answers)article.append(a.box);
+  for(const a of answers){if(item.questions_readonly)a.input.remove();article.append(a.box);}
   const freeText=el('textarea','inbox-note');freeText.rows=2;freeText.placeholder='Optional note';freeText.hidden=true;
   freeText.setAttribute('aria-label','Note for '+item.ticket_id);
   const actor=el('input','inbox-actor');actor.placeholder='Your name (recorded as approver)';actor.hidden=true;actor.setAttribute('aria-label','Approver name');
@@ -97,8 +97,14 @@ function card(item,openTicket,refresh){
 
 export function renderInbox(openTicket,refresh){
   const root=$('#inbox');
-  // Do not rebuild while the operator is typing in a card: a refresh would steal focus.
-  if(root.contains(document.activeElement)&&['TEXTAREA','INPUT'].includes(document.activeElement.tagName))return;
+  // Do not rebuild while the operator is typing in a card (a refresh would steal focus); rebuild as soon as
+  // focus leaves the cards so a changed revision or action list is never left stale.
+  if(root.contains(document.activeElement)&&['TEXTAREA','INPUT'].includes(document.activeElement.tagName)){
+    if(!root.dataset.pending){root.dataset.pending='1';
+      // If focus moved to another field in the tab, renderInbox simply defers again.
+      root.addEventListener('focusout',()=>setTimeout(()=>{delete root.dataset.pending;renderInbox(openTicket,refresh);},0),{once:true});}
+    return;
+  }
   const items=attentionItems();root.replaceChildren();
   if(!items.length){root.append(el('p','inbox-empty','Nothing needs you right now. Tickets that wait for a decision appear here.'));return;}
   for(const item of items)root.append(card(item,openTicket,refresh));

@@ -54,7 +54,7 @@ function renderHeader(){const data=state.snapshot;const signature=JSON.stringify
 
 async function refresh(){
  if(refreshing){refreshAgain=true;return;}refreshing=true;
- try{const data=await json('/api/centre');state.snapshot=data;renderHeader();refreshTicketSummary();refreshTicketEvidence(refresh,journey);const signature=JSON.stringify([data.tickets,data.children,data.scheduler,data.models,$('#repository').value]);if(signature!==latestSignature){latestSignature=signature;renderViews();}
+ try{const data=await json('/api/centre');state.snapshot=data;renderHeader();refreshTicketSummary();refreshTicketEvidence(refresh,journey);const signature=JSON.stringify([data.tickets,data.children,data.scheduler,data.models,data.attention,data.repositories,$('#repository').value]);if(signature!==latestSignature){latestSignature=signature;renderViews();}
   $('#centre-error').hidden=true;
   if(waitingAnimations.length){animateEvents(waitingAnimations);waitingAnimations=[];}
  }catch(error){showError(error);$('#stream-status').textContent='Read interrupted · showing last snapshot';}

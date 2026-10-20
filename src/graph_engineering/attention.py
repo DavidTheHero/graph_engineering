@@ -9,12 +9,11 @@ or cancelled are never listed.
 """
 from __future__ import annotations
 
-from .scheduling_policy import execution_limits
+from .report_store import INVESTIGATION_BUDGET
 
 INTAKE = "/api/centre/intake-action"
 TICKET = "/api/centre/ticket-action"
 PRIORITY_ORDER = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
-INVESTIGATION_BUDGET = 3  # Mirrors report_commands: at most three further investigations.
 
 
 def _short(text, limit=220):
@@ -33,7 +32,8 @@ def _action(action_id, label, endpoint, payload, *, input=None, primary=False, h
 def item(ticket, *, approved_head=None, original=None, automatic_development=False):
     """The attention item for one ticket row (``Tickets.list()`` shape), or None if nothing is needed."""
     state, status, node = ticket["state"], ticket["status"], ticket["node"]
-    if ticket.get("lease_owner") or ticket.get("cancel") or status in ("cancelled", "ready", "running"):
+    # Working, queued, cancelled or operator-paused (e.g. a rejected merge) tickets need nobody right now.
+    if ticket.get("lease_owner") or ticket.get("cancel") or ticket.get("paused") or status in ("cancelled", "ready", "running"):
         return None
     intake = state["config"].get("run_mode") == "intake"
     developing = state["config"].get("run_mode") == "accepted_development"
@@ -54,10 +54,11 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
         questions = [{"text": q, "proposal": answers.get(q)} for q in draft.get("questions", [])]
         limitations = [_short(x, 160) for x in draft.get("limitations", [])[:2]]
         actions = []
-        if questions:
+        budget_left = generation < INVESTIGATION_BUDGET
+        if questions and budget_left:  # The server refuses clarifications once the budget is used.
             actions.append(intake_action("clarify", "Send answers", input="answers", primary=True,
                                          help="Your answers are recorded as operator input and investigation continues."))
-        if generation < INVESTIGATION_BUDGET:
+        if budget_left:
             if questions:
                 actions.append(intake_action("answer_questions", "Ask Qwen 4B",
                                              help="Proposes answers from the code; only verified references are used."))
@@ -66,8 +67,11 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
         actions.append(intake_action("reject_enhancement", "Reject", confirm="Reject this ticket's enhancement?"))
         return base | {
             "kind": "clarification",
-            "headline": f"Answer {len(questions)} question{'s' * (len(questions) != 1)} so investigation can continue"
-                        if questions else "Investigation needs more information",
+            "headline": ("Investigation budget used: reject, or create a scoped follow-up ticket" if not budget_left else
+                         f"Answer {len(questions)} question{'s' * (len(questions) != 1)} so investigation can continue"
+                         if questions else "Investigation needs more information"),
+            # Without budget the answer boxes would have no action to submit them.
+            **({"questions_readonly": True} if not budget_left else {}),
             "context": [c for c in [f"Hypothesis: {_short(draft.get('root_cause_hypothesis'))}" if draft.get("root_cause_hypothesis") else None,
                                     *[f"Limitation: {x}" for x in limitations],
                                     f"Further investigations used: {generation}/{INVESTIGATION_BUDGET}"] if c],
@@ -95,6 +99,8 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
             actions.append(intake_action("reinvestigate", "Investigate further", input="text"))
         if status == "ready_for_review":
             actions.append(intake_action("reject_enhancement", "Reject", confirm="Reject this enhancement?"))
+        if not actions:
+            return None  # Rejected with no budget left: the operator's decision is final here.
         return base | {
             "kind": "review",
             "headline": "Review the enhanced ticket" if status == "ready_for_review" else "Enhancement rejected: choose the next step",
@@ -154,7 +160,6 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
                                    | {"consent_key": "trust_execution"}]}
 
     if status in ("blocked", "escalated", "failed"):
-        limits = execution_limits(ticket)
         error = state.get("error")
         message = error.get("message") if isinstance(error, dict) else error
         retry_left = ticket["retries"] < ticket["max_retries"]
@@ -166,7 +171,7 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
             actions.append(intake_action("answer_questions", "Ask Qwen 4B"))
         if developing:
             actions.append(intake_action("development_information", "Add troubleshooting information", input="text"))
-        return base | {"kind": "blocked" if retry_left else "dead_letter",
+        return base | {"kind": "blocked" if retry_left and status == "blocked" else "dead_letter",
                        "headline": f"Stopped at {node.replace('_', ' ')}" + ("" if retry_left else ": retry limit reached"),
                        "context": [c for c in [_short(message, 300) if message else None,
                                                f"Retries used: {ticket['retries']}/{ticket['max_retries']}",
@@ -175,17 +180,21 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
     return None
 
 
-def items(tickets) -> list[dict]:
-    """Every ticket waiting for a person, most urgent first (priority, then longest waiting)."""
+def items(tickets, rows=None) -> list[dict]:
+    """Every ticket waiting for a person, most urgent first (priority, then longest waiting).
+
+    Pass ``rows`` (already loaded ``Tickets.list()``) to stay inside the caller's read transaction.
+    """
     from .autonomy import policy
-    from .report_store import report
-    result = []
-    for ticket in tickets.list():
+    result, automatic_by_repository = [], {}
+    for ticket in rows if rows is not None else tickets.list():
         repository_id = ticket["state"].get("intake", {}).get("repository_id")
-        automatic = bool(repository_id and policy(tickets, repository_id).get("development"))
-        original = report(tickets.db, ticket["id"]) if ticket["state"]["config"].get("run_mode") in ("intake", "accepted_development") else None
-        found = item(ticket, approved_head=tickets.store.approved_head(ticket["run_id"]), original=original,
-                     automatic_development=automatic)
+        if repository_id and repository_id not in automatic_by_repository:
+            automatic_by_repository[repository_id] = bool(policy(tickets, repository_id).get("development"))
+        report_row = tickets.db.execute("SELECT original FROM ticket_reports WHERE ticket_id=?", (ticket["id"],)).fetchone()
+        found = item(ticket, approved_head=tickets.store.approved_head(ticket["run_id"]),
+                     original={"original": report_row[0]} if report_row else None,
+                     automatic_development=automatic_by_repository.get(repository_id, False))
         if found:
             found["repository"] = ticket["state"]["config"].get("source_repo", ticket["repo"])
             result.append(found)

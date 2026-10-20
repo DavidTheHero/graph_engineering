@@ -47,7 +47,10 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual(found["actions"][0]["payload"], {"ticket_id": "GE-1", "revision": 2, "actor": "Local operator",
                                                           "action": "clarify"})
         exhausted = item(row("needs_information", enhanced=DRAFT, intake={"generation": 3, "ticket_id": "GE-1"}))
-        self.assertEqual(self.kinds(exhausted), ["clarify", "reject_enhancement"])
+        # The server refuses clarifications once the budget is used, so the card must not offer them.
+        self.assertEqual(self.kinds(exhausted), ["reject_enhancement"])
+        self.assertTrue(exhausted["questions_readonly"])
+        self.assertIn("follow-up", exhausted["headline"])
 
     def test_review_accept_is_disabled_without_verified_references(self):
         good = item(row("ready_for_review", enhanced=DRAFT, finding_validation={"source_references_valid": True, "verified_references": 2}))
@@ -70,6 +73,16 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual(found["actions"][0]["payload"], {"ticket_id": "GE-1", "action": "approve", "head": "a" * 40})
         self.assertEqual(found["actions"][0]["input"], "actor")
         self.assertIsNone(item(waiting, approved_head="a" * 40))
+
+    def test_rejected_merge_and_final_rejection_leave_the_view(self):
+        waiting = row("waiting_approval", "approval_gate", mode="development", head="a" * 40) | {"paused": 1}
+        self.assertIsNone(item(waiting))  # "Reject" pauses the ticket: the decision has been made.
+        self.assertIsNone(item(row("enhancement_rejected", enhanced=DRAFT, intake={"generation": 3, "ticket_id": "GE-1"})))
+        self.assertEqual(self.kinds(item(row("enhancement_rejected", enhanced=DRAFT))), ["reinvestigate"])
+
+    def test_escalated_with_retries_left_is_dead_letter_but_retryable(self):
+        found = item(row("escalated", "repair", mode="development", error="Repair budget exhausted"))
+        self.assertEqual((found["kind"], self.kinds(found)), ("dead_letter", ["retry"]))
 
     def test_blocked_and_dead_letter(self):
         blocked = item(row("blocked", "problem_investigation", error={"message": "OpenCode stalled"}))

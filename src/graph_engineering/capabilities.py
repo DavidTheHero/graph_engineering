@@ -330,9 +330,9 @@ class Capabilities:
         from .attention import items
         with self._tickets() as tickets:
             found = items(tickets)
-        return {"items": [{k: i.get(k) for k in ("ticket_id", "kind", "headline", "priority", "title", "waiting_since",
-                                                   "context", "questions")} | {"actions": [a["label"] for a in i["actions"]]}
-                          for i in found], "total": len(found),
+        return {"items": _bounded([{k: i.get(k) for k in ("ticket_id", "kind", "headline", "priority", "title", "waiting_since",
+                                                            "context", "questions")} | {"actions": [a["label"] for a in i["actions"]]}
+                                   for i in found], 2000), "total": len(found), "trust": UNTRUSTED,
                 "note": "Read-only. Clarifications may be added with add_clarification (operate); approvals are human-only."}
 
     def scheduler_status(self) -> dict:

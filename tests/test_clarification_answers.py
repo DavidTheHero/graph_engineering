@@ -12,7 +12,7 @@ from tests.test_intake import InvestigationDouble
 class ClarifyingDouble(InvestigationDouble):
     """Asks for clarification until a model-proposal clarification exists; answers questions per ``quote``."""
 
-    def __init__(self, quote="return a-b", status="answered_from_repository"):
+    def __init__(self, quote="def add(a,b): return a-b", status="answered_from_repository"):
         super().__init__(clarify=True)
         self.quote, self.status, self.seen = quote, status, []
 
@@ -73,7 +73,7 @@ class ClarificationAnswerTests(unittest.TestCase):
         self.assertTrue(all(a["verified"] for a in answers["answers"]))
         note = run["state"]["clarifications"][-1]
         self.assertEqual(note["source"], "model_proposal")
-        self.assertIn('calc.py:1 "return a-b"', note["text"])
+        self.assertIn('calc.py:1 "def add(a,b): return a-b"', note["text"])
         self.assertIn("not operator input", note["text"])
         self.assertEqual(run["state"]["intake"]["generation"], 1)
         # The small model answered within its own budget: no escalation to the large model.
@@ -103,6 +103,13 @@ class ClarificationAnswerTests(unittest.TestCase):
         self.assertEqual(run["status"], "ready_for_review", run["state"].get("error"))
         self.assertIn("A (partial): add() returns a-b", run["state"]["clarifications"][-1]["text"])
 
+    def test_trivial_quote_does_not_verify_a_claim(self):
+        worker = ClarifyingDouble(quote="def")  # Present on line 1, but proves nothing.
+        result, run = self.waiting_ticket(worker)
+        _, run, _ = self.ask_small_model(result, run, worker)
+        self.assertEqual(run["status"], "needs_information")
+        self.assertFalse(run["state"]["question_answers"]["answers"][0]["verified"])
+
     def test_intent_questions_are_not_turned_into_facts(self):
         worker = ClarifyingDouble(status="requires_user_decision")
         result, run = self.waiting_ticket(worker)
@@ -120,6 +127,46 @@ class ClarificationAnswerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "budget exhausted"):
             act(self.tickets, {"ticket_id": result["ticket_id"], "action": "answer_questions",
                                "revision": state["revision"], "actor": "Local operator"}, "ask-small-2")
+
+
+class EvidenceHelperTests(unittest.TestCase):
+    def test_terms_keep_phrases_and_drop_paths(self):
+        from graph_engineering.question_answering import search_terms
+        self.assertEqual(search_terms(["model name", "llm.model =", "src/app.js", "  OLLAMA_MODEL ", "ab", "Model Name"]),
+                         ["model name", "llm.model =", "OLLAMA_MODEL"])
+
+    def test_citations_verify_only_against_shown_lines(self):
+        from graph_engineering.question_answering import verify_reference
+        shown = {"calc.py": {1: "def add(a,b): return a-b"}}
+        ok = {"file": "calc.py", "line": 1, "quote": "def add(a,b): return a-b"}
+        self.assertEqual(verify_reference(ok, shown), ok)
+        self.assertIsNone(verify_reference(ok | {"file": "other.py"}, shown))  # A file the model never saw.
+        self.assertIsNone(verify_reference(ok | {"quote": "def"}, shown))  # Too short to prove anything.
+        self.assertEqual(verify_reference(ok | {"line": 3}, shown)["corrected_from"], 3)
+
+
+class SecretFilterTests(unittest.TestCase):
+    setUp = test_intake.IntakeTests.setUp
+    tearDown = test_intake.IntakeTests.tearDown
+
+    def test_secret_and_oversized_files_are_never_listed_read_or_grepped(self):
+        from graph_engineering.question_answering import focused_evidence, source_files
+        from tests.test_core import git
+        (self.repo / "config").mkdir()
+        (self.repo / "config" / "credentials.py").write_text("API_TOKEN = 'add-super-secret'\n")
+        (self.repo / "big.py").write_text("# add\n" + "x = 1\n" * 40000)  # > 180 KB
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-m", "Add a secret and a huge file")
+        sha = git(self.repo, "rev-parse", "HEAD")
+        listing = source_files(self.repo, sha)
+        self.assertNotIn("config/credentials.py", listing)
+        self.assertNotIn("big.py", listing)
+        evidence, shown = focused_evidence(self.repo, sha, ["add"], ["config/credentials.py", "calc.py"])
+        self.assertEqual(evidence["picked_files"], ["calc.py"])
+        self.assertNotIn("config/credentials.py", shown)
+        self.assertNotIn("big.py", shown)
+        self.assertNotIn("config/credentials.py", evidence["files_containing_term"]["add"])
+        self.assertNotIn("super-secret", json.dumps(evidence))
 
 
 if __name__ == "__main__":
