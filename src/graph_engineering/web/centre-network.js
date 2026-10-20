@@ -73,7 +73,7 @@ export function renderNetwork(data,tickets,select,inspect){
    data.topology.clusters.forEach(c=>cy.add({group:'nodes',data:{id:'cluster:'+c.id,label:c.label}}));
    data.topology.nodes.forEach(n=>{const [x,y]=positions[n.id]||[0,0];cy.add({group:'nodes',data:{id:n.id,label:n.label,parent:'cluster:'+n.cluster,tooltip:n.contract.responsible},position:saved[n.id]||{x,y},classes:'station'});});
    data.topology.queues.forEach((q,i)=>cy.add({group:'nodes',data:{id:q.id,label:q.label,parent:'cluster:classification'},position:saved[q.id]||{x:-250+(i%3)*220,y:70+Math.floor(i/3)*120},classes:'queue'}));
-   for(const model of ['a','b'])cy.add({group:'nodes',data:{id:'model:'+model,label:model==='a'?'Qwen 3.8 · 27B':'Qwen 3.5 · 4B',parent:'cluster:engineering'},position:saved['model:'+model]||{x:positions['model:'+model][0],y:positions['model:'+model][1]},classes:'model'});
+   data.models.forEach((m,i)=>{const id='model:'+m.key,[x,y]=positions[id]||[1035,-160+i*230];cy.add({group:'nodes',data:{id,label:m.label,parent:'cluster:engineering'},position:saved[id]||{x,y},classes:'model'});});
    data.topology.edges.forEach(e=>{cy.add({group:'edges',data:e,classes:e.source===e.target?'self-loop':['repair','escalation','issue_detection','repository_search','problem_investigation'].includes(e.target)&&e.source!=='evidence_collection'?'feedback':''});});
   });
   const picker=$('#node-picker');picker.replaceChildren(el('option','','Choose a node…'));
@@ -84,14 +84,14 @@ export function renderNetwork(data,tickets,select,inspect){
  cy.batch(()=>{
   cy.nodes().removeClass('active');
   data.queues.forEach(q=>{const node=cy.getElementById('queue:'+q.id);if(node.length)node.data('label',q.label+'\n'+q.count+' waiting');});
-  data.models.forEach(m=>{const n=cy.getElementById('model:'+m.key);if(n.length)n.data('label',(m.key==='a'?'Qwen 3.8 · 27B':'Qwen 3.5 · 4B')+'\n'+(m.available?'Available':'Unavailable'));});
+  data.models.forEach(m=>{const n=cy.getElementById('model:'+m.key);if(n.length)n.data('label',m.label+'\n'+(m.observed===undefined?'Not checked':m.available?'Available':'Unavailable'));});
   const ids=new Set();
   for(const ticket of tickets.filter(t=>t.execution_id)){
    const id='instance:'+ticket.execution_id;ids.add(id);
    const station=cy.getElementById(ticket.node);station.addClass('active');
-   const anchor=cy.getElementById(ticket.model?'model:'+(ticket.model.includes('qwen3.8')?'a':'b'):ticket.node);
+   const anchor=cy.getElementById(ticket.model_key?'model:'+ticket.model_key:ticket.node);
    const p=anchor.length?anchor.position():{x:0,y:0};
-   const label=ticket.id+'\n'+(ticket.model?shortModel(ticket.model):human(ticket.agent)+' starting');
+   const label=ticket.id+'\n'+(ticket.model?shortModel(ticket.model,ticket.model_key):human(ticket.agent)+' starting');
    if(!cy.getElementById(id).length)cy.add({group:'nodes',data:{id,label,ticketId:ticket.id},position:{x:p.x+130,y:p.y+85+ids.size*20},classes:'instance active'});
    else cy.getElementById(id).data('label',label);
    addEdge(ticket.node,id,'observed');

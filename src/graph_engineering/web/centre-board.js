@@ -1,4 +1,4 @@
-import {state,$,el,columns,human,tag,elapsed,shortModel,facts} from './centre-state.js';
+import {state,$,el,columns,human,tag,elapsed,shortModel,tierBadge,facts} from './centre-state.js';
 const visibleCards=new Map();
 
 export function renderBoard(tickets,select) {
@@ -21,7 +21,7 @@ export function renderBoard(tickets,select) {
         card.append(top,el('strong','card-title',ticket.title));if(ticket.lifecycle)card.append(tag(ticket.lifecycle));if(ticket.demonstration_notice||ticket.labels.includes('failure-injection'))card.append(tag('Labelled failure injection'));
         const category=el('span','card-repository',ticket.repository_name+' · '+human(ticket.category));card.append(category);
         if(ticket.queue_reason&&['dependency','resource','retry','investigation','approval','paused','development','clarification','cancelled'].includes(ticket.queue))card.append(el('span','card-reason',ticket.queue_reason));
-        const foot=el('span','card-foot');foot.append(el('span','worker-avatar',ticket.model?ticket.model.includes('qwen3.8')?'27':'4':ticket.execution_id?'↻':'○'),el('span','',ticket.model?shortModel(ticket.model):ticket.execution_id?'Starting '+human(ticket.agent):human(ticket.agent)),el('span','card-duration',ticket.execution_id?elapsed(ticket.started):''));if(ticket.execution_id)foot.lastElementChild.dataset.runningSince=ticket.started;card.append(foot);
+        const foot=el('span','card-foot');foot.append(el('span','worker-avatar',ticket.model?tierBadge(ticket.model_key):ticket.execution_id?'↻':'○'),el('span','',ticket.model?shortModel(ticket.model,ticket.model_key):ticket.execution_id?'Starting '+human(ticket.agent):human(ticket.agent)),el('span','card-duration',ticket.execution_id?elapsed(ticket.started):''));if(ticket.execution_id)foot.lastElementChild.dataset.runningSince=ticket.started;card.append(foot);
         const meta=el('span','card-meta');meta.append(tag(ticket.backend==='github'&&ticket.issue?'GitHub-linked':'Local ticket'),el('span','',ticket.repairs+ticket.retries?`↻ ${ticket.repairs+ticket.retries} retries`:human(ticket.node)));card.append(meta);
         card.addEventListener('click',()=>select(ticket.id));section.append(card);
       }

@@ -38,7 +38,9 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'se
 
 class DashboardServer(ThreadingHTTPServer):
     daemon_threads = False
-    allow_reuse_address = False
+    # POSIX SO_REUSEADDR only lets a restarted server bind past TIME_WAIT sockets; a second
+    # listener on the same address is still refused. Windows uses SO_EXCLUSIVEADDRUSE instead.
+    allow_reuse_address = os.name != 'nt'
 
     def server_bind(self):
         if os.name == 'nt':
@@ -199,16 +201,51 @@ def serve_dashboard(home: Path, port: int = 8765):
         server.serve_forever(poll_interval=0.25)
 
 
+def live_controller(home: Path, freshness=15.0):
+    """PID of a scheduler whose heartbeat is fresh and whose process exists, else None."""
+    if not (Path(home)/'state.sqlite3').exists():
+        return None
+    from .tickets import Tickets
+    tickets = Tickets(home)
+    try:
+        service = tickets.setting('worker_service') or {}
+    finally:
+        tickets.store.close()
+    pid = service.get('pid')
+    if not isinstance(pid, int) or time.time() - service.get('observed', 0) > freshness:
+        return None
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return None
+    return pid
+
+
 def serve_centre(home: Path, port=8765, workers=2, attach_controller=False):
     home = Path(home).resolve()
     with make_server(home,port,control=True) as server:
         kwargs = {'creationflags':subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {'start_new_session':True}
         controller = None
+        running = live_controller(home)
+        if running and not attach_controller:
+            # One scheduler per home: a second one could only fail on the scheduler lock.
+            attach_controller = True
+            print(f'A scheduler is already running for this home (PID {running}); attaching to it.',flush=True)
         if not attach_controller:
             with (home/'scheduler.log').open('ab') as output:
                 controller = subprocess.Popen([sys.executable,'-m','graph_engineering','--home',str(home),
                     'dispatch','--workers',str(workers)],stdin=subprocess.DEVNULL,stdout=output,stderr=output,**kwargs)
-        service = f'Controller PID: {controller.pid}' if controller else 'Attached to existing dispatch service; check dashboard heartbeat'
+            try:
+                controller.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                pass
+            else:
+                # It exited during startup (e.g. lock held by an unobserved scheduler). Say so instead of hiding it in a log.
+                print(f'Scheduler exited during startup (code {controller.returncode}); see {home/"scheduler.log"}. '
+                      'The dashboard will show "Controller not observed" until a scheduler runs.',flush=True)
+                controller = None
+        service = (f'Controller PID: {controller.pid}' if controller else
+                   f'Attached to scheduler PID {running}' if running else 'No scheduler started; check dashboard heartbeat')
         print(f'Control centre: http://127.0.0.1:{server.server_port}\n{service}; state: {home}',flush=True)
         try: server.serve_forever(poll_interval=.25)
         finally:

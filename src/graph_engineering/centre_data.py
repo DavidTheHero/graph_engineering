@@ -9,6 +9,8 @@ import time
 from .dashboard_data import Catalog, EVIDENCE, ROLE_NODES, bounded
 from .runtime import redact
 from .scheduling_policy import board_status, effective_rank,execution_limits
+from .models import load_models
+from .routing import RoutingError
 from .scheduler import required_model, ROLES
 from .tickets import Tickets, QUEUES
 from .workflow import graph_contracts
@@ -42,13 +44,10 @@ def topology():
     contracts = graph_contracts()
     names = {c['name'] for c in contracts}
     edges = set()
+    from .workflow import transitions
+    # The same declared transitions that Workflow.execute enforces; self-holds are not drawn.
     for c in contracts:
-        for target in [c['next'],c['failure'],*c['conditional_edges']]:
-            target = target.split(' ')[0]
-            if target in names: edges.add((c['name'],target))
-    # CandidateError requery is a real executable transition beyond the generic
-    # validation contract's declared invalid-finding terminal route.
-    edges.add(('issue_validation','issue_detection'))
+        edges.update((c['name'],target) for target in transitions(c['name']) if target in names and target != c['name'])
     return {'nodes':[dict(id=c['name'],label=c['name'].replace('_',' ').title(),
                         cluster=next(k for k,(_,items) in CLUSTERS.items() if c['name'] in items),contract=c) for c in contracts],
             'edges':[{'id':a+'~'+b,'source':a,'target':b,'kind':'workflow'} for a,b in sorted(edges)],
@@ -89,6 +88,7 @@ def events(tickets, after=0, limit=250, ticket_id=None):
 def snapshot(home):
     tickets = Tickets(home)
     try:
+        registry = load_models(tickets.store.root)
         tickets.db.execute('BEGIN')
         rows = tickets.list(); all_tickets = {t['id']:t for t in rows}
         result = []
@@ -104,6 +104,11 @@ def snapshot(home):
             assignment = json.loads(assigned[0]) if assigned else {}
             role = ROLES.get(ticket['node'],(None,None))[0]
             current_model = assignment.get('model_id') if ticket['lease_owner'] and assignment.get('role') == role else None
+            current_key = assignment.get('model_key') if current_model else None
+            try:
+                planned = required_model(ticket)
+            except RoutingError:
+                planned = None  # The queue reason already explains why no model may run this step.
             position = ticket['node'] if queue in ('active','done') else 'queue:'+queue
             result.append(bounded({
                 'id':ticket['id'],'run_id':ticket['run_id'],'title':enhanced.get('title') or state.get('triage',{}).get('title') or candidate.get('title') or (manual['original'].strip()[:120] if manual else 'Source investigation' if config.get('inspect_with_model') else 'Repository scan'),
@@ -119,7 +124,8 @@ def snapshot(home):
                 'dependencies':ticket['dependencies'],'paused':bool(ticket['paused']),'cancel_requested':bool(ticket.get('cancel')),
                 'retries':ticket['retries'],'repairs':state.get('repairs',0),'execution_limits':execution_limits(ticket),
                 'attempts':state.get('attempts',{}),'not_before':ticket['not_before'],
-                'agent':role or 'deterministic','model':current_model,'planned_model':required_model(ticket),
+                'agent':role or 'deterministic','model':current_model,'model_key':current_key,
+                'model_label':registry.get(current_key,{}).get('label') or current_model,'planned_model':planned,
                 'execution_id':ticket['lease_owner'],'started':ticket['lease_started'] if ticket['lease_owner'] else None,
                 'created':ticket['created'],'updated':ticket['run_updated'],'position':position,
                 'branch':state.get('branch'),'worktree':state.get('worktree'),
@@ -129,7 +135,10 @@ def snapshot(home):
                 'mode':config.get('run_mode','development'),'approval_head':state.get('head'),
                 'demonstration_notice':config.get('demo_notice'),
                 'last_model_receipt':assignment if current_model else None}))
-        health = [dict(key=r['key'],observed=r['observed'],**json.loads(r['data'])) for r in tickets.db.execute('SELECT * FROM model_observations')]
+        observed = {r['key']:dict(observed=r['observed'],**json.loads(r['data'])) for r in tickets.db.execute('SELECT * FROM model_observations')}
+        # Registry entries drive the UI: labels and tiers come from configuration, not from model-id guessing.
+        health = [dict(key=key,label=m.get('label') or m.get('model_id') or key,tier=m.get('tier'),model_id=m.get('model_id'),
+                       **observed.get(key,{})) for key,m in registry.items()]
         children = {}
         for row in tickets.db.execute("SELECT * FROM events WHERE kind IN ('child_started','child_completed','child_failed') ORDER BY seq DESC LIMIT 200"):
             event = dict(row)|{'data':json.loads(row['data'])};child = event['data'].get('child_task_id')

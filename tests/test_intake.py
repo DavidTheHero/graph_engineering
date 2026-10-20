@@ -135,6 +135,31 @@ class IntakeTests(unittest.TestCase):
         self.assertEqual(revisions[1]['content']['findings'][0]['quote'],'# label: "sum"')
         self.assertFalse(run['state']['finding_validation']['runtime_causality_verified'])
 
+    class DriftDouble(InvestigationDouble):
+        def __init__(self,quote,line):super().__init__();self.quote,self.line=quote,line
+        def invoke(self,*args,**kwargs):
+            result=super().invoke(*args,**kwargs)
+            if args[0]=='root_investigation':result['content']['findings']=[{'file':'calc.py','line':self.line,'quote':self.quote,'observation':'Observed.'}]
+            return result
+
+    def commit_comments(self):
+        (self.repo/'calc.py').write_text('def add(a,b): return a-b\n# one\n# two\n# marker unique\n# dup\n# dup\n')
+        git(self.repo,'add','calc.py');git(self.repo,'commit','-m','Add comments')
+
+    def test_small_line_drift_is_corrected_for_a_unique_exact_quote(self):
+        self.commit_comments()
+        _,run=self.investigate(self.DriftDouble('# marker unique',2))
+        validation=run['state']['finding_validation']
+        self.assertTrue(validation['source_references_valid'],validation)
+        correction=validation['quote_format_corrections'][0]
+        self.assertEqual((correction['kind'],correction['line'],correction['corrected_line']),('line_offset',2,4))
+        self.assertEqual(run['state']['enhanced']['findings'][0]['line'],4)
+
+    def test_ambiguous_nearby_quote_is_never_guessed(self):
+        self.commit_comments()
+        _,run=self.investigate(self.DriftDouble('# dup',3))
+        self.assertFalse(run['state']['finding_validation']['source_references_valid'])
+
     def test_search_feedback_and_invalid_reference_retry_have_independent_attempt_budgets(self):
         class LoopDouble(InvestigationDouble):
             calls=0

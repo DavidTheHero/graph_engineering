@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
+import subprocess
+import uuid
 from pathlib import Path
 import re
 import sys
@@ -14,7 +18,8 @@ from .models import detect_opencode, probe_endpoints
 from .runtime import BusyError, Store, redact
 
 
-DEFAULT_HOME = Path(__file__).resolve().parents[2] / ".runtime"
+# GRAPH_ENGINEERING_HOME lets an installed (non-editable) package keep state outside site-packages.
+DEFAULT_HOME = Path(os.environ.get("GRAPH_ENGINEERING_HOME") or Path(__file__).resolve().parents[2] / ".runtime")
 
 
 def _workflow(home: Path):
@@ -53,7 +58,7 @@ def _poll(value: str) -> float:
 
 
 def parser() -> argparse.ArgumentParser:
-    result = argparse.ArgumentParser(prog="graph-engineering", description=__doc__)
+    result = argparse.ArgumentParser(prog="graph-engineer", description=__doc__)
     result.add_argument("--home", type=Path, default=DEFAULT_HOME, help="controller state/artifact directory")
     commands = result.add_subparsers(dest="command", required=True)
     init = commands.add_parser("init", help="inspect a repository and create isolated controller configuration")
@@ -93,8 +98,41 @@ def parser() -> argparse.ArgumentParser:
     serve = commands.add_parser("serve", help="run a restartable foreground controller; external service manager optional")
     serve.add_argument("--poll", type=_poll, default=5)
     serve.add_argument("--once", action="store_true", help="process one sweep and return")
-    ui = commands.add_parser("ui", help="open a local, read-only workflow dashboard")
+    ui = commands.add_parser("ui", help="open the local dashboard (read-only unless --control)")
     ui.add_argument("--port", type=int, default=8765, help="loopback HTTP port (default: 8765)")
+    ui.add_argument("--control", action="store_true", help="serve the operator control centre and start the scheduler")
+    ui.add_argument("--workers", type=int, default=2, help="scheduler concurrency with --control")
+    repo = commands.add_parser("repo", help="register and inspect repositories (metadata access only)")
+    repo_commands = repo.add_subparsers(dest="repo_command", required=True)
+    repo_add = repo_commands.add_parser("add", help="register a local Git root; grants no execution or publication")
+    repo_add.add_argument("path", type=Path)
+    repo_commands.add_parser("list", help="list registered repositories")
+    repo_inspect = repo_commands.add_parser("inspect", help="detected ecosystems and commands; executes nothing")
+    repo_inspect.add_argument("repository_id")
+    ticket = commands.add_parser("ticket", help="create natural-language tickets")
+    ticket_commands = ticket.add_subparsers(dest="ticket_command", required=True)
+    ticket_create = ticket_commands.add_parser("create", help="persist a plain-language problem and queue investigation")
+    ticket_create.add_argument("repository_id")
+    ticket_create.add_argument("description")
+    ticket_create.add_argument("--priority", choices=("P0", "P1", "P2", "P3"))
+    ticket_create.add_argument("--expected", default="")
+    ticket_create.add_argument("--logs", default="")
+    start = commands.add_parser("run", help="queue a workflow for a registered repository (processed by dispatch/ui --control)")
+    start.add_argument("repository_id")
+    start.add_argument("--mode", choices=("read_only", "assisted"), default="read_only")
+    start.add_argument("--inspect-with-model", action="store_true", help="read-only model inspection of source")
+    start.add_argument("--trust-execution", action="store_true", help="explicitly permit this repository's code to run (assisted)")
+    commands.add_parser("models", help="list the model registry and verify advertised identifiers")
+    mcp = commands.add_parser("mcp", help="Model Context Protocol server")
+    mcp_commands = mcp.add_subparsers(dest="mcp_command", required=True)
+    mcp_serve = mcp_commands.add_parser("serve", help="serve MCP over stdio (default) or loopback HTTP")
+    mcp_serve.add_argument("--profile", choices=("read", "operate", "admin"), default="read")
+    mcp_serve.add_argument("--transport", choices=("stdio", "http"), default="stdio")
+    mcp_serve.add_argument("--port", type=int, default=8787)
+    mcp_serve.add_argument("--client", default="mcp", help="client label recorded in the audit trail")
+    mcp_config = mcp_commands.add_parser("config", help="print a client configuration snippet")
+    mcp_config.add_argument("--client", choices=("codex", "opencode", "json"), default="json")
+    mcp_config.add_argument("--profile", choices=("read", "operate", "admin"), default="read")
     dispatch = commands.add_parser('dispatch', help='run the durable priority-aware ticket scheduler')
     dispatch.add_argument('--workers',type=int,default=2)
     dispatch.add_argument('--once',action='store_true')
@@ -135,7 +173,7 @@ def _reports(path: Path) -> list[dict]:
 def _serve(workflow, *, poll: float, once: bool) -> int:
     while True:
         for run in workflow.store.list_runs():
-            eligible = run["status"] in ("ready", "running")
+            eligible = run["status"] in ("ready", "running") and run["state"].get("retry_not_before", 0) <= time.time()
             if run["status"] == "waiting_approval":
                 head = run["state"].get("head")
                 eligible = bool(head) and workflow.store.approved_head(run["id"]) == head
@@ -148,6 +186,118 @@ def _serve(workflow, *, poll: float, once: bool) -> int:
         if once:
             return 0
         time.sleep(poll)
+
+
+def _version(argv: list[str]) -> str | None:
+    try:
+        result = subprocess.run(argv, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return (result.stdout or result.stderr).strip().splitlines()[0] if result.returncode == 0 else None
+
+
+def _doctor(home: Path) -> dict:
+    """Validate the environment. Required: git, OpenCode 2.0.32 and at least one model with a verified id."""
+    from .models import discover_models, load_models
+    checks: dict = {"python": sys.version.split()[0], "home": str(home)}
+    checks["git"] = _version(["git", "--version"])
+    try:
+        executable, version = detect_opencode()
+        checks["opencode"] = {"available": True, "executable": executable, "version": version}
+    except Exception as exc:
+        checks["opencode"] = {"available": False, "error": str(exc)}
+    checks["gh"] = {"version": _version(["gh", "--version"]),
+                    "authenticated": shutil.which("gh") is not None and subprocess.run(
+                        ["gh", "auth", "status"], capture_output=True, timeout=15).returncode == 0}
+    checks["node"] = _version(["node", "--version"])
+    try:
+        models = load_models(home)
+        checks["models"] = discover_models(models, timeout=6)
+        probe_endpoints(home / "health", models)
+    except Exception as exc:
+        checks["models"] = {"error": str(exc)}
+    try:
+        import anyio
+        from mcp import Client
+        from .mcp_server import build_server
+
+        async def handshake():
+            async with Client(build_server(home, "read", "doctor")) as client:
+                return client.protocol_version, len((await client.list_tools()).tools)
+        protocol, count = anyio.run(handshake)
+        checks["mcp"] = {"available": True, "protocol_version": protocol, "read_tools": count}
+    except ImportError as exc:
+        checks["mcp"] = {"available": False, "error": str(exc)}
+    except Exception as exc:
+        checks["mcp"] = {"available": False, "error": type(exc).__name__ + ": " + str(exc)}
+    verified = [k for k, m in checks["models"].items() if isinstance(m, dict) and m.get("identifier_verified")] \
+        if isinstance(checks["models"], dict) and "error" not in checks["models"] else []
+    checks["ready"] = bool(checks["git"] and checks["opencode"]["available"] and verified)
+    checks["actions"] = [message for failed, message in [
+        (not checks["git"], "Install Git."),
+        (not checks["opencode"]["available"], "Install OpenCode 2.0.32 (the provider configuration is verified for it)."),
+        (not verified, "No configured model id is advertised by its server; run `graph-engineer models` and fix models.json."),
+        (not checks["mcp"]["available"], "Optional: pip install 'graph-engineering[mcp]' to enable the MCP server."),
+        (not checks["gh"]["authenticated"], "Optional: `gh auth login` for live GitHub publication."),
+    ] if failed]
+    return checks
+
+
+def _platform_command(args) -> int:
+    from .tickets import Tickets
+    from . import control_repositories as repositories
+    if args.command == "mcp":
+        return _mcp(args)
+    if args.command == "models":
+        from .models import discover_models, load_models
+        _emit(discover_models(load_models(args.home)))
+        return 0
+    tickets = Tickets(args.home)
+    try:
+        if args.command == "repo" and args.repo_command == "add":
+            registered = repositories.register(tickets, str(args.path.resolve()))
+            _emit(registered | {"next": "Metadata access only. Use `run` or the control centre to start work; "
+                                        "code execution needs explicit trust."})
+        elif args.command == "repo" and args.repo_command == "list":
+            _emit(repositories.repositories(tickets))
+        elif args.command == "repo":
+            _emit(repositories.inspect(tickets, args.repository_id))
+        elif args.command == "ticket":
+            from .report_store import create
+            _emit(create(tickets, {"repository_id": args.repository_id, "description": args.description,
+                                   "priority": args.priority, "expected": args.expected, "logs": args.logs},
+                         "cli-" + uuid.uuid4().hex))
+        else:
+            data = {"mode": args.mode, "inspect_with_model": args.inspect_with_model,
+                    "trust_execution": args.trust_execution, "scan_only": args.mode == "assisted"}
+            _emit(repositories.start(tickets, args.repository_id, data, "cli-" + uuid.uuid4().hex)
+                  | {"next": "Queued. Process with `graph-engineer dispatch` or `graph-engineer ui --control`."})
+    finally:
+        tickets.store.close()
+    return 0
+
+
+def _mcp(args) -> int:
+    if args.mcp_command == "config":
+        executable = shutil.which("graph-engineer") or sys.argv[0]
+        argv = [str(Path(executable).resolve()), "--home", str(args.home), "mcp", "serve", "--profile", args.profile]
+        if args.client == "codex":
+            print("[mcp_servers.graph-engineering]\n" f"command = {json.dumps(argv[0])}\n"
+                  f"args = {json.dumps(argv[1:] + ['--client', 'codex'])}\nstartup_timeout_sec = 20\ntool_timeout_sec = 120")
+        elif args.client == "opencode":
+            _emit({"$schema": "https://opencode.ai/config.json", "mcp": {"graph-engineering": {
+                "type": "local", "command": argv + ["--client", "opencode"], "enabled": True, "timeout": 20000}}})
+        else:
+            _emit({"mcpServers": {"graph-engineering": {"command": argv[0], "args": argv[1:]}}})
+        return 0
+    from . import mcp_server
+    if args.transport == "http":
+        if not 1 <= args.port <= 65535:
+            raise ValueError("port must be between 1 and 65535")
+        mcp_server.serve_http(args.home, args.profile, args.client, args.port)
+    else:
+        mcp_server.serve_stdio(args.home, args.profile, args.client)
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -201,22 +351,22 @@ def main(argv: list[str] | None = None) -> int:
                 store.approve(args.run, args.head, args.actor.strip())
                 _emit({"run": args.run, "approved_head": args.head, "actor": args.actor.strip()})
         elif args.command == "doctor":
-            try:
-                executable, version = detect_opencode()
-                opencode = {"available": True, "executable": executable, "version": version}
-            except Exception as exc:
-                opencode = {"available": False, "error": str(exc)}
-            report = {"opencode": opencode, **probe_endpoints(args.home / "health")}
+            report = _doctor(args.home)
             _emit(report)
-            if not opencode["available"] or any(not model.get("available") for model in report["models"].values()):
-                return 2
+            return 0 if report["ready"] else 2
         elif args.command == "graph":
             _emit(_contracts())
         elif args.command == "ui":
-            from .dashboard import serve_dashboard
             if not 1 <= args.port <= 65535:
                 raise ValueError("port must be between 1 and 65535")
-            serve_dashboard(args.home, args.port)
+            if args.control:
+                from .dashboard import serve_centre
+                serve_centre(args.home, args.port, args.workers)
+            else:
+                from .dashboard import serve_dashboard
+                serve_dashboard(args.home, args.port)
+        elif args.command in ("repo", "ticket", "run", "models", "mcp"):
+            return _platform_command(args)
         elif args.command == 'dispatch':
             from .scheduler import serve_scheduler
             serve_scheduler(args.home,args.workers,args.once)

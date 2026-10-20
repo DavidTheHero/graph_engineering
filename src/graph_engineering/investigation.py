@@ -6,6 +6,8 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 
+from . import routing
+from .adapters import CODE_SUFFIXES, DOC_SUFFIXES
 from .repository import command, discover, git, run_check
 from .report_store import report, revision
 from .runtime import digest, redact
@@ -71,7 +73,7 @@ def retrieve(repo,sha,keywords,original):
     """Literal bounded search of committed blobs; no model-supplied commands."""
     listing=git(repo,'ls-tree','-rz','--long',sha)
     allowed={}
-    extensions={'.py','.js','.mjs','.cjs','.ts','.tsx','.jsx','.json','.toml','.md','.yml','.yaml'}
+    extensions=set(CODE_SUFFIXES)|set(DOC_SUFFIXES)
     for entry in listing.split('\0'):
         if '\t' not in entry:continue
         metadata,name=entry.split('\t',1);parts=metadata.split()
@@ -86,7 +88,7 @@ def retrieve(repo,sha,keywords,original):
         if len(terms)==8:break
     argv=['git','grep','-n','-I','-i','-F']
     for term in terms or ['error']:argv.extend(['-e',term])
-    argv.extend([sha,'--','*.py','*.js','*.mjs','*.ts','*.tsx','*.jsx','*.md'])
+    argv.extend([sha,'--',*('*'+suffix for suffix in CODE_SUFFIXES),'*.md'])
     search=command(argv,repo,timeout=20)
     if search['returncode'] not in (0,1) or search['timed_out']:raise ValueError('Repository search failed or exceeded its budget')
     hits={}
@@ -118,7 +120,7 @@ class InvestigationNodes:
     def node_request_triage(self,state):
         original=_report(self,state)
         triage=self.ask(state,'classification',{'task':'Classify this untrusted user report. Do not assert a root cause. Return bounded keywords for literal repository search.',
-            'report':original['original'][:1400],'expected':original['options']['expected'][:300]},TRIAGE,'b')
+            'report':original['original'][:1400],'expected':original['options']['expected'][:300]},TRIAGE,routing.SMALL)
         with self.store.db:
             ticket=self.store.db.execute('SELECT triaged FROM tickets WHERE id=?',(original['ticket_id'],)).fetchone()
             policy=state['config'].get('intake_priority_policy',{'security':'P1'})
@@ -168,7 +170,7 @@ class InvestigationNodes:
             'original':original['original'][:3000],'user_context':context,
             'triage':state['triage'],'evidence':evidence,
             'clarifications':clarifications,'reproduction_receipt':reproduction,
-            'prior_validation':state.get('finding_validation',{})},PROPOSAL,'a')
+            'prior_validation':state.get('finding_validation',{})},PROPOSAL,routing.LARGE)
         more=result['next_action']=='additional_search' and state.get('search_round',0)<2
         return {'investigation_result':result},'repository_search' if more else 'ticket_enhancement','ready'
 
@@ -213,6 +215,15 @@ class InvestigationNodes:
                 corrections.append({'file':finding['file'],'line':finding['line'],
                     'proposed_quote':finding['quote'],'captured_quote':captured,'kind':'typographic_quotes'})
                 finding=finding|{'quote':captured}
+            if excerpt and finding['quote'] not in line:
+                # Small line-number drift: accept only a UNIQUE exact quote within three captured lines.
+                lines=excerpt['text'].splitlines();index=finding['line']-excerpt['start_line']
+                nearby=[i for i in range(max(0,index-3),min(len(lines),index+4)) if finding['quote'] in lines[i]]
+                if len(nearby)==1:
+                    corrected=excerpt['start_line']+nearby[0]
+                    corrections.append({'file':finding['file'],'line':finding['line'],'corrected_line':corrected,
+                        'proposed_quote':finding['quote'],'captured_quote':finding['quote'],'kind':'line_offset'})
+                    finding=finding|{'line':corrected};line=lines[nearby[0]]
             findings.append(finding)
             if not excerpt or finding['quote'] not in line:rejected.append({'file':finding['file'],'line':finding['line'],'reason':'File, line or exact quote is absent from captured evidence'})
             else:valid.append(finding)

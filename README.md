@@ -10,6 +10,14 @@ policy or agent instruction file is rewritten by the framework.
 
 ## Verified outcome
 
+On 20 October 2026 (macOS) the re-engineered platform passed 167 automated tests and
+26 real-browser checks. It investigated natural-language tickets on two unrelated
+repositories (JS/Python and Go) with live Qwen 4B and 27B through OpenCode, recovered
+from a `kill -9` mid model call without duplication, resolved 4/4 seeded defects
+end-to-end with zero merge-policy violations, and served its own MCP server to the
+official SDK client and to OpenCode. Measured results and limitations are in
+[EVALUATION-2026-10-20](docs/EVALUATION-2026-10-20.md).
+
 On 18 October 2026, both supplied model servers were used through OpenCode.
 Two unrelated real Git repositories (Python unittest and JavaScript node:test)
 completed local issue-to-merge workflows and post-merge tests. A real public
@@ -27,22 +35,90 @@ limitations, operations, counts and evaluation results.
 
 ## Install
 
-Requirements: Python 3.10+, Git, the verified OpenCode 2.0.32 CLI, reachable model
-servers; Node for JavaScript repositories; authenticated `gh` for live GitHub.
-The Python runtime has no third-party dependencies. Building uses setuptools.
-Windows 11, Python 3.10.9, Node 24.20.0, Git 2.39.2 and gh 2.102.0 were exercised.
+Requirements: Python 3.10+, Git, OpenCode **2.0.32** (the only version whose provider
+configuration has been verified), and reachable OpenAI-compatible model servers.
+Optional: Node for JavaScript repositories, an authenticated `gh` for live GitHub, and
+the `[mcp]` extra for the MCP server. The controller core has no third-party runtime
+dependencies.
 
-```powershell
-cd D:\git_code\graph_engineering
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .
-.\.venv\Scripts\graph-engineering.exe doctor
+```bash
+cd graph_engineering
+python3 -m venv .venv
+.venv/bin/pip install -e '.[mcp]'        # Windows: .venv\Scripts\pip install -e ".[mcp]"
+export GRAPH_ENGINEERING_HOME=~/.graph-engineering   # optional; default is ./.runtime
+.venv/bin/graph-engineer doctor          # exit 0 = git, OpenCode and at least one verified model id
 ```
 
-The prepared `.venv` already contains the editable installation. If using the
-source without installation, set `PYTHONPATH` to this project's `src` directory
-and run `python -m graph_engineering`. Other OpenCode versions are rejected until
-their source/schema and real provider invocation have been verified.
+`graph-engineering` is kept as an alias of `graph-engineer`.
+
+## Quick start
+
+```bash
+ge=.venv/bin/graph-engineer
+$ge doctor                                   # environment, model ids vs /v1/models, MCP handshake
+$ge models                                   # registry, reachability, advertised ids and context windows
+$ge repo add /path/to/repository             # metadata access only; prints the repository id
+$ge repo inspect <repository-id>             # ecosystems, test/build argv, CI and policy files (nothing executed)
+$ge ticket create <repository-id> "The agent sometimes gets stuck during tool execution. Investigate."
+$ge ui --control --port 8771                 # control centre + durable scheduler; open http://127.0.0.1:8771
+# or headless: $ge dispatch --workers 2      (process queued tickets; restart-safe)
+$ge run <repository-id> --mode read_only --inspect-with-model   # queue a read-only scan
+$ge status                                   # runs; add <run-id> --events for the transition log
+$ge mcp serve --profile read                 # MCP over stdio (see docs/MCP.md)
+```
+
+Approvals (accepting an enhanced ticket, starting development, trusting code
+execution, publishing, approving a merge) are made by a person in the control
+centre or the CLI. They are deliberately unavailable to MCP clients.
+
+## Connect another repository
+
+1. `graph-engineer repo add /abs/path`. Detection reads tracked files only. Supported
+   ecosystems are Python, JavaScript/TypeScript (npm, pnpm, yarn, bun), Go, Rust,
+   Maven, Gradle, .NET, Ruby and Make. Anything else registers with the **generic**
+   adapter: read-only investigation works, and execution requires an explicit
+   `test_command`. Polyglot repositories are searched across every detected language.
+2. Create tickets or read-only scans immediately. Registration never grants code
+   execution or publication, and the source checkout is never modified (work happens
+   in controller-owned snapshots and worktrees).
+3. To let the graph run tests and implement fixes, trust the repository explicitly:
+   in the centre, use **Start workflow → trust execution**, or create a configuration
+   with `graph-engineer init /abs/path --trust-local-code`. Provision the repository's
+   dependencies yourself. Worktrees are **not** a sandbox; see
+   [operations](docs/OPERATIONS.md).
+4. For GitHub publication: `init … --backend github --slug owner/repo` (requires
+   `gh auth login`). Merges stay human-approved and gated by branch protection and CI.
+
+No Graph Engineering code changes are needed per repository. On 2026-10-20 the same
+controller investigated General_AI_Agent (JS + Python) and google/uuid (Go). See
+[the evaluation](docs/EVALUATION-2026-10-20.md).
+
+## Models
+
+`<home>/models.json` (example: [configs/models.example.json](configs/models.example.json))
+is the provider registry. Any OpenAI-compatible endpoint works. Each entry has a
+`tier` (`large`/`small`), a `label` and optionally `roles` and `api_key_env` (never an
+inline key). Nodes request roles, not servers. `routing.py` resolves a role through
+the profile (`baseline` = large tier for everything; `multimodel` = small tier for
+triage and review, large tier for investigation, planning and implementation) and
+the latest observed health. A complex role never silently falls back to a small model
+unless it is listed in `small_fallback_roles`. Every fallback is a persisted
+`degraded_routing` event. See [ADR 006](docs/ADR-006-capability-routing.md).
+
+## Infrastructure faults
+
+Worker startup stalls, timeouts and unavailable or busy models are retried automatically with backoff (15 s, 30 s, 60 s, 120 s). They do not spend a step's attempt budget. Tickets wait in the **Retry** queue with the reason shown, and are dead-lettered with the exact cause only when the allowance (`max_infrastructure_retries`, default 4) is exhausted. A silent OpenCode worker is detected after `startup_timeout` (45 s), not the 120 s call timeout. See [ADR 008](docs/ADR-008-infrastructure-faults.md).
+
+## MCP server
+
+One standards-compliant server exposes repositories, tickets, runs, events,
+artifacts, the executable graph and model health. Profiles are `read`, `operate` and
+`admin`; every call is audited. It runs over stdio or loopback HTTP with a bearer
+token. Client setup for Codex and OpenCode, the tool list and the security model are
+in [docs/MCP.md](docs/MCP.md).
+
+Architecture overview and diagram: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The audit behind this revision: [docs/AUDIT-2026-10-20.md](docs/AUDIT-2026-10-20.md).
 
 ## Live engineering control centre
 
@@ -114,7 +190,7 @@ Python packages. See [dashboard operation and verification](docs/DASHBOARD.md).
 
 ![Workflow graph with real execution evidence](evidence/ui/dashboard-1440.png)
 
-## Connect a repository
+## Repair runs from a reproduced failure (CLI)
 
 Start with a **clean, current base checkout**. Provision its dependencies yourself;
 the controller does not install packages or run unreviewed setup commands.
@@ -216,7 +292,7 @@ Artifacts and logs can contain proprietary source: restrict access to controller
 storage. Known environment secrets and GitHub token patterns are redacted; this is
 not a general-purpose detector for arbitrary secrets committed to a repository.
 
-## Models and routing
+## Routing profile measurements (18 October, Windows)
 
 | Profile | Investigation | Planning/implementation | Independent diff review |
 |---|---|---|---|
@@ -265,11 +341,15 @@ Do not rerun their creation/setup steps against a repository you have not author
 graph_engineering/
   pyproject.toml              # package and CLI
   src/graph_engineering/
-    cli.py                   # init/scan/execute/enqueue/status/resume/stop/approve/serve
-    workflow.py              # node registry, contracts and conditional handlers
+    cli.py                   # graph-engineer: doctor/repo/ticket/run/ui/mcp/models + init/scan/execute/approve/serve
+    mcp_server.py            # MCP protocol adapter: tools, resources, stdio and loopback HTTP
+    capabilities.py          # protocol-neutral capability layer: profiles, audit, validation
+    routing.py               # role -> tier -> healthy model selection with explicit fallback
+    adapters.py              # ecosystem detection: py/js/go/rust/jvm/.NET/ruby/make/generic
+    workflow.py              # node registry, enforced CONDITIONAL_EDGES and node handlers
     runtime.py               # SQLite, lock, deadlines, artifacts and effect ledger
     repository.py            # Python/JS adapter interface, worktrees and verification
-    models.py                # probes, V2 config and isolated OpenCode sessions
+    models.py                # model registry, id discovery, V2 config and isolated OpenCode sessions
     publication.py           # local and live backends; independent merge gates
     evaluation.py            # real defect seeds and measured evaluation
     tickets.py               # persistent ticket metadata and idempotent commands

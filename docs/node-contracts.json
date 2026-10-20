@@ -365,6 +365,7 @@
     "checkpoint": "before attempt and after validated output; interrupted effects reconciled",
     "conditional_edges": [
       "deduplication",
+      "issue_detection (correctable candidate; bounded re-query)",
       "blocked (unconfirmed/low confidence)"
     ]
   },

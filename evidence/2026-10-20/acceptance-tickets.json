@@ -1,0 +1,1035 @@
+[
+ {
+  "ticket_id": "GE-05145CDA",
+  "run_id": "ab8542b2e07b4be7",
+  "repository": "/Users/daviddoan/git_code/General_AI_Agent",
+  "node": "ticket_finalisation",
+  "status": "needs_information",
+  "original": "The agent sometimes gets stuck during tool execution. Investigate what is causing it.",
+  "revisions": 2,
+  "triage": {
+   "title": "Agent Stuck During Tool Execution",
+   "category": "performance",
+   "keywords": [
+    "agent",
+    "stuck",
+    "tool execution",
+    "hang",
+    "timeout",
+    "blocking",
+    "latency",
+    "execution failure"
+   ],
+   "components": [
+    "agent",
+    "tool"
+   ],
+   "missing_information": [
+    "specific tool name",
+    "error message",
+    "duration of hang",
+    "reproducibility",
+    "environment details"
+   ],
+   "suggested_priority": "P2"
+  },
+  "enhanced": {
+   "title": "Agent Stuck During Tool Execution",
+   "problem_statement": "The user reports that the agent sometimes gets stuck during tool execution. The provided code excerpts show that the agent loop delegates tool execution to an external `execute` callback without any internal timeout, cancellation, or abort mechanism, which is a plausible cause of indefinite hangs if the underlying tool blocks.",
+   "expected_behaviour": "The agent loop should complete tool execution within a bounded time or allow the host to cancel a stuck tool, preventing indefinite hangs.",
+   "observed_behaviour": "The user reports the agent gets stuck during tool execution. No runtime logs, error messages, or reproduction steps were provided to confirm the specific tool, duration, or environment causing the hang.",
+   "findings": [
+    {
+     "file": "backend/agent-loop.js",
+     "line": 52,
+     "quote": "export async function runAgentLoop({ choose, execute, availableTools, seed, maxSteps = 6, requireReport = false, finishOnReport = false }) {",
+     "observation": "The `runAgentLoop` function accepts an `execute` callback but does not define any timeout, cancellation, or abort parameters for tool execution."
+    },
+    {
+     "file": "backend/agent-loop.js",
+     "line": 58,
+     "quote": "try { decision = loopStepSchema.parse(step === 0 && seed ? seed : await choose(observations, maxSteps - step)); }",
+     "observation": "The loop awaits the `choose` callback for decisions, but the subsequent tool execution path (implied by the `execute` parameter) is not shown with any timeout or race condition handling in the provided excerpt."
+    },
+    {
+     "file": "backend/tests/agent-loop.test.js",
+     "line": 16,
+     "quote": "execute: async (tool, args) => {",
+     "observation": "The test suite defines `execute` as an async callback, confirming that tool execution is delegated to an external implementation that the agent loop does not internally bound or cancel."
+    }
+   ],
+   "root_cause_hypothesis": "The agent loop in `backend/agent-loop.js` delegates tool execution to an external `execute` callback without implementing any internal timeout, cancellation, or abort mechanism. If the underlying tool implementation blocks indefinitely (e.g., due to a network hang or unresponsive dependency), the agent loop will wait indefinitely, causing the reported 'stuck' behavior.",
+   "reproduction_steps": [
+    "No reproduction steps are available. The user reported the issue without providing specific tool names, error messages, hang duration, or environment details."
+   ],
+   "proposed_solution": "Implement a timeout or cancellation mechanism for tool execution in `backend/agent-loop.js`. This could involve wrapping the `execute` callback in a `Promise.race` with a `setTimeout` or using an `AbortController` to allow the host to cancel stuck tool executions after a configurable duration.",
+   "acceptance_criteria": [
+    "The agent loop must not hang indefinitely when a tool execution blocks.",
+    "A configurable timeout or cancellation mechanism must be available for tool execution.",
+    "Stuck tool executions must be reported as errors or timeouts in the agent trace, not as indefinite hangs."
+   ],
+   "validation_plan": [
+    "Add a unit test that simulates a blocking tool execution and verifies that the agent loop times out or cancels after the configured duration.",
+    "Verify that the timeout/cancellation mechanism does not interfere with normal tool execution completion."
+   ],
+   "limitations": [
+    "No runtime logs, error messages, or reproduction steps were provided to confirm the specific tool, duration, or environment causing the hang.",
+    "The provided code excerpt for `backend/agent-loop.js` is truncated at line 75, so the actual tool execution call site is not visible to confirm the absence of timeout handling in the full implementation."
+   ],
+   "questions": [
+    "Which specific tool is causing the hang?",
+    "What is the typical duration of the hang before it is considered 'stuck'?",
+    "Are there any error messages or logs associated with the stuck state?",
+    "In what environment does this occur (e.g., specific OS, Node.js version, network conditions)?"
+   ],
+   "search_terms": [
+    "Promise.race",
+    "setTimeout",
+    "AbortController",
+    "timeout",
+    "cancel",
+    "abort"
+   ],
+   "next_action": "clarification",
+   "confidence": 0.6,
+   "original_user_description": "The agent sometimes gets stuck during tool execution. Investigate what is causing it.",
+   "source_commit": "477c9ccb16443273302208e95625524248a49f88",
+   "root_cause_status": "hypothesis",
+   "evidence_status": "Proposal only; deterministic reference validation is recorded separately",
+   "affected_components": [
+    "backend/agent-loop.js",
+    "backend/tests/agent-loop.test.js"
+   ],
+   "observed_behaviour_attribution": "User report and source inspection; runtime reproduction is recorded separately"
+  },
+  "finding_validation": {
+   "source_references_valid": true,
+   "verified_references": 3,
+   "rejected": [],
+   "runtime_causality_verified": false,
+   "root_cause_status": "hypothesis",
+   "quote_format_corrections": []
+  },
+  "reproduction": {
+   "executed": false,
+   "passed": null,
+   "reason": "Read-only investigation; repository code was not executed"
+  },
+  "model_calls": [
+   {
+    "role": "classification",
+    "model_key": "b",
+    "model_id": "docker.io/local/qwen35-4b:8k",
+    "success": true,
+    "latency_seconds": 12.1938,
+    "input_bytes": 241
+   },
+   {
+    "role": "root_investigation",
+    "model_key": "a",
+    "model_id": "qwen3.8-27b",
+    "success": true,
+    "latency_seconds": 25.2086,
+    "input_bytes": 24943
+   },
+   {
+    "role": "root_investigation",
+    "model_key": "a",
+    "model_id": "qwen3.8-27b",
+    "success": true,
+    "latency_seconds": 19.6872,
+    "input_bytes": 23006
+   },
+   {
+    "role": "root_investigation",
+    "model_key": "a",
+    "model_id": "qwen3.8-27b",
+    "success": true,
+    "latency_seconds": 17.5674,
+    "input_bytes": 23409
+   }
+  ],
+  "recovery_events": [],
+  "transitions": [
+   [
+    2,
+    "2026-10-19T23:45:00.119155+00:00",
+    "queue:intake",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    4,
+    "2026-10-19T23:45:00.314525+00:00",
+    "manual_intake",
+    "completed",
+    "request_triage",
+    "ready"
+   ],
+   [
+    6,
+    "2026-10-19T23:45:00.633773+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    10,
+    "2026-10-19T23:45:12.938666+00:00",
+    "request_triage",
+    "completed",
+    "request_duplicate_check",
+    "ready"
+   ],
+   [
+    12,
+    "2026-10-19T23:45:13.312531+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    14,
+    "2026-10-19T23:45:13.394016+00:00",
+    "request_duplicate_check",
+    "completed",
+    "repository_search",
+    "ready"
+   ],
+   [
+    16,
+    "2026-10-19T23:45:13.829204+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    19,
+    "2026-10-19T23:45:14.588923+00:00",
+    "repository_search",
+    "completed",
+    "problem_investigation",
+    "ready"
+   ],
+   [
+    21,
+    "2026-10-19T23:45:14.844481+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    25,
+    "2026-10-19T23:45:40.147758+00:00",
+    "problem_investigation",
+    "completed",
+    "repository_search",
+    "ready"
+   ],
+   [
+    27,
+    "2026-10-19T23:45:40.262343+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    30,
+    "2026-10-19T23:45:40.948860+00:00",
+    "repository_search",
+    "completed",
+    "problem_investigation",
+    "ready"
+   ],
+   [
+    32,
+    "2026-10-19T23:45:41.284108+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    36,
+    "2026-10-19T23:46:01.076716+00:00",
+    "problem_investigation",
+    "completed",
+    "ticket_enhancement",
+    "ready"
+   ],
+   [
+    38,
+    "2026-10-19T23:46:01.171113+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    40,
+    "2026-10-19T23:46:01.279470+00:00",
+    "ticket_enhancement",
+    "completed",
+    "reproduction_check",
+    "ready"
+   ],
+   [
+    42,
+    "2026-10-19T23:46:01.680372+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    44,
+    "2026-10-19T23:46:01.782260+00:00",
+    "reproduction_check",
+    "completed",
+    "finding_validation",
+    "ready"
+   ],
+   [
+    46,
+    "2026-10-19T23:46:02.201669+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    48,
+    "2026-10-19T23:46:02.304943+00:00",
+    "finding_validation",
+    "completed",
+    "problem_investigation",
+    "ready"
+   ],
+   [
+    50,
+    "2026-10-19T23:46:02.720533+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    62,
+    "2026-10-19T23:46:20.396248+00:00",
+    "problem_investigation",
+    "completed",
+    "ticket_enhancement",
+    "ready"
+   ],
+   [
+    64,
+    "2026-10-19T23:46:20.470056+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    66,
+    "2026-10-19T23:46:20.559498+00:00",
+    "ticket_enhancement",
+    "completed",
+    "reproduction_check",
+    "ready"
+   ],
+   [
+    68,
+    "2026-10-19T23:46:20.979587+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    70,
+    "2026-10-19T23:46:21.076103+00:00",
+    "reproduction_check",
+    "completed",
+    "finding_validation",
+    "ready"
+   ],
+   [
+    72,
+    "2026-10-19T23:46:21.491580+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    74,
+    "2026-10-19T23:46:21.591159+00:00",
+    "finding_validation",
+    "completed",
+    "ticket_finalisation",
+    "ready"
+   ],
+   [
+    76,
+    "2026-10-19T23:46:22.006155+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    78,
+    "2026-10-19T23:46:22.103891+00:00",
+    "ticket_finalisation",
+    "completed",
+    "ticket_finalisation",
+    "needs_information"
+   ]
+  ]
+ },
+ {
+  "ticket_id": "GE-EABBDB96",
+  "run_id": "33746956c519460b",
+  "repository": "/Users/daviddoan/git_code/graph_engineering/.runtime/third-party/uuid",
+  "node": "ticket_finalisation",
+  "status": "needs_information",
+  "original": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. Investigate which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+  "revisions": 4,
+  "triage": {
+   "title": "UUID Parse Validation Inconsistency",
+   "category": "bug",
+   "keywords": [
+    "uuid",
+    "Parse",
+    "ParseBytes",
+    "Validate",
+    "validation",
+    "urn",
+    "braces",
+    "prefix"
+   ],
+   "components": [
+    "uuid"
+   ],
+   "missing_information": [
+    "expected"
+   ],
+   "suggested_priority": "P2"
+  },
+  "enhanced": {
+   "title": "UUID Parse Validation Inconsistency",
+   "problem_statement": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. The investigation must determine which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+   "expected_behaviour": "The user expects uuid.Parse to reject non-standard input formats such as strings wrapped in braces or with a urn prefix, or at least to behave consistently with ParseBytes and Validate.",
+   "observed_behaviour": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix.",
+   "findings": [
+    {
+     "file": "uuid.go",
+     "line": 86,
+     "quote": "// Parse decodes s into a UUID or returns an error if it cannot be parsed.  Both",
+     "observation": "The doc comment for Parse explicitly states it decodes both standard and non-standard forms."
+    },
+    {
+     "file": "uuid.go",
+     "line": 90,
+     "quote": "// Parse accepts non-standard strings such as the raw hex encoding",
+     "observation": "The doc comment confirms Parse accepts non-standard strings including raw hex."
+    },
+    {
+     "file": "uuid.go",
+     "line": 91,
+     "quote": "// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx and 38 byte \"Microsoft style\" encodings,",
+     "observation": "The doc comment confirms Parse accepts 38 byte Microsoft style encodings with braces."
+    },
+    {
+     "file": "uuid.go",
+     "line": 94,
+     "quote": "// it parses non-standard encodings as indicated above.",
+     "observation": "The doc comment explicitly warns that Parse should not be used to validate strings."
+    },
+    {
+     "file": "uuid.go",
+     "line": 102,
+     "quote": "case 36 + 9:",
+     "observation": "Parse handles 45-character strings (36 + 9) for URN prefix."
+    },
+    {
+     "file": "uuid.go",
+     "line": 103,
+     "quote": "if !strings.EqualFold(s[:9], \"urn:uuid:\") {",
+     "observation": "Parse checks for the urn:uuid: prefix case-insensitively."
+    }
+   ],
+   "root_cause_hypothesis": "The root cause is a mismatch between user expectations and the documented behavior of Parse. Parse is intentionally designed to accept non-standard encodings (braces, URN prefix, raw hex) as documented in uuid.go lines 86-94, but users may expect it to behave as a strict validator. The inconsistency with Validate (which likely only accepts standard RFC 9562 forms) is by design, as Parse is for decoding and Validate is for strict validation.",
+   "reproduction_steps": [
+    "Call uuid.Parse with a string wrapped in braces, e.g., \u201c{f47ac10b-58cc-0372-8567-0e02b2c3d479}\u201d.",
+    "Call uuid.Parse with a string prefixed with urn:uuid:, e.g., \u201curn:uuid:f47ac10b-58cc-4372-0567-0e02b2c3d479\u201d.",
+    "Call uuid.Parse with a raw 32-character hex string, e.g., \u201cf47ac10b58cc037285670e02b2c3d479\u201d.",
+    "Compare results with uuid.Validate on the same inputs."
+   ],
+   "proposed_solution": "No code change is required if the current behavior is intentional. The documentation in uuid.go lines 86-94 already warns that Parse should not be used for validation. If users need strict validation, they should use uuid.Validate instead. If the behavior is considered a bug, Parse could be modified to reject non-standard forms, but this would be a breaking change and contradict the documented intent.",
+   "acceptance_criteria": [
+    "uuid.Parse accepts strings wrapped in braces, with urn:uuid: prefix, and raw 32-character hex strings as documented.",
+    "uuid.Validate rejects non-standard forms that Parse accepts, if strict validation is required.",
+    "Documentation clearly distinguishes between Parse (decoding) and Validate (strict validation)."
+   ],
+   "validation_plan": [
+    "Review uuid.go lines 86-94 to confirm documented behavior.",
+    "Review uuid_test.go lines 44-76 to confirm test coverage for non-standard forms.",
+    "Compare Parse and Validate behavior on non-standard inputs to confirm inconsistency is by design."
+   ],
+   "limitations": [
+    "No runtime logs or reproduction receipt is available; behavior is inferred from source code and test cases only.",
+    "The exact implementation of Validate is not provided in the excerpts, so its behavior on non-standard forms cannot be directly verified."
+   ],
+   "questions": [
+    "Should Parse be modified to reject non-standard forms, or is the current behavior (accepting them) intentional and documented?",
+    "Is there a specific use case where users expect Parse to behave as a strict validator?"
+   ],
+   "search_terms": [
+    "func Parse(",
+    "func ParseBytes(",
+    "func (u UUID) Validate(",
+    "strings.TrimPrefix",
+    "strings.TrimLeft",
+    "urn:uuid:",
+    "strings.HasPrefix",
+    "Users"
+   ],
+   "next_action": "clarification",
+   "confidence": 0.85,
+   "original_user_description": "Users report that uuid.Parse accepts some inputs they expected to be rejected, for example strings wrapped in braces or with a urn prefix. Investigate which input formats Parse actually accepts and whether validation is inconsistent with ParseBytes or Validate.",
+   "source_commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d",
+   "root_cause_status": "hypothesis",
+   "evidence_status": "Proposal only; deterministic reference validation is recorded separately",
+   "affected_components": [
+    "uuid.go"
+   ],
+   "observed_behaviour_attribution": "User report and source inspection; runtime reproduction is recorded separately"
+  },
+  "finding_validation": {
+   "source_references_valid": true,
+   "verified_references": 6,
+   "rejected": [],
+   "runtime_causality_verified": false,
+   "root_cause_status": "hypothesis",
+   "quote_format_corrections": [
+    {
+     "file": "uuid.go",
+     "line": 89,
+     "corrected_line": 90,
+     "proposed_quote": "// Parse accepts non-standard strings such as the raw hex encoding",
+     "captured_quote": "// Parse accepts non-standard strings such as the raw hex encoding",
+     "kind": "line_offset"
+    },
+    {
+     "file": "uuid.go",
+     "line": 91,
+     "proposed_quote": "// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx and 38 byte \u201cMicrosoft style\u201d encodings,",
+     "captured_quote": "// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx and 38 byte \"Microsoft style\" encodings,",
+     "kind": "typographic_quotes"
+    },
+    {
+     "file": "uuid.go",
+     "line": 93,
+     "corrected_line": 94,
+     "proposed_quote": "// it parses non-standard encodings as indicated above.",
+     "captured_quote": "// it parses non-standard encodings as indicated above.",
+     "kind": "line_offset"
+    },
+    {
+     "file": "uuid.go",
+     "line": 103,
+     "proposed_quote": "if !strings.EqualFold(s[:9], \u201curn:uuid:\u201d) {",
+     "captured_quote": "if !strings.EqualFold(s[:9], \"urn:uuid:\") {",
+     "kind": "typographic_quotes"
+    }
+   ]
+  },
+  "reproduction": {
+   "executed": false,
+   "passed": null,
+   "reason": "Read-only investigation; repository code was not executed"
+  },
+  "model_calls": [
+   {
+    "role": "classification",
+    "model_key": "b",
+    "model_id": "docker.io/local/qwen35-4b:8k",
+    "success": true,
+    "latency_seconds": 8.8279,
+    "input_bytes": 417
+   },
+   {
+    "role": "root_investigation",
+    "model_key": "a",
+    "model_id": "qwen3.8-27b",
+    "success": true,
+    "latency_seconds": 22.1991,
+    "input_bytes": 16906
+   },
+   {
+    "role": "root_investigation",
+    "model_key": "a",
+    "model_id": "qwen3.8-27b",
+    "success": true,
+    "latency_seconds": 22.5894,
+    "input_bytes": 14938
+   },
+   {
+    "role": "root_investigation",
+    "model_key": "a",
+    "model_id": "qwen3.8-27b",
+    "success": true,
+    "latency_seconds": 23.9631,
+    "input_bytes": 15624
+   },
+   {
+    "role": "root_investigation",
+    "model_key": "a",
+    "model_id": "qwen3.8-27b",
+    "success": true,
+    "latency_seconds": 19.1545,
+    "input_bytes": 17231
+   },
+   {
+    "role": "root_investigation",
+    "model_key": "a",
+    "model_id": "qwen3.8-27b",
+    "success": true,
+    "latency_seconds": 20.7781,
+    "input_bytes": 15532
+   }
+  ],
+  "recovery_events": [
+   {
+    "seq": 144,
+    "run_id": "33746956c519460b",
+    "at": "2026-10-19T23:49:57.360749+00:00",
+    "node": "ticket_finalisation",
+    "kind": "intake_reinvestigate",
+    "data": {
+     "ticket_id": "GE-EABBDB96",
+     "execution_attempt_id": null,
+     "parent_task_id": "GE-EABBDB96",
+     "actor": "mcp:codex-acceptance",
+     "revision": 2,
+     "source": "ticket_finalisation",
+     "destination": "repository_search",
+     "status": "ready"
+    }
+   },
+   {
+    "seq": 154,
+    "run_id": "33746956c519460b",
+    "at": "2026-10-19T23:50:56.105846+00:00",
+    "node": "problem_investigation",
+    "kind": "worker_recovered",
+    "data": {
+     "ticket_id": "GE-EABBDB96",
+     "execution_attempt_id": "3785274b4eb7462fa18b851f71997b96",
+     "parent_task_id": "GE-EABBDB96"
+    }
+   }
+  ],
+  "transitions": [
+   [
+    54,
+    "2026-10-19T23:46:18.934212+00:00",
+    "queue:intake",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    56,
+    "2026-10-19T23:46:19.144050+00:00",
+    "manual_intake",
+    "completed",
+    "request_triage",
+    "ready"
+   ],
+   [
+    58,
+    "2026-10-19T23:46:19.449483+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    81,
+    "2026-10-19T23:46:28.387323+00:00",
+    "request_triage",
+    "completed",
+    "request_duplicate_check",
+    "ready"
+   ],
+   [
+    83,
+    "2026-10-19T23:46:28.585752+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    85,
+    "2026-10-19T23:46:28.676783+00:00",
+    "request_duplicate_check",
+    "completed",
+    "repository_search",
+    "ready"
+   ],
+   [
+    87,
+    "2026-10-19T23:46:29.102565+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    90,
+    "2026-10-19T23:46:29.869769+00:00",
+    "repository_search",
+    "completed",
+    "problem_investigation",
+    "ready"
+   ],
+   [
+    92,
+    "2026-10-19T23:46:30.127563+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    96,
+    "2026-10-19T23:46:52.426530+00:00",
+    "problem_investigation",
+    "completed",
+    "repository_search",
+    "ready"
+   ],
+   [
+    98,
+    "2026-10-19T23:46:52.491176+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    101,
+    "2026-10-19T23:46:53.264409+00:00",
+    "repository_search",
+    "completed",
+    "problem_investigation",
+    "ready"
+   ],
+   [
+    103,
+    "2026-10-19T23:46:53.507801+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    107,
+    "2026-10-19T23:47:16.190672+00:00",
+    "problem_investigation",
+    "completed",
+    "ticket_enhancement",
+    "ready"
+   ],
+   [
+    109,
+    "2026-10-19T23:47:16.309310+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    111,
+    "2026-10-19T23:47:16.466467+00:00",
+    "ticket_enhancement",
+    "completed",
+    "reproduction_check",
+    "ready"
+   ],
+   [
+    113,
+    "2026-10-19T23:47:16.818415+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    115,
+    "2026-10-19T23:47:16.903291+00:00",
+    "reproduction_check",
+    "completed",
+    "finding_validation",
+    "ready"
+   ],
+   [
+    117,
+    "2026-10-19T23:47:17.327067+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    119,
+    "2026-10-19T23:47:17.418249+00:00",
+    "finding_validation",
+    "completed",
+    "problem_investigation",
+    "ready"
+   ],
+   [
+    121,
+    "2026-10-19T23:47:17.841307+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    125,
+    "2026-10-19T23:47:41.906868+00:00",
+    "problem_investigation",
+    "completed",
+    "ticket_enhancement",
+    "ready"
+   ],
+   [
+    127,
+    "2026-10-19T23:47:42.140382+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    129,
+    "2026-10-19T23:47:42.230516+00:00",
+    "ticket_enhancement",
+    "completed",
+    "reproduction_check",
+    "ready"
+   ],
+   [
+    131,
+    "2026-10-19T23:47:42.648537+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    133,
+    "2026-10-19T23:47:42.733969+00:00",
+    "reproduction_check",
+    "completed",
+    "finding_validation",
+    "ready"
+   ],
+   [
+    135,
+    "2026-10-19T23:47:43.159191+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    137,
+    "2026-10-19T23:47:43.248446+00:00",
+    "finding_validation",
+    "completed",
+    "ticket_finalisation",
+    "ready"
+   ],
+   [
+    139,
+    "2026-10-19T23:47:43.670414+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    141,
+    "2026-10-19T23:47:43.745449+00:00",
+    "ticket_finalisation",
+    "completed",
+    "ticket_finalisation",
+    "needs_information"
+   ],
+   [
+    144,
+    "2026-10-19T23:49:57.360749+00:00",
+    "ticket_finalisation",
+    "intake_reinvestigate",
+    null,
+    "ready"
+   ],
+   [
+    146,
+    "2026-10-19T23:49:57.464781+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    149,
+    "2026-10-19T23:49:58.208565+00:00",
+    "repository_search",
+    "completed",
+    "problem_investigation",
+    "ready"
+   ],
+   [
+    151,
+    "2026-10-19T23:49:58.484600+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    154,
+    "2026-10-19T23:50:56.105846+00:00",
+    "problem_investigation",
+    "worker_recovered",
+    null,
+    null
+   ],
+   [
+    155,
+    "2026-10-19T23:50:58.181408+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    159,
+    "2026-10-19T23:51:17.442087+00:00",
+    "problem_investigation",
+    "completed",
+    "repository_search",
+    "ready"
+   ],
+   [
+    161,
+    "2026-10-19T23:51:17.478420+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    164,
+    "2026-10-19T23:51:18.263307+00:00",
+    "repository_search",
+    "completed",
+    "problem_investigation",
+    "ready"
+   ],
+   [
+    166,
+    "2026-10-19T23:51:18.491507+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    170,
+    "2026-10-19T23:51:39.354875+00:00",
+    "problem_investigation",
+    "completed",
+    "ticket_enhancement",
+    "ready"
+   ],
+   [
+    172,
+    "2026-10-19T23:51:39.791500+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    174,
+    "2026-10-19T23:51:39.915346+00:00",
+    "ticket_enhancement",
+    "completed",
+    "reproduction_check",
+    "ready"
+   ],
+   [
+    176,
+    "2026-10-19T23:51:40.306703+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    178,
+    "2026-10-19T23:51:40.395973+00:00",
+    "reproduction_check",
+    "completed",
+    "finding_validation",
+    "ready"
+   ],
+   [
+    180,
+    "2026-10-19T23:51:40.818010+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    182,
+    "2026-10-19T23:51:40.906806+00:00",
+    "finding_validation",
+    "completed",
+    "ticket_finalisation",
+    "ready"
+   ],
+   [
+    184,
+    "2026-10-19T23:51:41.328644+00:00",
+    "queue:normal",
+    "queue_dispatched",
+    null,
+    null
+   ],
+   [
+    186,
+    "2026-10-19T23:51:41.407572+00:00",
+    "ticket_finalisation",
+    "completed",
+    "ticket_finalisation",
+    "needs_information"
+   ]
+  ]
+ }
+]
