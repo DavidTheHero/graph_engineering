@@ -52,8 +52,10 @@ function card(item,openTicket,refresh){
   const answers=item.questions.map((q,i)=>questionBlock(item,q,i));
   for(const a of answers){if(item.questions_readonly)a.input.remove();article.append(a.box);}
   const freeText=el('textarea','inbox-note');freeText.rows=2;freeText.placeholder='Optional note';freeText.hidden=true;
+  freeText.value=drafts.get(item.ticket_id+':note')||'';freeText.addEventListener('input',()=>drafts.set(item.ticket_id+':note',freeText.value));
   freeText.setAttribute('aria-label','Note for '+item.ticket_id);
   const actor=el('input','inbox-actor');actor.placeholder='Your name (recorded as approver)';actor.hidden=true;actor.setAttribute('aria-label','Approver name');
+  actor.value=drafts.get('actor')||'';actor.addEventListener('input',()=>drafts.set('actor',actor.value));
   const consentWrap=el('label','inbox-consent');const consent=el('input');consent.type='checkbox';consentWrap.hidden=true;
   const consentText=el('span');consentWrap.append(consent,consentText);
   const bar=el('div','inbox-actions');
@@ -82,7 +84,7 @@ function card(item,openTicket,refresh){
         }
         button.disabled=true;
         await command(action.endpoint,payload);
-        item.questions.forEach((_,i)=>drafts.delete(item.ticket_id+':'+i));
+        item.questions.forEach((_,i)=>drafts.delete(item.ticket_id+':'+i));drafts.delete(item.ticket_id+':note');
         toast(`${item.ticket_id}: ${action.label} recorded.`);
         await refresh();
       }catch(error){showError(error);button.disabled=!state.control;}
@@ -99,12 +101,12 @@ export function renderInbox(openTicket,refresh){
   const root=$('#inbox');
   // Do not rebuild while the operator is typing in a card (a refresh would steal focus); rebuild as soon as
   // focus leaves the cards so a changed revision or action list is never left stale.
+  // Rebuilding on focus-out would swallow a click on the card's buttons, so a deferred update is applied by the
+  // next poll (centre.js re-renders while #inbox is marked pending) once no field in the tab has focus.
   if(root.contains(document.activeElement)&&['TEXTAREA','INPUT'].includes(document.activeElement.tagName)){
-    if(!root.dataset.pending){root.dataset.pending='1';
-      // If focus moved to another field in the tab, renderInbox simply defers again.
-      root.addEventListener('focusout',()=>setTimeout(()=>{delete root.dataset.pending;renderInbox(openTicket,refresh);},0),{once:true});}
-    return;
+    root.dataset.pending='1';return;
   }
+  delete root.dataset.pending;
   const items=attentionItems();root.replaceChildren();
   if(!items.length){root.append(el('p','inbox-empty','Nothing needs you right now. Tickets that wait for a decision appear here.'));return;}
   for(const item of items)root.append(card(item,openTicket,refresh));

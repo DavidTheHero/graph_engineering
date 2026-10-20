@@ -79,6 +79,9 @@ class ProjectionTests(unittest.TestCase):
         self.assertIsNone(item(waiting))  # "Reject" pauses the ticket: the decision has been made.
         self.assertIsNone(item(row("enhancement_rejected", enhanced=DRAFT, intake={"generation": 3, "ticket_id": "GE-1"})))
         self.assertEqual(self.kinds(item(row("enhancement_rejected", enhanced=DRAFT))), ["reinvestigate"])
+        # A paused ticket that is blocked still needs a retry decision.
+        paused_blocked = row("blocked", "problem_investigation", error="stalled") | {"paused": 1}
+        self.assertEqual(self.kinds(item(paused_blocked)), ["retry"])
 
     def test_escalated_with_retries_left_is_dead_letter_but_retryable(self):
         found = item(row("escalated", "repair", mode="development", error="Repair budget exhausted"))

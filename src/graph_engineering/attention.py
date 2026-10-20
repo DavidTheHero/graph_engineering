@@ -32,8 +32,11 @@ def _action(action_id, label, endpoint, payload, *, input=None, primary=False, h
 def item(ticket, *, approved_head=None, original=None, automatic_development=False):
     """The attention item for one ticket row (``Tickets.list()`` shape), or None if nothing is needed."""
     state, status, node = ticket["state"], ticket["status"], ticket["node"]
-    # Working, queued, cancelled or operator-paused (e.g. a rejected merge) tickets need nobody right now.
-    if ticket.get("lease_owner") or ticket.get("cancel") or ticket.get("paused") or status in ("cancelled", "ready", "running"):
+    # Working, queued or cancelled tickets need nobody right now. A paused merge approval means the operator
+    # rejected it; paused blocked/failed tickets still need a retry decision, so they stay.
+    if ticket.get("lease_owner") or ticket.get("cancel") or status in ("cancelled", "ready", "running"):
+        return None
+    if ticket.get("paused") and status not in ("blocked", "escalated", "failed"):
         return None
     intake = state["config"].get("run_mode") == "intake"
     developing = state["config"].get("run_mode") == "accepted_development"
@@ -187,13 +190,13 @@ def items(tickets, rows=None) -> list[dict]:
     """
     from .autonomy import policy
     result, automatic_by_repository = [], {}
+    originals = dict(tickets.db.execute("SELECT ticket_id, original FROM ticket_reports").fetchall())  # One query.
     for ticket in rows if rows is not None else tickets.list():
         repository_id = ticket["state"].get("intake", {}).get("repository_id")
         if repository_id and repository_id not in automatic_by_repository:
             automatic_by_repository[repository_id] = bool(policy(tickets, repository_id).get("development"))
-        report_row = tickets.db.execute("SELECT original FROM ticket_reports WHERE ticket_id=?", (ticket["id"],)).fetchone()
         found = item(ticket, approved_head=tickets.store.approved_head(ticket["run_id"]),
-                     original={"original": report_row[0]} if report_row else None,
+                     original={"original": originals[ticket["id"]]} if ticket["id"] in originals else None,
                      automatic_development=automatic_by_repository.get(repository_id, False))
         if found:
             found["repository"] = ticket["state"]["config"].get("source_repo", ticket["repo"])

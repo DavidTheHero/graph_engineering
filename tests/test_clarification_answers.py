@@ -141,8 +141,15 @@ class EvidenceHelperTests(unittest.TestCase):
         ok = {"file": "calc.py", "line": 1, "quote": "def add(a,b): return a-b"}
         self.assertEqual(verify_reference(ok, shown), ok)
         self.assertIsNone(verify_reference(ok | {"file": "other.py"}, shown))  # A file the model never saw.
-        self.assertIsNone(verify_reference(ok | {"quote": "def"}, shown))  # Too short to prove anything.
+        self.assertIsNone(verify_reference(ok | {"quote": "def"}, shown, "def is used"))  # Keyword only.
         self.assertEqual(verify_reference(ok | {"line": 3}, shown)["corrected_from"], 3)
+        # A short identifier counts only when the answer names it.
+        env = {"llm.js": {84: "    model: process.env.OLLAMA_MODEL || 'llama3.1'"}}
+        short = {"file": "llm.js", "line": 84, "quote": "model:"}
+        self.assertIsNotNone(verify_reference(short, env, "The model: option comes from OLLAMA_MODEL"))
+        self.assertIsNone(verify_reference(short, env, "Configured elsewhere"))
+
+
 
 
 class SecretFilterTests(unittest.TestCase):
@@ -158,15 +165,48 @@ class SecretFilterTests(unittest.TestCase):
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-m", "Add a secret and a huge file")
         sha = git(self.repo, "rev-parse", "HEAD")
-        listing = source_files(self.repo, sha)
+        from graph_engineering.investigation import committed_files
+        allowed = committed_files(self.repo, sha)
+        listing = source_files(allowed)
         self.assertNotIn("config/credentials.py", listing)
         self.assertNotIn("big.py", listing)
-        evidence, shown = focused_evidence(self.repo, sha, ["add"], ["config/credentials.py", "calc.py"])
+        evidence, shown = focused_evidence(self.repo, sha, ["add"], ["config/credentials.py", "calc.py"], allowed)
         self.assertEqual(evidence["picked_files"], ["calc.py"])
         self.assertNotIn("config/credentials.py", shown)
         self.assertNotIn("big.py", shown)
         self.assertNotIn("config/credentials.py", evidence["files_containing_term"]["add"])
         self.assertNotIn("super-secret", json.dumps(evidence))
+
+    def test_hidden_tail_of_a_long_line_cannot_be_cited(self):
+        from graph_engineering.investigation import committed_files
+        from graph_engineering.question_answering import SHOWN_WIDTH, focused_evidence, verify_reference
+        from tests.test_core import git
+        (self.repo / "wide.py").write_text("CONFIG = '" + "x" * SHOWN_WIDTH + "HIDDEN_TAIL_VALUE'\n")
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-m", "Long line")
+        sha = git(self.repo, "rev-parse", "HEAD")
+        evidence, shown = focused_evidence(self.repo, sha, ["CONFIG"], ["wide.py"], committed_files(self.repo, sha))
+        self.assertNotIn("HIDDEN_TAIL_VALUE", json.dumps(evidence))  # The model never saw the tail...
+        reference = {"file": "wide.py", "line": 1, "quote": "HIDDEN_TAIL_VALUE"}
+        self.assertIsNone(verify_reference(reference, shown, "HIDDEN_TAIL_VALUE is set"))  # ...so it cannot cite it.
+
+    def test_line_numbers_match_git_with_form_feeds_and_failed_search_degrades(self):
+        from unittest.mock import patch
+        from graph_engineering.investigation import committed_files
+        from graph_engineering.question_answering import focused_evidence
+        from tests.test_core import git
+        (self.repo / "ff.py").write_text("a = 1\n\x0c\nb = 2\nTARGET_VALUE = 3\n")  # Form feed on line 2.
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-m", "Form feed")
+        sha = git(self.repo, "rev-parse", "HEAD")
+        allowed = committed_files(self.repo, sha)
+        _, shown = focused_evidence(self.repo, sha, ["TARGET_VALUE"], ["ff.py"], allowed)
+        self.assertEqual(shown["ff.py"][4], "TARGET_VALUE = 3")  # git grep's line 4, not shifted by splitlines().
+        failed = {"returncode": 2, "timed_out": True, "output": ""}
+        with patch("graph_engineering.question_answering.command", return_value=failed):
+            evidence, shown = focused_evidence(self.repo, sha, ["TARGET_VALUE"], ["ff.py"], allowed)
+        self.assertIn("picked files only", evidence["search_incomplete"])
+        self.assertIn("ff.py", shown)  # Degraded to the picked file instead of failing the step.
 
 
 if __name__ == "__main__":
