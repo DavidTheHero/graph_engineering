@@ -37,16 +37,20 @@ CODE_SUFFIXES = (".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".go", ".r
                  ".scala", ".cs", ".fs", ".rb", ".php", ".swift", ".c", ".h", ".cc", ".cpp", ".hpp", ".m",
                  ".lua", ".sh", ".ex", ".exs", ".erl", ".dart", ".vue", ".svelte", ".sql", ".zig")
 DOC_SUFFIXES = (".md", ".rst", ".txt", ".json", ".toml", ".yml", ".yaml", ".cfg", ".ini", ".gradle", ".xml")
+PREFIX_DISCOVERY = {".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx"}
 TEST_DIRS = {"tests", "test", "__tests__", "spec", "specs", "testing", "e2e", "integration_tests", "testdata"}
 
 
 def is_test(path: str) -> bool:
     p = PurePosixPath(path)
     name = p.name.lower()
-    return (name.startswith(("test", "spec")) or bool(re.search(r"[._-](?:test|spec)s?[._-]", name))
-            # JVM/.NET/Swift/PHP convention: FooTest.java, FooTests.cs, FooSpec.scala (case-sensitive, so
-            # Latest.kt and Contest.php stay source files).
-            or bool(re.search(r"[a-z0-9](?:Test|Tests|Spec)\.(?:java|kt|cs|scala|swift|php)$", p.name))
+    # Bare "test*" prefix only where runners discover by that glob (unittest test*.py, node test*.js);
+    # elsewhere a prefix counts only with a separator, so Testament.kt and spectrum.py stay source.
+    prefix = name.startswith("test") if p.suffix.lower() in PREFIX_DISCOVERY else bool(re.match(r"(?:test|spec)s?[._-]", name))
+    return (prefix or bool(re.search(r"[._-](?:test|spec)s?[._-]", name))
+            # JVM/.NET/Swift/PHP convention, case-sensitive: FooTest.java, HTTPTest.kt, DAOTests.cs, URLSpec.scala;
+            # Latest.kt and Contest.php stay source files.
+            or bool(re.search(r"[A-Za-z0-9](?:Test|Tests|Spec)\.(?:java|kt|cs|scala|swift|php)$", p.name))
             or bool({part.lower() for part in p.parts[:-1]} & TEST_DIRS))
 
 

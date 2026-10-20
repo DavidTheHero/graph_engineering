@@ -211,18 +211,27 @@ def live_controller(home: Path):
     if not (Path(home)/'state.sqlite3').exists():
         return None
     from .runtime import BusyError, RepoLock
-    try:
-        with RepoLock(home, 'scheduler'):
-            return None
-    except BusyError:
-        pass
+    # A probe holds the lock only for microseconds; a live scheduler holds it continuously. Treat the
+    # scheduler as running only if the lock stays held across several probes (another dashboard's probe
+    # would not), and starting schedulers retry their lock briefly (scheduler.acquire_scheduler_lock).
+    for attempt in range(4):
+        try:
+            with RepoLock(home, 'scheduler'):
+                return None
+        except BusyError:
+            if attempt < 3:
+                time.sleep(0.15)
     from .tickets import Tickets
     tickets = Tickets(home)
     try:
         pid = (tickets.setting('worker_service') or {}).get('pid')
     finally:
         tickets.store.close()
-    return pid if isinstance(pid, int) else -1
+    return pid if isinstance(pid, int) else 0  # 0 = running, PID not yet reported
+
+
+def _pid_label(pid):
+    return f'last reported PID {pid}' if pid else 'PID not reported yet'
 
 
 def serve_centre(home: Path, port=8765, workers=2, attach_controller=False):
@@ -231,10 +240,10 @@ def serve_centre(home: Path, port=8765, workers=2, attach_controller=False):
         kwargs = {'creationflags':subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {'start_new_session':True}
         controller = None
         running = live_controller(home)
-        if running and not attach_controller:
+        if running is not None and not attach_controller:
             # One scheduler per home: a second one could only fail on the scheduler lock.
             attach_controller = True
-            print(f'A scheduler is already running for this home (PID {running}); attaching to it.',flush=True)
+            print(f'A scheduler is already running for this home ({_pid_label(running)}); attaching to it.',flush=True)
         if not attach_controller:
             with (home/'scheduler.log').open('ab') as output:
                 controller = subprocess.Popen([sys.executable,'-m','graph_engineering','--home',str(home),
@@ -249,7 +258,7 @@ def serve_centre(home: Path, port=8765, workers=2, attach_controller=False):
                       'The dashboard will show "Controller not observed" until a scheduler runs.',flush=True)
                 controller = None
         service = (f'Controller PID: {controller.pid}' if controller else
-                   f'Attached to scheduler PID {running}' if running else 'No scheduler started; check dashboard heartbeat')
+                   f'Attached to scheduler ({_pid_label(running)})' if running is not None else 'No scheduler started; check dashboard heartbeat')
         print(f'Control centre: http://127.0.0.1:{server.server_port}\n{service}; state: {home}',flush=True)
         try: server.serve_forever(poll_interval=.25)
         finally:

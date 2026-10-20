@@ -291,10 +291,12 @@ class Capabilities:
                 "note": "Test results are controller-executed receipts; review findings are model proposals."}
 
     def workflow_graph(self) -> dict:
-        from .workflow import NODES, transitions
+        from .workflow import CONDITIONAL_EDGES, NODES, transitions
         return {"nodes": [{"name": n.name, "responsible": n.responsible, "permissions": n.permissions,
                            "max_attempts": n.max_attempts, "timeout_seconds": n.timeout_seconds,
-                           "transitions": sorted(transitions(n.name) - {n.name})} for n in NODES],
+                           "transitions": sorted(transitions(n.name) - {n.name}),
+                           "dynamic_transitions": [e for e in CONDITIONAL_EDGES.get(n.name, []) if e.startswith("<")]}
+                          for n in NODES],
                 "note": "Workflow.execute rejects any transition not listed here."}
 
     def model_health(self, refresh: bool = False) -> dict:

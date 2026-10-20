@@ -297,15 +297,21 @@ def provider_rejection(event) -> int | None:
     if not isinstance(event, dict):
         return None
     error = event.get("error") if isinstance(event.get("error"), dict) else {}
-    codes = [error.get("status"), error.get("statusCode")]
-    body = (error.get("response") or {}).get("body") if isinstance(error.get("response"), dict) else None
-    parsed = _json_or_none(body) if isinstance(body, str) else body
-    if isinstance(parsed, dict) and isinstance(parsed.get("error"), dict):
-        codes.append(parsed["error"].get("code"))
-    for code in codes:
-        if isinstance(code, int) and 400 <= code < 500 and code not in TRANSIENT_HTTP:
-            return code
-    return None
+    data = error.get("data") if isinstance(error.get("data"), dict) else {}  # AI-SDK APIError shape.
+    if data.get("isRetryable") is True:
+        return None
+    codes = [error.get("status"), error.get("statusCode"), data.get("statusCode")]
+    bodies = [(error.get("response") or {}).get("body") if isinstance(error.get("response"), dict) else None,
+              data.get("responseBody")]
+    for body in bodies:
+        parsed = _json_or_none(body) if isinstance(body, str) else body
+        if isinstance(parsed, dict) and isinstance(parsed.get("error"), dict):
+            codes.append(parsed["error"].get("code"))
+    codes = [c for c in codes if isinstance(c, int) and c >= 400]
+    # Any retryable signal (5xx, 408/409/425/429) anywhere wins over an outer 4xx wrapper.
+    if not codes or any(c >= 500 or c in TRANSIENT_HTTP for c in codes):
+        return None
+    return codes[0]
 
 
 def parse_opencode_output(stdout: str) -> tuple[dict, dict]:

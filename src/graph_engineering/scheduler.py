@@ -47,6 +47,9 @@ def observe_models(tickets, timeout=2):
     observations = {}
     for key, config in load_models(tickets.store.root).items():
         result = ModelClient(config).health(retries=0, timeout=timeout)
+        if result['available'] and config.get('model_id') and not any(m.get('id') == config['model_id'] for m in result.get('models', [])):
+            # The server is up but no longer serves this model: requests would be rejected (404).
+            result = result | {'available': False, 'reason': 'configured model id not advertised by server'}
         observations[key] = result
         with tickets.db:
             tickets.db.execute('INSERT OR REPLACE INTO model_observations VALUES(?,?,?)',
@@ -158,11 +161,24 @@ def execute_assignment(home, ticket_id, owner):
             tickets.store.close()
 
 
+def acquire_scheduler_lock(home, patience=3.0):
+    """Take the scheduler lock, tolerating a dashboard's momentary liveness probe (dashboard.live_controller)."""
+    deadline = time.monotonic() + patience
+    while True:
+        lock = RepoLock(home, 'scheduler')
+        try:
+            return lock.__enter__() and lock
+        except BusyError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.1)
+
+
 def serve_scheduler(home, workers=2, once=False, poll=.5):
     if not 1 <= workers <= 8: raise ValueError('Worker concurrency must be between 1 and 8')
     home = Path(home).resolve()
     children = []
-    with RepoLock(home, 'scheduler'):
+    with acquire_scheduler_lock(home):
         tickets = Tickets(home)
         try:
             tickets.set_setting('workers',workers)

@@ -47,12 +47,13 @@ def tier_of(models: dict, key: str) -> str:
 
 def preferred_tier(config: dict, role: str, requested: str | None = None) -> str:
     """``baseline`` keeps the measured large-model-only default; ``multimodel`` uses role tiers."""
-    if role in SMALL_FIRST_ROLES and config.get("routing") != "assigned":
+    assessed = config.get("routing") == "assigned" and role in config.get("role_routes", {})
+    if role in SMALL_FIRST_ROLES and not assessed:
         return SMALL
     if config.get("routing", "baseline") == "baseline":
         return LARGE
-    if config.get("routing") == "assigned":
-        route = config.get("role_routes", {}).get(role) or []
+    if assessed:
+        route = config["role_routes"][role]
         if route and route[0] in config.get("models", {}):
             return tier_of(config["models"], route[0])
     return requested if requested in TIERS else ROLE_TIERS.get(role, LARGE)
@@ -63,11 +64,13 @@ def candidates(config: dict, role: str, requested: str | None = None) -> list[st
     models = config.get("models", {})
     # roles=None (absent) permits every role; an explicit list, even empty, is an allow-list.
     usable = [k for k, m in models.items() if m.get("model_id") and (m.get("roles") is None or role in m["roles"])]
-    if config.get("routing") == "assigned":
-        # Measured assignment: only the listed models, in the listed order. A role with
-        # no route has no eligible model and must fail closed, not guess.
-        ordered = [k for k in config.get("role_routes", {}).get(role, []) if k in usable]
+    routes = config.get("role_routes", {})
+    if config.get("routing") == "assigned" and role in routes:
+        # Measured assignment: only the listed models, in the listed order. An assessed role
+        # with an empty route has no eligible model and must fail closed, not guess.
+        ordered = [k for k in routes[role] if k in usable]
     else:
+        # Roles the assignment never assessed (e.g. an older routing.json) use tier routing.
         tier = preferred_tier(config, role, requested)
         ordered = [k for k in usable if tier_of(models, k) == tier]
         # A bounded role may escalate to a larger model; a complex role may use a small
