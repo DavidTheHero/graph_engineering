@@ -120,7 +120,7 @@ def discover_models(models: dict[str, dict], timeout: int = 8) -> dict:
         configured = config.get("model_id")
         report[key] = {"endpoint": config["endpoint"], "configured_model_id": configured, "tier": config.get("tier"),
                        "reachable": health["available"], "advertised": advertised,
-                       "identifier_verified": any(m["id"] == configured for m in advertised),
+                       "identifier_verified": identifier_advertised(health, configured),
                        "error": None if health["available"] else (health["attempts"][-1].get("error") or health["attempts"][-1].get("status"))}
     return report
 
@@ -186,6 +186,24 @@ class ModelClient:
                    "max_tokens": self.endpoint.output, "temperature": 0,
                    "chat_template_kwargs": {"enable_thinking": False}, **(body or {})}
         return _request(self.endpoint, "/chat/completions", payload, timeout=timeout or self.endpoint.timeout)
+
+
+def identifier_advertised(health: dict, model_id: str | None) -> bool:
+    return any(isinstance(m, dict) and m.get("id") == model_id for m in health.get("models", []))
+
+
+def model_health(config: dict, timeout: int = 5) -> dict:
+    """Health for routing: the server answers AND still advertises the configured model id.
+
+    A reachable server that no longer serves the model would reject every request (404),
+    so it counts as unavailable. Shared by the scheduler sweep and the workflow's probe.
+    """
+    if not config.get("endpoint"):
+        return {"available": False, "reason": "no endpoint configured"}
+    result = ModelClient(config).health(retries=0, timeout=timeout)
+    if result["available"] and config.get("model_id") and not identifier_advertised(result, config["model_id"]):
+        result = result | {"available": False, "reason": "configured model id not advertised by server"}
+    return result
 
 
 def probe_endpoints(root: Path, endpoints: dict | None = None) -> dict:

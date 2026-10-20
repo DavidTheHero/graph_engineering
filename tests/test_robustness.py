@@ -104,7 +104,7 @@ class InfrastructureRetryTests(unittest.TestCase):
         self.assertNotIn("infrastructure_failures", self.tickets.store.get(run["id"])["state"])
 
     def test_non_startup_fault_probes_model_health_for_the_scheduler(self):
-        with patch("graph_engineering.workflow.ModelClient") as client:
+        with patch("graph_engineering.models.ModelClient") as client:
             client.return_value.health.return_value = {"available": False, "attempts": []}
             _, run, events = self.run_until_settled(StallingDouble(stalls=1, phase="generation"), passes=0)
         self.assertEqual(run["status"], "ready")

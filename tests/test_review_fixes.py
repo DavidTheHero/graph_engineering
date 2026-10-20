@@ -89,8 +89,9 @@ class ImplementationModelTests(unittest.TestCase):
                 flow.store.clear_stop(run["id"])
                 run = flow.execute(run["id"])
                 self.assertEqual(run["state"]["implementation_model"], "a2")
-                self.assertEqual((run["node"], run["status"]), ("independent_review", "blocked"))
-                self.assertIn("different-model review", json.dumps(run["state"]["error"]))
+                # The override names the implementer, so independence picks another permitted reviewer.
+                self.assertEqual(run["state"]["review"]["model"], "b")
+                self.assertNotIn(run["state"]["review"]["model"], run["state"]["implementation_models"])
             finally:
                 flow.store.close()
                 tickets.store.close()
@@ -116,27 +117,30 @@ if __name__ == "__main__":
 class SecondReviewTests(unittest.TestCase):
     """Second review pass on e70dde1."""
 
-    def test_liveness_probe_cannot_stop_a_starting_scheduler(self):
+    def test_liveness_probe_cannot_stop_a_starting_scheduler_and_the_lock_stays_held(self):
         import threading
         from graph_engineering.dashboard import live_controller
-        from graph_engineering.runtime import RepoLock
-        from graph_engineering.scheduler import acquire_scheduler_lock
+        from graph_engineering.runtime import BusyError, RepoLock
+        from graph_engineering.scheduler import scheduler_lock
         with tempfile.TemporaryDirectory() as folder:
             home = Path(folder)
             Tickets(home).store.close()
             probe = RepoLock(home, "scheduler").__enter__()  # A dashboard probe holds it momentarily.
             threading.Timer(0.3, lambda: probe.__exit__(None, None, None)).start()
-            lock = acquire_scheduler_lock(home)  # Waits out the probe instead of exiting with BusyError.
-            try:
+            with scheduler_lock(home):  # Exactly how serve_scheduler uses it.
+                # Held for the whole block: an independent acquisition must fail every time.
+                for _ in range(3):
+                    with self.assertRaises(BusyError):
+                        RepoLock(home, "scheduler").__enter__()
                 self.assertEqual(live_controller(home), 0)  # Running, PID not reported yet (not a bogus -1).
-            finally:
-                lock.__exit__(None, None, None)
             self.assertIsNone(live_controller(home))
 
     def test_acronym_test_classes_are_tests_and_prefix_words_are_source(self):
-        for name in ("src/HTTPTest.java", "IOTest.kt", "DAOTests.cs", "URLSpec.scala", "testcalc.py", "test.js", "test_x.go"):
+        for name in ("src/HTTPTest.java", "IOTest.kt", "DAOTests.cs", "URLSpec.scala", "testcalc.py", "test.js", "test_x.go",
+                     "spec_helper.py", "spec-utils.js", "spec.ts", "foo_test.js", "thing.spec.ts"):
             self.assertTrue(is_test(name), name)
-        for name in ("Testament.kt", "Specification.java", "spectrum.py", "testimonials.php", "app/Latest.kt"):
+        for name in ("Testament.kt", "Specification.java", "spectrum.py", "testimonials.php", "app/Latest.kt",
+                     "src/testimonials.js", "src/testUtils.ts", "lib/testing.tsx"):
             self.assertFalse(is_test(name), name)
 
     def test_assigned_routing_falls_back_only_for_unassessed_roles(self):
@@ -154,6 +158,7 @@ class SecondReviewTests(unittest.TestCase):
             try:
                 models = default_models()
                 models["a2"] = models["a"] | {"model_id": "second-large"}
+                del models["b"]  # Only implementers remain: no independent reviewer exists.
                 config = {"repo": folder, "backend": "local", "models": models, "routing": "multimodel",
                           "allow_same_model_review": False, "model_overrides": {"review": "a"}}
                 flow.run_id = flow.store.create_run(config, "implementers")["id"]
@@ -192,7 +197,7 @@ class SecondReviewTests(unittest.TestCase):
                 with patch("graph_engineering.workflow.RepoLock"):
                     self.assertEqual(flow.ask({"config": config, "repairs": 0}, "planning", {"task": "x"}, schema, "large"), {"ok": True})
                 self.assertEqual(flow.last_model, "a2")
-                self.assertIn("provider_rejection_fallback", [e["kind"] for e in flow.store.events("rejection")])
+                self.assertIn("provider_rejection", [e["kind"] for e in flow.store.events("rejection")])
             finally:
                 flow.store.close()
 
@@ -201,7 +206,7 @@ class SecondReviewTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             tickets = Tickets(Path(folder))
             try:
-                with patch("graph_engineering.scheduler.ModelClient") as client:
+                with patch("graph_engineering.models.ModelClient") as client:
                     client.return_value.health.return_value = {"available": True, "models": [{"id": "something-else"}]}
                     observed = observe_models(tickets)
                 self.assertFalse(observed["a"]["available"])
@@ -216,3 +221,83 @@ class SecondReviewTests(unittest.TestCase):
         qa = next(n for n in graph["nodes"] if n["name"] == "question_answering")
         self.assertTrue(qa["dynamic_transitions"][0].startswith("<recorded checkpoint>"))
         self.assertFalse(any(t.startswith("<") for t in qa["transitions"]))
+
+
+class ThirdReviewTests(unittest.TestCase):
+    """Third review pass on 581200a."""
+
+    def flow(self, folder, models, worker, **config):
+        flow = Workflow(Path(folder))
+        config = {"repo": folder, "backend": "local", "models": models, "routing": "multimodel"} | config
+        flow.run_id = flow.store.create_run(config, "third")["id"]
+        flow.worker = worker
+        return flow, config
+
+    def test_rejection_after_escalation_terminates_with_the_real_cause(self):
+        class RejectLarge:
+            metrics, calls = [], []
+
+            def invoke(self, role, prompt, schema, key, run_id, **_):
+                self.calls.append(key)
+                raise ModelError("provider rejected request: HTTP 401", transient=False, phase="provider")
+        models = default_models()
+        models["b"]["input_budget_bytes"] = 10  # Every prompt escalates the small model to the large one.
+        worker = RejectLarge()
+        with tempfile.TemporaryDirectory() as folder:
+            flow, config = self.flow(folder, models, worker)
+            try:
+                with patch("graph_engineering.workflow.RepoLock"), self.assertRaisesRegex(ModelError, "rejected by provider: a"):
+                    flow.ask({"config": config, "repairs": 0}, "classification", {"task": "x"}, {"type": "object"}, "small")
+                self.assertEqual(worker.calls, ["a"])  # One real call; the rejected model is not retried.
+                kinds = [e["kind"] for e in flow.store.events("third")]
+                self.assertEqual(kinds.count("provider_rejection"), 1)
+            finally:
+                flow.store.close()
+
+    def test_rejection_is_remembered_by_later_steps_of_the_run(self):
+        class RejectA:
+            metrics, calls = [], []
+
+            def invoke(self, role, prompt, schema, key, run_id, **_):
+                self.calls.append(key)
+                if key == "a":
+                    raise ModelError("provider rejected request: HTTP 404", transient=False, phase="provider")
+                return {"content": {}, "metrics": {}, "raw_path": "double"}
+        models = default_models()
+        models["a2"] = models["a"] | {"model_id": "second-large"}
+        worker = RejectA()
+        with tempfile.TemporaryDirectory() as folder:
+            flow, config = self.flow(folder, models, worker)
+            try:
+                with patch("graph_engineering.workflow.RepoLock"):
+                    flow.ask({"config": config, "repairs": 0}, "planning", {"task": "x"}, {"type": "object"}, "large")
+                    flow.ask({"config": config, "repairs": 0}, "implementation", {"task": "y"}, {"type": "object"}, "large")
+                self.assertEqual(worker.calls, ["a", "a2", "a2"])  # The second step goes straight to a2.
+            finally:
+                flow.store.close()
+
+    def test_reviewer_is_chosen_among_non_implementers(self):
+        models = default_models()
+        models["c"] = models["b"] | {"model_id": "third-small"}
+        config_extra = {"allow_same_model_review": False, "role_routes": {"review": ["a", "c"]}}
+        with tempfile.TemporaryDirectory() as folder:
+            flow, config = self.flow(folder, models, None, routing="assigned", **config_extra)
+            try:
+                state = {"config": config, "implementation_model": "b", "implementation_models": ["a", "b"]}
+                self.assertEqual(flow.model(state, "small", "review", frozenset(state["implementation_models"])), "c")
+            finally:
+                flow.store.close()
+
+    def test_malformed_route_fails_closed(self):
+        from graph_engineering import routing
+        config = {"routing": "assigned", "models": default_models(), "role_routes": {"review": None}}
+        with self.assertRaises(routing.RoutingError):
+            routing.select(config, "review")
+
+    def test_workflow_health_probe_shares_the_identifier_check(self):
+        from graph_engineering.models import model_health
+        with patch("graph_engineering.models.ModelClient") as client:
+            client.return_value.health.return_value = {"available": True, "models": [{"id": "other"}]}
+            self.assertFalse(model_health(default_models()["a"])["available"])
+            client.return_value.health.return_value = {"available": True, "models": [{"id": "qwen3.8-27b"}]}
+            self.assertTrue(model_health(default_models()["a"])["available"])

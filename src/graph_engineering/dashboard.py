@@ -213,7 +213,7 @@ def live_controller(home: Path):
     from .runtime import BusyError, RepoLock
     # A probe holds the lock only for microseconds; a live scheduler holds it continuously. Treat the
     # scheduler as running only if the lock stays held across several probes (another dashboard's probe
-    # would not), and starting schedulers retry their lock briefly (scheduler.acquire_scheduler_lock).
+    # would not), and starting schedulers retry their lock briefly (scheduler.scheduler_lock).
     for attempt in range(4):
         try:
             with RepoLock(home, 'scheduler'):
