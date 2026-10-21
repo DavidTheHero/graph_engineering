@@ -144,11 +144,11 @@ def retrieve(repo,sha,keywords,original,files=()):
             'warning':'Untrusted repository text. Quotes prove source provenance, not runtime behavior.'}
 
 
-def prompt_budget(config,role='root_investigation'):
+def prompt_budget(config,role='root_investigation',schema=None):
     """Bytes the strictest model permitted for ``role`` accepts (same rule as the worker), minus the schema."""
     limits=[min(m.get('input_budget_bytes',40000),40000,max((m.get('context') or 100000)-m.get('output',4096)-2048,0))
             for key in routing.candidates(config,role) for m in [config['models'][key]]]
-    return (min(limits) if limits else 40000)-len(json.dumps(PROPOSAL).encode())-256
+    return (min(limits) if limits else 40000)-len(json.dumps(PROPOSAL if schema is None else schema).encode())-256
 
 
 def _size(prompt):

@@ -171,6 +171,57 @@ CONDITIONAL_EDGES = {
 }
 
 
+def fit_planning_request(config: dict, request: dict) -> dict:
+    """Fit an accepted-development planning prompt to the model budget instead of failing.
+
+    Planning chooses files; implementation later receives the complete text of only the planned files.
+    So output tails are shortened first, then the longest file texts (paths stay listed, marked
+    ``complete: false`` with their full length). GE-30D05C40: agent.js alone is 24.5 KB."""
+    from .investigation import _size, prompt_budget
+    budget = prompt_budget(config, "planning", PLAN_SCHEMA)
+    shortened = []
+    def fits():
+        return _size(request | ({"shortened_for_budget": shortened} if shortened else {})) <= budget
+    if not fits() and request.get("previous_attempt", {}).get("failure_output"):
+        request = request | {"previous_attempt": request["previous_attempt"] | {"failure_output": request["previous_attempt"]["failure_output"][-1500:]}}
+        shortened.append("previous_attempt.failure_output (last 1500 characters kept)")
+    if not fits() and isinstance(request["candidate"].get("actual"), str):
+        request = request | {"candidate": request["candidate"] | {"actual": request["candidate"]["actual"][-1500:]}}
+        shortened.append("candidate.actual (last 1500 characters kept)")
+    files = [dict(f) for f in request["evidence"]["files"]]
+    while not fits():
+        longest = max(files, key=lambda f: len(f["content"]), default=None)
+        if longest is None or len(longest["content"]) <= 1500:
+            break  # Nothing sensible left to shorten; the worker's own budget check reports it.
+        keep = max(1500, len(longest["content"]) // 2)
+        if not longest.get("shortened_from"):
+            longest["shortened_from"] = len(longest["content"])
+            shortened.append(f"{longest['path']} (text shortened for planning; implementation receives it complete)")
+        longest["content"] = longest["content"][:keep]
+        longest["complete"] = False
+        request = request | {"evidence": request["evidence"] | {"files": files}}
+    return request | ({"shortened_for_budget": shortened} if shortened else {})
+
+
+def fit_implementation_request(config: dict, request: dict) -> dict:
+    """Fit an accepted-development implementation prompt: shorten output tails and context, never the
+    planned files (edits must match their exact complete text). Too large planned files fail clearly."""
+    from .investigation import _size, prompt_budget
+    budget = prompt_budget(config, "implementation", HUNK_SCHEMA)
+    for key, keep in (("previous_failure", 1500), ("additional_information", None), ("previous_failure", 600)):
+        if _size(request) <= budget:
+            return request
+        if key == "additional_information":
+            request = request | {key: [text[:300] for text in request.get(key) or []]}
+        else:
+            request = request | {key: request.get(key, "")[-keep:]}
+    if _size(request) > budget and isinstance(request["candidate"].get("actual"), str):
+        request = request | {"candidate": request["candidate"] | {"actual": request["candidate"]["actual"][-1000:]}}
+    if _size(request) > budget:
+        raise ValueError("Planned source files exceed the implementation model's input budget; split the task into smaller changes")
+    return request
+
+
 class TransitionError(RuntimeError):
     """A node handler attempted an undeclared graph transition (a controller defect)."""
 
@@ -662,6 +713,10 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                 request["previous_attempt"] = {"files": state["plan"].get("files", []),
                                                "failure_output": state["verification"].get("output", "")[-3000:],
                                                **({"review_findings": review} if review and not review.get("approved") else {})}
+        if accepted:
+            request = fit_planning_request(state["config"], request)
+            if request.get("shortened_for_budget"):
+                self.store.event(self.run_id, "task_planning", "prompt_fitted", {"shortened": request["shortened_for_budget"]})
         plan = self.ask(state, "planning", request, PLAN_SCHEMA, routing.LARGE)
         complete = {f["path"] for f in state["bundle"]["files"] if f["complete"] or state['config'].get('run_mode')=='accepted_development'}
         if not set(plan["files"]) <= (set(state["repository"]["source_files"]) & complete) - set(state["frozen"]):
@@ -694,12 +749,15 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                 self.store.event(self.run_id,'isolated_implementation','unplanned_edit_reverted',{'file':name})
         evidence=source_bundle(path,state['plan']['files']+([state['regression']['path']] if accepted else state['repository']['test_files']),state['validation']['output'] if accepted else state['baseline']['output'],30000 if accepted else 14000)
         if accepted and any(not f['complete'] for f in evidence['files'] if f['path'] in state['plan']['files']):raise ValueError('Planned source exceeds complete implementation context; split the task')
+        request = {"task": ("Return exact old/new source fragment replacements for planned files only. Each old fragment must occur exactly once. The frozen regression must pass after the fix. " if accepted else "Return COMPLETE replacement content for only planned source files to fix the observed bug. ")+"Preserve other behavior. No test, config, instruction, shell or policy edits.",
+                   "plan": state["plan"], "candidate": state["candidate"],
+                   "evidence": evidence,
+                   "previous_failure": state.get("verification", {}).get("output", "")[-4000:],
+                   "review_feedback": state.get("review", {}),"additional_information":troubleshooting_context(state)}
+        if accepted:
+            request = fit_implementation_request(state["config"], request)
         def propose():
-            patch = self.ask(state, "implementation", {"task": ("Return exact old/new source fragment replacements for planned files only. Each old fragment must occur exactly once. The frozen regression must pass after the fix. " if accepted else "Return COMPLETE replacement content for only planned source files to fix the observed bug. ")+"Preserve other behavior. No test, config, instruction, shell or policy edits.",
-                             "plan": state["plan"], "candidate": state["candidate"],
-                             "evidence": evidence,
-                             "previous_failure": state.get("verification", {}).get("output", "")[-4000:],
-                             "review_feedback": state.get("review", {}),"additional_information":troubleshooting_context(state)}, HUNK_SCHEMA if accepted else PATCH_SCHEMA, routing.LARGE)
+            patch = self.ask(state, "implementation", request, HUNK_SCHEMA if accepted else PATCH_SCHEMA, routing.LARGE)
             edits = validate_edits(path, materialize_hunks(path,patch,state['plan']['files']) if accepted else patch["files"], state["plan"]["files"])
             # The model that actually wrote the patch (routing may have fallen back since model_selection).
             return {"patch":patch,"edits":edits,"edits_hash":digest(edits),"model":self.last_model}
