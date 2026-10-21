@@ -235,15 +235,23 @@ def adapted_test_intact(path: Path, name: str, base_sha: str) -> None:
         raise ValueError(f"Adapted test gained skip, focus or todo markers: {name}")
 
 
+def planned_complete(candidate: dict, planned: list[str]) -> bool:
+    """Every planned file is in the bundle and whole. A planned file the bundle dropped for lack of room (planned
+    files always exist in the repository) is as incomplete as a cut one: the model must never edit unseen source."""
+    shown = {f["path"]: f["complete"] for f in candidate["files"]}
+    return all(shown.get(name, False) for name in planned)
+
+
 def complete_view(bundle, planned: list[str], levels, limit: int):
     """The first view (longest lines first) at which every planned file is complete, as (bundle, level index).
 
-    Shorter views only trim marked lines, so a file complete at one level stays complete at the next; only when
-    the planned files are incomplete even at the shortest view is the task too large for the model."""
+    Every level is checked on its own: a shorter view is usually smaller, but a line just over the limit grows by
+    the marker, so a file complete at one level is not guaranteed complete at the next (review of PR #11). Only
+    when the planned files are incomplete at every view is the task too large for the model."""
     candidate = None
     for index, max_line in enumerate(levels):
         candidate = bundle(max_line)
-        if max_line is None or all(f["complete"] for f in candidate["files"] if f["path"] in planned):
+        if max_line is None or planned_complete(candidate, planned):
             return candidate, index
     raise ValueError(f"Planned source ({sum(len(f['content']) for f in candidate['files'])} characters at the shortest view) exceeds the "
                      f"implementation model's complete-file context of {limit}; split the task into smaller changes")
@@ -865,8 +873,8 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             return source_bundle(path,state['plan']['files']+([state['regression']['path']] if accepted else state['repository']['test_files']),
                                  state['validation']['output'] if accepted else state['baseline']['output'],
                                  implementation_bundle_limit(state['config']) if accepted else 14000,max_line=max_line)
-        # The first view (longest lines first) at which every planned file is complete; shorter views only trim
-        # marked lines, so a file complete at one level stays complete at the next.
+        # The first view (longest lines first) at which every planned file is complete; each level is checked on
+        # its own, since shortening can grow a line that is just over the limit by the marker.
         levels = IMPLEMENTATION_MAX_LINES if accepted else (None,)
         evidence, start = complete_view(bundle, state['plan']['files'], levels, implementation_bundle_limit(state['config']))
         if start:
@@ -886,13 +894,18 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         if accepted and fresh_round:  # That failure and review describe edits this round no longer has.
             request |= {"previous_failure": "", "review_feedback": {}}
         def fit():
-            # Shorter long lines before giving up: the files stay complete, only their marked lines get shorter.
+            # Shorter long lines before giving up; a shorter view is used only while every planned file stays
+            # complete in it (review of PR #11: shortening is not monotonic, so each view is checked again).
+            error = None
             for index, max_line in enumerate(IMPLEMENTATION_MAX_LINES[start:], start):
+                view = evidence if index == start else bundle(max_line)
+                if index != start and not planned_complete(view, state['plan']['files']):
+                    continue
                 try:
-                    return fit_implementation_request(state["config"], request | {"evidence": evidence if index == start else bundle(max_line)})
-                except ValueError:
-                    if index == len(IMPLEMENTATION_MAX_LINES) - 1:
-                        raise
+                    return fit_implementation_request(state["config"], request | {"evidence": view})
+                except ValueError as failure:
+                    error = failure
+            raise error
         def propose():
             fitted = fit() if accepted else request
             patch = self.ask(state, "implementation", fitted, HUNK_SCHEMA if accepted else PATCH_SCHEMA, routing.LARGE)
