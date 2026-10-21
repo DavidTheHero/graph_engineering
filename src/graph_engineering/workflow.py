@@ -1254,7 +1254,8 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             close = lambda: self.backend(state).update_issue(state["issue"]["number"], state="closed")
             self.store.effect(self.run_id, "close_issue", close, on_uncertain=close)
         updates = {}
-        if state["config"].get("run_mode") == "accepted_development" and outcome == "completed" and (state.get("regression") or {}).get("uncovered"):
+        from .accepted_development import coverage_summary
+        if state["config"].get("run_mode") == "accepted_development" and outcome == "completed" and coverage_summary(state)["remaining"] and coverage_summary(state)["total"]:
             # The delivered change covers only part of the accepted requirement: the rest continues as its own
             # ticket, created once (GE-30D05C40 was "done" with three of four criteria never attempted).
             create = lambda: self.follow_up_ticket(state)
@@ -1283,8 +1284,12 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         if solution:
             lines += ["", "Proposed solution recorded on the original ticket:", str(solution)[:1500]]
         try:
+            try:
+                priority = tickets.get(parent)["priority"]  # The parent's priority, as the operator or triage set it.
+            except KeyError:
+                priority = None  # Unknown parent: intake triages the follow-up itself.
             created = create(tickets, {"repository_id": state["intake"]["repository_id"], "description": "\n".join(lines)[:6000],
-                                       "priority": state.get("priority") or "P2", "related_ticket": parent}, f"follow-up-{self.run_id}")
+                                       **({"priority": priority} if priority else {}), "related_ticket": parent}, f"follow-up-{self.run_id}")
         finally:
             tickets.store.close()
         return {"ticket_id": created["ticket_id"], "run_id": created["run_id"], "remaining": [n for n, _, _ in summary["remaining"]]}

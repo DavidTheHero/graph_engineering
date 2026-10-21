@@ -158,10 +158,13 @@ ended with a person pressing Retry. The repository autonomy policy now owns reco
   script uses it, each with its own path and command, the UI runner placing the test beside the
   existing UI tests) and must account for every acceptance criterion by number: `covers` for the
   criteria its test cases assert, `uncovered` with a reason for the rest (`coverage_feedback` loops
-  the author until the lists are complete). The regression review checks the claimed coverage. The
+  the author until the lists are complete; each loop is a regression_authoring attempt and counts
+  against the policy's `max_node_attempts`). vitest is started as `node node_modules/vitest/vitest.mjs`
+  with the `--config` of the vitest command itself, so it runs on Windows too. The regression review checks the claimed coverage. The
   publication and merge cards and the PR body say which criteria the delivery covers; at completion
   the uncovered criteria become a follow-up ticket for the same repository (`follow_up_created`,
-  related to the parent), so a ticket is never "done" with criteria silently dropped. GE-30D05C40
+  related to the parent, with the parent's priority), so a ticket is never "done" with criteria
+  silently dropped. GE-30D05C40
   was completed after one of four criteria.
 * **GitHub publication follows the repository's PR convention.** The tested local branch
   `graph/<run>` is pushed under `<feat|fix>/<issue>-<slug>` and the PR body carries `Closes #N`

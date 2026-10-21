@@ -28,13 +28,35 @@ class RunnerDetectionTests(unittest.TestCase):
             self.assertEqual([r["name"] for r in runners], ["node", "vitest"])
             self.assertEqual((runners[0]["path"], runners[0]["argv"]), ("backend/tests/graph_run1.test.js", ["node", "--test", "backend/tests/graph_run1.test.js"]))
             self.assertEqual(runners[1]["path"], "frontend/src/graph_run1.test.jsx")
-            self.assertEqual(runners[1]["argv"], ["npx", "--no-install", "vitest", "run", "--config", "frontend/vite.config.js", "frontend/src/graph_run1.test.jsx"])
+            self.assertEqual(runners[1]["argv"][1:], ["node_modules/vitest/vitest.mjs", "run", "--config", "frontend/vite.config.js", "frontend/src/graph_run1.test.jsx"])
+            self.assertTrue(runners[1]["argv"][0].endswith("node"))
             self.assertEqual(runners[1]["example"], "frontend/src/App.test.jsx")
+            # Review of PR #16: a later command's --config is not vitest's; a script naming a config wins; option-like names are refused.
+            for scripts, expected in (({"t": "vitest run && eslint . --config eslint.config.js"}, None),
+                                      ({"t": "vitest run; prettier --config .prettierrc ."}, None),
+                                      ({"watch": "vitest", "test": "vitest run --config frontend/vite.config.js"}, "frontend/vite.config.js")):
+                (root / "package.json").write_text(json.dumps({"scripts": scripts}))
+                vitest = regression_runners(state, "run1")[1]["argv"]
+                self.assertEqual(vitest[vitest.index("--config") + 1] if "--config" in vitest else None, expected, scripts)
+            (root / "package.json").write_text(json.dumps({"scripts": {"t": "vitest run --config -x"}}))
+            self.assertEqual([r["name"] for r in regression_runners(state, "run1")], ["node"])
             # Without a vitest script only node is offered; a Python repository gets unittest.
             (root / "package.json").write_text(json.dumps({"scripts": {"test": "node --test"}}))
             self.assertEqual([r["name"] for r in regression_runners(state, "run1")], ["node"])
             py = regression_runners({"repository": {"adapter": "python", "test_files": ["tests/test_a.py"]}, "baseline_path": folder, "config": {"repo": folder}}, "run1")
             self.assertEqual((py[0]["name"], py[0]["path"]), ("unittest", "tests/test_graph_run1.py"))
+
+    def test_example_test_never_follows_a_symlink(self):
+        from graph_engineering.accepted_development import example_test
+        with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as outside:
+            root = Path(folder); (root / "src").mkdir()
+            (root / "src" / "App.test.jsx").write_text("it('renders', () => {});")
+            (Path(outside) / "secret.txt").write_text("host secret")
+            (root / "src" / "Leak.test.jsx").symlink_to(Path(outside) / "secret.txt")
+            self.assertEqual(example_test(root, "src/App.test.jsx"), "it('renders', () => {});")
+            self.assertIsNone(example_test(root, "src/Leak.test.jsx"))
+            self.assertIsNone(example_test(root, "../x.test.jsx"))
+            self.assertIsNone(example_test(root, None))
 
     def test_coverage_feedback_requires_every_criterion_exactly_once(self):
         runners = [{"name": "node"}, {"name": "vitest"}]
