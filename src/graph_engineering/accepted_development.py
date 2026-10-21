@@ -74,6 +74,29 @@ def registered_timeout(flow,state):
 REGRESSION_VALIDATION_ROUNDS = 2  # Proposals run against the original source before the step blocks (node attempt limit).
 
 
+def development_files(state,source_files,cited,limit=8):
+    """Source files the test author and implementer see: the validated findings first, then the files the
+    investigation chose to read, then committed files matching the acceptance criteria (where a feature lives).
+
+    GE-30D05C40: only backend/llm.js was cited, so the author never saw the API or the chat bar its
+    acceptance criteria describe and kept testing behaviour that already existed."""
+    from .investigation import retrieve
+    draft=state['enhanced'];allowed=set(source_files)
+    wanted=list(cited)+[f for f in draft.get('read_files') or [] if f in allowed]
+    criteria=' '.join(draft.get('acceptance_criteria') or [])+' '+str(draft.get('proposed_solution') or '')
+    terms=[t for t in dict.fromkeys(re.findall(r'[A-Za-z_/][A-Za-z0-9_/.-]{3,}',criteria)) if t.lower() not in STOP_TERMS][:8]
+    try:
+        found=retrieve(Path(state['config']['source_repo']),state['base_sha'],terms,criteria)
+        wanted+=[e['file'] for e in found['excerpts'] if e['file'] in allowed]
+    except ValueError:
+        pass  # Search is best effort; the cited files remain.
+    return list(dict.fromkeys(wanted))[:limit]
+
+
+STOP_TERMS={'that','this','with','from','when','then','should','returns','return','current','same','side','left','right',
+            'which','where','into','updates','update','subsequent','requests','displays','display','button','location'}
+
+
 def current_environment(config,registration):
     """The registration's current python_environment wins, including a cleared one (a stale frozen
     interpreter must not be kept); without a registration the run's own value stays."""
@@ -162,6 +185,7 @@ class AcceptedDevelopmentNodes:
         names=[f['file'] for f in state['enhanced']['findings'] if f['file'] in working['repository']['source_files']]
         names=list(dict.fromkeys(names))
         if not names:raise ValueError('Accepted report has no validated source component to implement')
+        names=development_files(state,working['repository']['source_files'],names)
         evidence['bundle']=source_bundle(Path(evidence['baseline_path']),names,evidence['baseline']['output'][-2000:],30000)
         return evidence|{'config':config,'repository':working['repository'],'development':state['development']|{'setup_complete':True}},'regression_authoring','ready'
 
