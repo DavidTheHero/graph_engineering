@@ -174,8 +174,11 @@ ended with a person pressing Retry. The repository autonomy policy now owns reco
   (`uncovered_note`); the reviewer also reports reads of properties nothing sets. GE-FDD2275A
   shipped a UI test that stubbed `/api/model` while its endpoint returned `{}`.
 * **A tested change can be rejected at publication.** "Reject publication" (`reject_delivery`)
-  records the reason and the tested head, publishes nothing, and returns the ticket to review for
-  a new acceptance cycle; the reason reaches the next development as context.
+  records the reason, the tested head and the diff digest, publishes nothing, keeps the ticket's
+  issue linked, and returns the ticket to review for a new acceptance cycle. Under `auto_accept`
+  the policy accepts it again and development restarts with the reason as context for the test
+  author, planner and implementer; the independent reviewer must report any rejected defect still
+  present, and a diff identical to a rejected one is sent back to repair without being presented.
 * **GitHub publication follows the repository's PR convention.** The tested local branch
   `graph/<run>` is pushed under `<feat|fix>/<issue>-<slug>` and the PR body carries `Closes #N`
   and Change / Validation / Review sections built from recorded evidence only

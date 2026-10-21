@@ -68,6 +68,7 @@ class RunnerDetectionTests(unittest.TestCase):
         self.assertIn("exactly once", coverage_feedback({"tests": [{"runner": "node", "covers": [1]}], "uncovered": []}, criteria, runners))
         self.assertIn("exactly once", coverage_feedback({"tests": [{"runner": "node", "covers": [1, 2]}], "uncovered": [{"criterion": 2, "reason": "x"}, {"criterion": 3, "reason": "x"}]}, criteria, runners))
         self.assertIn("at least one", coverage_feedback({"tests": [{"runner": "node", "covers": [1, 2, 3]}, {"runner": "vitest", "covers": []}], "uncovered": []}, criteria, runners))
+        self.assertIn("exactly once", coverage_feedback({"tests": [{"runner": "node", "covers": [1, 2]}, {"runner": "vitest", "covers": [2, 3]}], "uncovered": []}, criteria, runners))
         self.assertIn("one test file per runner", coverage_feedback({"tests": [{"runner": "node", "covers": [1]}, {"runner": "node", "covers": [2, 3]}], "uncovered": []}, criteria, runners))
         self.assertIn("runner from", coverage_feedback({"tests": [{"runner": "jest", "covers": [1, 2, 3]}], "uncovered": []}, criteria, runners))
         self.assertEqual(coverage_feedback({"tests": [{"runner": "node", "covers": []}], "uncovered": []}, [], runners), "")  # No criteria recorded.
@@ -217,6 +218,21 @@ class RegressionPerRunnerTests(unittest.TestCase):
         self.assertEqual(uncovered_note({"enhanced": {"acceptance_criteria": ["a"]}, "regression": {"parts": [{"path": "a", "covers": [1]}], "uncovered": []}}), "")
 
 
+    def test_an_identical_diff_to_a_rejected_one_is_never_presented_again(self):
+        from graph_engineering.runtime import digest
+        act(self.tickets, self.base | {"action": "start_development", "trust_execution": True}, "identical-start-1")
+        flow = Workflow(self.home); flow.worker = DevelopmentDouble()
+        try:
+            run = flow.execute(self.run["id"], until="independent_review")
+            state = run["state"] | {"delivery_rejections": [{"actor": "op", "reason": "returns nothing", "diff_sha256": digest(run["state"]["diff"])}]}
+            flow.run_id = self.run["id"]
+            updates, node, _ = flow.node_independent_review(state)
+        finally:
+            flow.store.close()
+        self.assertEqual((node, updates["review"]["approved"]), ("repair", False))
+        self.assertIn("Identical to the change rejected at publication by op", updates["review"]["findings"][0]["message"])
+
+
 class RejectDeliveryTests(unittest.TestCase):
     setUp = handoff.DevelopmentHandoffTests.setUp
     tearDown = handoff.DevelopmentHandoffTests.tearDown
@@ -235,13 +251,19 @@ class RejectDeliveryTests(unittest.TestCase):
         self.assertIn("reject_delivery", [a["id"] for a in card["actions"]])
         with self.assertRaisesRegex(ValueError, "Give the reason"):
             act(self.tickets, self.base | {"action": "reject_delivery", "reason": " "}, "reject-empty-1")
-        act(self.tickets, self.base | {"action": "reject_delivery", "reason": "GET /api/model returns nothing"}, "reject-1")
+        [reject] = [a for a in card["actions"] if a["id"] == "reject_delivery"]
+        self.assertEqual(reject["input"], "text")  # The inbox collects free text for it.
+        self.tickets.store.db.execute("UPDATE runs SET state=json_set(state,'$.issue',json('{\"number\":7,\"url\":\"u\",\"backend\":\"github\"}')) WHERE id=?", (self.run["id"],))
+        self.tickets.store.db.commit()
+        act(self.tickets, self.base | {"action": "reject_delivery", "text": "GET /api/model returns nothing"}, "reject-1")
         ticket = self.tickets.get(self.ticket["ticket_id"])
         self.assertEqual((ticket["status"], ticket["state"]["acceptance_cycle"]), ("ready_for_review", 1))
         [rejection] = ticket["state"]["delivery_rejections"]
         self.assertEqual((rejection["reason"], rejection["head"]), ("GET /api/model returns nothing", run["state"]["head"]))
         self.assertTrue(any("rejected at publication" in c for c in troubleshooting_context(ticket["state"])))
         self.assertTrue(any("Publication rejected: GET /api/model" in c["text"] for c in ticket["state"]["clarifications"]))
+        self.assertEqual(ticket["state"]["issue"]["number"], 7)  # The issue stays linked: no second issue next cycle.
+        self.assertEqual(rejection["diff_sha256"][:8], __import__("graph_engineering.runtime", fromlist=["digest"]).digest(run["state"]["diff"])[:8])
         with self.assertRaisesRegex(ValueError, "awaiting publication"):  # Only a change awaiting publication can be rejected.
             act(self.tickets, self.base | {"action": "reject_delivery", "reason": "again"}, "reject-2")
 

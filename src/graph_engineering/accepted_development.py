@@ -105,8 +105,9 @@ def coverage_feedback(result,criteria,runners):
     if len(set(chosen))!=len(chosen):return 'At most one test file per runner: put all of a runner\'s test cases in one file.'
     if not criteria:return ''
     if any(not t.get('covers') for t in tests):return 'Every test file must cover at least one acceptance criterion; drop a file that covers none.'
-    expected=set(range(1,len(criteria)+1));covered={n for t in tests for n in t.get('covers') or []};uncovered={u['criterion'] for u in result.get('uncovered') or []}
-    if covered|uncovered!=expected or covered&uncovered:
+    expected=set(range(1,len(criteria)+1));listed=[n for t in tests for n in set(t.get('covers') or [])]+[u['criterion'] for u in result.get('uncovered') or []]
+    covered={n for t in tests for n in t.get('covers') or []};uncovered={u['criterion'] for u in result.get('uncovered') or []}
+    if covered|uncovered!=expected or covered&uncovered or len(listed)!=len(set(listed)):
         return ('Every acceptance criterion must appear exactly once, by number, in some test\'s covers or in uncovered '
                 '(with the reason no offered runner can test it). Criteria: '+'; '.join(numbered_criteria(criteria)))
     return ''
@@ -115,7 +116,7 @@ def coverage_feedback(result,criteria,runners):
 def coverage_summary(state):
     """Which acceptance criteria the frozen regression covers and which remain, for cards, bodies and follow-ups."""
     regression=state.get('regression') or {};criteria=state.get('enhanced',{}).get('acceptance_criteria') or []
-    remaining=[(u['criterion'],NUMBERED.sub('',str(criteria[u['criterion']-1])) if 0<u['criterion']<=len(criteria) else '',u.get('reason','')) for u in regression.get('uncovered') or []]
+    remaining=[(u['criterion'],NUMBERED.sub('',str(criteria[u['criterion']-1])),u.get('reason','')) for u in regression.get('uncovered') or [] if 0<u['criterion']<=len(criteria)]
     covered=regression.get('covers') or [n for part in regression_parts(regression) for n in part.get('covers') or []]
     return {'covered':sorted(set(covered)),'remaining':remaining,'total':len(criteria)}
 
@@ -469,8 +470,11 @@ class AcceptedDevelopmentNodes:
                         raise ValueError('Regression repair budget exhausted. '+feedback)
                     return {'regression_feedback':feedback,'regression_validation_round':count},'regression_authoring','ready'
             if receipts[0]['returncode']!=receipts[1]['returncode']:raise ValueError('Regression did not reproduce consistently: '+part['path'])
-        receipts=[{'returncode':max(r[i]['returncode'] for r in all_receipts),'passed':False,'timed_out':False,'empty_suite':False,
-                   'output':'\n'.join(f'--- {p["path"]}\n'+r[i]['output'][-4000:] for p,r in zip(parts,all_receipts))} for i in range(2)]
+        # One receipt per run across the parts; a single part keeps its receipt as it was (command, duration, cwd).
+        receipts=[all_receipts[0][i] if len(parts)==1 else all_receipts[0][i]|{
+                   'returncode':max(r[i]['returncode'] for r in all_receipts),'passed':False,'timed_out':False,'empty_suite':False,
+                   'argv':[r[i].get('argv') for r in all_receipts],'duration_seconds':sum(r[i].get('duration_seconds') or 0 for r in all_receipts),
+                   'output':'\n'.join(f'--- {p["path"]}\n'+r[i]['output'][-max(1500,4000//len(parts)):] for p,r in zip(parts,all_receipts))} for i in range(2)]
         for name,sha in state['frozen'].items():
             if digest((path/name).read_bytes().hex())!=sha:raise ValueError('Regression execution modified a frozen repository file')
         if git(path,'diff','--name-only') or set(git(path,'ls-files','--others','--exclude-standard').splitlines())!=set(regression_paths(regression)):

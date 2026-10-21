@@ -1018,7 +1018,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             self.store.event(self.run_id, "isolated_implementation", "view_shortened", {"max_line": levels[start]})
         adapted = (state["plan"].get("adapted_tests") or []) if accepted else []
         later = uncovered_note(state) if accepted else ""
-        request = {"task": ("Return exact old/new source fragment replacements for planned files only. Each old fragment must occur exactly once. The frozen regression must pass after the fix. " + later + " "
+        request = {"task": ("Return exact old/new source fragment replacements for planned files only. Each old fragment must occur exactly once. The frozen regression must pass after the fix. " + (later + " " if later else "")
                             + (("The existing tests " + ", ".join(adapted) + " are planned ONLY so their assertions that pin the old behaviour can be adapted to the accepted requirement: never delete, skip or weaken any other assertion or test. ") if adapted else "")
                             + "Lines ending in \"…[line truncated]\" are shown shortened. To edit such a line, end BOTH its old line and its replacement line with that marker: the hidden remainder is kept unchanged. Never guess hidden text. "
                             if accepted else "Return COMPLETE replacement content for only planned source files to fix the observed bug. ")+"Preserve other behavior. No test, config, instruction, shell or policy edits.",
@@ -1164,7 +1164,18 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                           "test_output_after_change": verification["output"][-3500:],
                           "output_before_change": "At the accepted commit, BEFORE this diff (the regression test was EXPECTED to fail here; this is NOT the current result): "
                                                   + state["baseline"]["output"][-2500:]}
-        review = self.ask(state, "review", prompt, REVIEW_SCHEMA, routing.SMALL, excluded)
+        rejections = state.get("delivery_rejections") or []
+        if rejections:  # A person rejected an earlier tested change for this ticket: the reviewer checks the new one against why.
+            prompt["previous_rejections"] = [{"by": r["actor"], "reason": r["reason"]} for r in rejections[-2:]]
+            prompt["task"] += " previous_rejections lists why a person rejected an earlier change for this ticket: report a required finding for any of those defects still present."
+        rejected = next((r for r in rejections if r.get("diff_sha256") == digest(state["diff"])), None)
+        if rejected:  # Never present the very change a person already rejected.
+            review = {"decision": "request_changes", "rationale": "This diff is identical to the change rejected at publication.",
+                      "findings": [{"severity": "required", "file": (state["plan"]["files"] or [""])[0], "line": 1,
+                                    "message": "Identical to the change rejected at publication by " + rejected["actor"] + ": " + rejected["reason"][:500]}]}
+            self.last_model = "controller"
+        else:
+            review = self.ask(state, "review", prompt, REVIEW_SCHEMA, routing.SMALL, excluded)
         review_model = self.last_model
         if review["decision"] != "approve" and facts["full_suite_passed"] and contradicts_test_run(review):
             # A rejection whose blocking findings say a test fails, while the controller's own run passed, is re-asked

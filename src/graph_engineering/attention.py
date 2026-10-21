@@ -164,7 +164,7 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
                                    else "Local simulation only; nothing is published to GitHub."],
                        "actions": [intake_action("publish_development", "Approve publication", input="actor", primary=True)
                                    | {"payload": intake_payload | {"action": "publish_development", "approve_publication": True}},
-                                   intake_action("reject_delivery", "Reject publication", input="reason",
+                                   intake_action("reject_delivery", "Reject publication", input="text",
                                                  confirm="Reject this tested change? Nothing is published; the ticket returns to review with your reason.")]}
 
     if status == "waiting_approval" and approved_head != state.get("head"):
