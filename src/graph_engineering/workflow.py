@@ -190,10 +190,12 @@ def adaptable_tests(flow, state: dict) -> list[str]:
     if not (verification.get("regression") or {}).get("passed"):
         return []  # The requirement itself is not met yet: fix the source, not the tests.
     regression = (state.get("regression") or {}).get("path")
-    return sorted(set(failing_test_files(verification.get("output", ""), state["repository"]["test_files"])) - {regression})
+    kept = (state.get("plan") or {}).get("adapted_tests") or []  # Adapted this round: stays in scope while others fail.
+    return sorted((set(failing_test_files(verification.get("output", ""), state["repository"]["test_files"])) | set(kept)) - {regression})
 
 
-FAILURE_LINE = re.compile(r"FAIL|✖|not ok|Error|Traceback|FAILED|^\s*test at |^\s+at |File \"", re.M)
+FAILURE_LINE = re.compile(r"FAIL|✖|not ok|Traceback|^\s*test at |^\s+at |File \"|^\s*(?:---|❯) ", re.M)
+PASSING_LINE = re.compile(r"PASSED|✓|✔|^\s*PASS\b|\bok\b", re.M)
 
 
 def failing_test_files(output: str, test_files: list[str]) -> list[str]:
@@ -201,7 +203,7 @@ def failing_test_files(output: str, test_files: list[str]) -> list[str]:
     verbose runner (``PASS tests/a.test.js``, ``tests/test_a.py ....``) is never offered for adaptation."""
     found = []
     for line in output.splitlines():
-        if not FAILURE_LINE.search(line):
+        if not FAILURE_LINE.search(line) or PASSING_LINE.search(line):
             continue
         for name in test_files:
             if name not in found and re.search(r"(^|[\s\"'/(])" + re.escape(name) + r"($|[\s\"':)])", line):
@@ -863,7 +865,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                    "previous_failure": state.get("verification", {}).get("output", "")[-4000:],
                    "review_feedback": state.get("review", {}),"additional_information":troubleshooting_context(state)}
         last = state.get("last_error") or {}
-        if accepted and isinstance(last, dict) and str(last.get("message", "")).startswith(("A shortened", "An old fragment", "The replacement", "The marker", "Replacement")):
+        if accepted and isinstance(last, dict) and str(last.get("message", "")).startswith(("A shortened", "A replacement", "An old fragment", "The replacement", "The marker", "Replacement", "Adapted test")):
             request["rejected_proposal"] = "Your previous proposal was rejected: " + last["message"]  # The model can correct, not repeat.
         if accepted and fresh_round:  # That failure and review describe edits this round no longer has.
             request |= {"previous_failure": "", "review_feedback": {}}
@@ -919,7 +921,16 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             raise ValueError("Untracked files in worker worktree")
 
     def node_test_execution(self, state):
-        self.verify_files(state)
+        try:
+            self.verify_files(state)
+        except ValueError as exc:
+            if not str(exc).startswith("Adapted test"):
+                raise
+            # The edit overstepped the adaptation bounds: tell the implementer and repair, instead of burning this step.
+            self.store.event(self.run_id, "test_execution", "adapted_test_refused", {"message": str(exc)})
+            return {"verification": {"passed": False, "returncode": None, "timed_out": False, "empty_suite": False,
+                                     "output": "Adapted test refused before any test ran: " + str(exc)},
+                    "head": state.get("head", ""), "diff": state.get("diff", "")}, "repair", "ready"
         path = Path(state["worktree"])
         if state['config'].get('parallel_quality') and state['config']['build_commands']:
             from .quality import parallel_checks

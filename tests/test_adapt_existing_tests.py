@@ -137,6 +137,8 @@ class AdaptExistingTestsTests(unittest.TestCase):
                   'FAILED tests/test_a.py::test_x - AssertionError\n')
         self.assertEqual(failing_test_files(output, files), ['src/ba.test.js', 'tests/test_a.py'])
         self.assertEqual(failing_test_files('test at tests/xa.test.js:1:1\n', ['a.test.js']), [])  # Boundary, not substring.
+        # Re-review F-C: a passing line naming the file (and a test called ...Error...) never offers it.
+        self.assertEqual(failing_test_files('tests/test_a.py::TestErrorHandling::test_x PASSED\n', ['tests/test_a.py']), [])
 
     def test_review_repair_keeps_this_rounds_adapted_tests_and_a_fresh_round_offers_none(self):
         """Second review F4 and F7."""
@@ -146,6 +148,10 @@ class AdaptExistingTestsTests(unittest.TestCase):
         with patch('graph_engineering.autonomy.current', return_value={'adapt_existing_tests': True}):
             passed = base | {'verification': {'passed': True, 'regression': {'passed': True}, 'output': 'all green'}}
             self.assertEqual(adaptable_tests(flow, passed), ['test_shape.py'])  # Still adaptable while the review iterates.
+            # Re-review F-D: another test failing in the same round must not drop the adapted one from scope.
+            other = base | {'repository': {'test_files': ['test_shape.py', 'test_other.py']},
+                            'verification': {'passed': False, 'regression': {'passed': True}, 'output': 'FAIL: test_y\n  File "test_other.py", line 3'}}
+            self.assertEqual(adaptable_tests(flow, other), ['test_other.py', 'test_shape.py'])
             fresh = passed | {'development_round': 1, 'worktree_round': 0,
                               'verification': {'passed': False, 'regression': {'passed': True}, 'output': 'FAIL test_shape.py'}}
             self.assertEqual(adaptable_tests(flow, fresh), [])  # That failure describes code the reset discarded.
@@ -177,6 +183,15 @@ class AdaptExistingTestsTests(unittest.TestCase):
         path.write_text(original.replace('-1)', '5)  # changed by the test process'))
         with self.assertRaisesRegex(ValueError, 'modified outside the applied edits'):
             Workflow.verify_files(None, state)
+        # Re-review F-A: such a refusal is fed back as a failed attempt to repair, not a dead test step.
+        flow = Workflow(self.home)
+        flow.run_id = self.run['id']
+        try:
+            updates, node, status = flow.node_test_execution(state)
+        finally:
+            flow.store.close()
+        self.assertEqual((node, status, updates['verification']['passed']), ('repair', 'ready', False))
+        self.assertIn('Adapted test refused before any test ran', updates['verification']['output'])
 
 
 if __name__ == '__main__':

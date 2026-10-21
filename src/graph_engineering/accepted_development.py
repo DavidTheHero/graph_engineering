@@ -190,7 +190,7 @@ def expand_shortened_lines(content,old,new):
         visible=line[:-len(marker)]
         # The remainder belongs to the old line this replacement continues: the one sharing its start, never "the next one".
         scored=sorted(((common(visible,p),i) for i,(p,_) in enumerate(tails) if i not in taken),reverse=True)
-        if not scored or scored[0][0]<8 or (len(scored)>1 and scored[1][0]==scored[0][0]):
+        if len(scored)>1 and (scored[0][0]<8 or scored[1][0]==scored[0][0]):  # One remaining remainder is unambiguous.
             raise ValueError('A replacement line ending with the marker must begin like the shortened old line it replaces (at least 8 identical characters), so the right hidden remainder is kept')
         index=scored[0][1];taken.add(index)
         replaced.append(visible+tails[index][1]);used+=1

@@ -75,8 +75,12 @@ class ImplementationContextTests(unittest.TestCase):
                         "new": template[:80] + TRUNCATED_LINE + "\n" + imports[:80] + TRUNCATED_LINE}]
             out = materialize_hunks(repo, {"edits": swapped}, ["a.js"])[0]["content"]
             self.assertIn(template + "\n" + imports, out)  # A reorder keeps each line's own remainder, never swaps them.
-            with self.assertRaisesRegex(ValueError, "begin like the shortened old line"):  # An unrelated line cannot claim a remainder.
-                materialize_hunks(repo, {"edits": [{"path": "a.js", "old": imports[:80] + TRUNCATED_LINE, "new": "const OTHER = 1; " + TRUNCATED_LINE}]}, ["a.js"])
+            # Re-review F-B: a lone remaining remainder is assigned even when the start changes (`const` -> `let`).
+            lone = materialize_hunks(repo, {"edits": [{"path": "a.js", "old": template[:80] + TRUNCATED_LINE, "new": "let " + template[6:80] + TRUNCATED_LINE}]}, ["a.js"])
+            self.assertIn("let " + template[6:], lone[0]["content"])
+            with self.assertRaisesRegex(ValueError, "begin like the shortened old line"):  # Among several, an unrelated line cannot claim one.
+                materialize_hunks(repo, {"edits": [{"path": "a.js", "old": imports[:80] + TRUNCATED_LINE + "\n" + template[:80] + TRUNCATED_LINE,
+                                                   "new": "const OTHER = 1; " + TRUNCATED_LINE + "\n" + template[:80] + TRUNCATED_LINE}]}, ["a.js"])
             reordered_properly = [{"path": "a.js", "old": imports[:80] + TRUNCATED_LINE + "\n" + template[:80] + TRUNCATED_LINE,
                                    "new": "import { zz, " + imports[9:80] + TRUNCATED_LINE + "\n" + template[:80] + TRUNCATED_LINE}]
             out = materialize_hunks(repo, {"edits": reordered_properly}, ["a.js"])[0]["content"]
