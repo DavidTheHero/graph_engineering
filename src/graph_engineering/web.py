@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 from urllib.parse import parse_qs, urlparse
 
-from . import gates, workflow
+from . import workflow
 from .store import Conflict
 
 PAGE = Path(__file__).parent / "web" / "index.html"
@@ -26,12 +26,12 @@ def ticket_view(ctx, ticket_id: str) -> dict:
     return {**ticket, "events": events, "runs": ctx.store.runs(ticket_id)}
 
 
-def ticket_diff(ctx, ticket: dict) -> str:
-    work = ctx.ticket_dir(ticket["id"]) / "work"
-    base = ticket["data"].get("base")
-    if not base or not (work / ".git").exists() or ticket["working"]:
-        return ""
-    return gates.diff(work, base)
+def ticket_diff(ctx, ticket: dict | None) -> str:
+    """The patch the gates tested in the latest round; read from the report, never computed in the workspace."""
+    if ticket is None:
+        raise KeyError("ticket")
+    rounds = sorted(ctx.ticket_dir(ticket["id"]).glob("round-*/change.diff"), key=lambda p: int(p.parent.name.split("-")[1]))
+    return rounds[-1].read_text() if rounds else ""
 
 
 def transcript(ctx, run_id: str, limit: int = 400) -> list[dict]:
@@ -114,7 +114,10 @@ def make_handler(ctx, scheduler, port: int):
                 if match:
                     ticket_id, part = match.groups()
                     if part == "/events":
-                        after = int(parse_qs(url.query).get("after", ["0"])[0])
+                        try:
+                            after = int(parse_qs(url.query).get("after", ["0"])[0])
+                        except ValueError:
+                            return self.send(400, {"error": "after must be an event number"})
                         return self.send(200, ctx.store.events(ticket_id, after))
                     if part == "/diff":
                         return self.send(200, {"diff": ticket_diff(ctx, ctx.store.get(ticket_id))})
@@ -135,6 +138,8 @@ def make_handler(ctx, scheduler, port: int):
                 if length > 200_000:
                     return self.send(413, {"error": "request too large"})
                 body = json.loads(self.rfile.read(length) or b"{}")
+                if not isinstance(body, dict):
+                    return self.send(400, {"error": "the request body must be a JSON object"})
                 who = "person:control-centre"
                 if url.path == "/api/tickets":
                     repo = ctx.repos.get(str(body.get("repo")))
@@ -148,7 +153,9 @@ def make_handler(ctx, scheduler, port: int):
                 self.send(404, {"error": "not found"})
             except Conflict as exc:
                 self.send(409, {"error": str(exc)})
-            except (KeyError, ValueError) as exc:
+            except KeyError as exc:
+                self.send(404, {"error": f"not found: {exc}"})
+            except (ValueError, TypeError) as exc:
                 self.send(400, {"error": f"{type(exc).__name__}: {exc}"})
 
     return Handler

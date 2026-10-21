@@ -1,7 +1,6 @@
 """Worker threads that lease due tickets and run one workflow step each."""
 from __future__ import annotations
 
-import json
 import os
 import socket
 import threading
@@ -15,6 +14,10 @@ LEASE = 300          # seconds; renewed by a heartbeat while the step runs
 HEARTBEAT = 60
 BACKOFF = (60, 300, 900)
 MAX_ERRORS = 3
+
+
+class LeaseLost(RuntimeError):
+    """Another worker took the ticket over; this one stops without touching it."""
 
 
 class Scheduler:
@@ -59,8 +62,12 @@ class Scheduler:
                 store.renew(ticket["id"], owner, LEASE)
 
         threading.Thread(target=heartbeat, daemon=True).start()
-        ctx = Context(self.ctx.home, store, self.ctx.repos, self.ctx.registry, owner=owner,
-                      renew=lambda: store.renew(ticket["id"], owner, LEASE))
+
+        def renew():
+            if not store.renew(ticket["id"], owner, LEASE):
+                raise LeaseLost(f"{ticket['id']} lease was lost; another worker may hold it")
+
+        ctx = Context(self.ctx.home, store, self.ctx.repos, self.ctx.registry, owner=owner, renew=renew)
         try:
             advance(ctx, ticket)
             fresh = store.get(ticket["id"])
@@ -68,6 +75,8 @@ class Scheduler:
                 store.release(ticket["id"], owner)
             if fresh["data"].get("errors"):
                 store.merge_data(ticket["id"], errors=0)
+        except LeaseLost as exc:
+            store.event(ticket["id"], "lease_lost", owner, {"error": str(exc)})
         except Exception as exc:
             self.failed(ticket, owner, exc)
         finally:
@@ -82,6 +91,16 @@ class Scheduler:
         store.event(ticket["id"], "step_error", owner, {"state": ticket["state"], "error": message, "attempt": errors,
                                                         "trace": traceback.format_exc()[-2000:]})
         store.merge_data(ticket["id"], errors=errors)
+        if errors >= MAX_ERRORS and ticket["state"] in ("ready", "merging"):
+            # Publication or merge keeps failing: hand it to a person instead of retrying forever.
+            if ticket["state"] == "ready":
+                store.merge_data(ticket["id"], publish=False)
+                store.release(ticket["id"], owner, error=f"publication stopped after {errors} errors: {message}")
+            else:
+                store.release(ticket["id"], owner)
+                store.transition(ticket["id"], "awaiting_merge", owner, "merge_stopped", {"error": message},
+                                 error=f"merge stopped after {errors} errors: {message}")
+            return
         if errors >= MAX_ERRORS and ticket["state"] in ("new", "accepted"):
             store.release(ticket["id"], owner)
             failed_at = "intake" if ticket["state"] == "new" else "develop"

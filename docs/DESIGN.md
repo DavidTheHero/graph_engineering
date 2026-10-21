@@ -56,9 +56,9 @@ repository can reach the privileged zone, because nothing the model writes is ex
 After the coding agent stops, on the agent's workspace:
 
 1. Some test file and some non-test file changed. No test file was deleted.
-2. No protected path changed (`.github/`, lockfiles unless the ticket allows, configured paths).
-3. **Red/green**: each changed test file, copied onto the untouched base revision, fails; on the result it passes.
-4. The full test command and the build command pass.
+2. No protected path changed (`.github/` by default, plus configured paths) and no generated or local file added.
+3. **Red/green**: each changed test file, copied onto the untouched base revision, fails; on the result it passes. Without a per-file runner, the base suite must pass alone and fail with the new tests.
+4. The full test command and the build command pass on a clean checkout of the exact commit that will be published (only the dependency directories installed by setup are added).
 
 Then the review agent reads the ticket, the diff and the gate results with read-only tools, and
 returns `approve` or `changes` with findings. Any failed gate or `changes` starts another round
@@ -124,3 +124,19 @@ high-signal context that lets it act:
 
 Python standard library only; `gh`, Git and the target repository's toolchain are external.
 The MCP SDK is an optional extra.
+
+## Known gaps (prototype)
+
+An independent review on 2026-10-21 found that the sandbox boundary is **not yet sound**; hardening was
+deferred so the prototype could be proven first. Until these are fixed, use it only on your own repositories
+and do not describe it as isolating untrusted code:
+
+- The sandbox can write the workspace's git metadata, which the controller later uses outside the sandbox.
+- The macOS profile allows writes outside the home directory (it denies only `$HOME`).
+- Controller-owned files (notes, transcripts, gate reports, profiles) live where the sandbox can write.
+- Loopback is open, including the control centre's port; its write guard only stops browsers.
+- Some reads follow symbolic links planted in the workspace.
+- Test configuration (package scripts, test-runner configs) is not protected; the reviewer is the only check.
+
+Planned fixes: deny-by-default writes with only the box directory writable, read-only git metadata inside the
+sandbox, controller files outside the box, a per-process control-centre token and closed port, and no-follow reads.

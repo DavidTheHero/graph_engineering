@@ -144,11 +144,11 @@ def develop(ctx: Context, ticket: dict) -> dict:
         shutil.rmtree(directory)  # an interrupted attempt of this round starts again
     directory.mkdir(parents=True)
     sandbox = Sandbox(root, work, repo.sandbox_env(), trusted=repo.trusted)
-    if not (work / ".git").exists() or data.get("fresh_workspace"):
+    if not (work / ".git").exists() or not data.get("setup_done"):
+        # A crash between cloning and the end of setup leaves a half-prepared workspace: always start it again.
         if work.exists():
             shutil.rmtree(work)
         data["base"] = prepare_workspace(Path(repo.path), base_ref(repo, data), work)
-        data.pop("fresh_workspace", None)
         for command in repo.setup:
             code, out, seconds = sandbox.run(repo.expand(command), timeout=1800, network=True)
             ctx.store.event(ticket["id"], "setup", ctx.owner, {"command": command, "exit": code, "seconds": round(seconds),
@@ -157,7 +157,8 @@ def develop(ctx: Context, ticket: dict) -> dict:
                 shutil.rmtree(work, ignore_errors=True)
                 return _move(ctx, ticket, "failed", "setup_failed", {"command": command}, round=round_,
                              error=f"setup command failed: {command}", data={**data, "failed_at": "develop"})
-    ctx.store.merge_data(ticket["id"], base=data["base"])
+        data.update(setup_done=True, dependencies=gates.installed(work))
+        ctx.store.merge_data(ticket["id"], base=data["base"], setup_done=True, dependencies=data["dependencies"])
     spec = ticket["spec"]
 
     brief = prompts.project_brief(work)
@@ -177,7 +178,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
         raise RuntimeError(outcome.error)
 
     ctx.renew()
-    report = gates.run_gates(repo, work, data["base"], sandbox, directory)
+    report = gates.run_gates(repo, work, data["base"], sandbox, directory, data.get("dependencies"))
     (directory / "gates.json").write_text(json.dumps(report, indent=1))
     record["gates"] = [{"name": c["name"], "ok": c["ok"]} for c in report["checks"]]
     ctx.store.event(ticket["id"], "gates", "harness", {"round": round_, "passed": report["passed"], "checks": record["gates"]})
@@ -189,7 +190,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
         agent, run, reviewer = _agent(ctx, ticket, "review", reviewer_ws, READ_ONLY, prompts.SUBMIT_REVIEW, prompts.REVIEW,
                                       directory / "review", round_, exclude={coder.name}
                                       if len(ctx.registry.roles.get("review", [])) > 1 else frozenset(), max_steps=30)
-        diff_text = gates.diff(work, data["base"])
+        diff_text = gates.diff(work, data["base"], report["commit"])
         review = agent.run(prompts.review_task(spec, clip(diff_text, DIFF_CHARS), gates.summary(report), summary, brief))
         ctx.store.run_end(run, review.status, review.usage)
         if review.status == "cancelled":
@@ -199,10 +200,11 @@ def develop(ctx: Context, ticket: dict) -> dict:
         verdict = (review.result or {}).get("verdict") if review.status == "done" else None
         record["review"] = {"model": reviewer.name, "status": review.status, **(review.result or {})}
         if verdict == "approve":
-            git(work, "add", "-A")
-            git(work, "commit", "-q", "--allow-empty", "-m", f"{spec['title']}\n\n{summary}\n\nTicket: {ticket['id']}")
-            head = git(work, "rev-parse", "HEAD").strip()
-            data.update(head=head, summary=summary, gates=record["gates"], review=record["review"], publish=repo.auto_publish,
+            # The published commit has exactly the tree the gates tested; a later round stacks on the previous one.
+            message = f"{spec['title']}\n\n{neutral(summary)}\n\nTicket: {ticket['id']}"
+            head = git(work, "commit-tree", report["tree"], "-p", data.get("head") or data["base"], "-m", message).strip()
+            git(work, "reset", "-q", "--soft", head)
+            data.update(head=head, summary=summary, round_dir=str(directory), gates=record["gates"], review=record["review"], publish=repo.auto_publish,
                         rounds=data.get("rounds", []) + [record], feedback=None)
             return _move(ctx, ticket, "ready", "ready", {"round": round_, "head": head}, round=round_, data=data, error=None)
         feedback = "The reviewer requested changes:\n" + "\n".join(
@@ -230,15 +232,21 @@ def branch_name(repo: Repo, ticket: dict, issue: int | None) -> str:
     return repo.branch_template.format(kind=ticket["spec"].get("kind") or "feat", issue=issue, slug=slug, ticket=ticket["id"].lower())
 
 
+def neutral(text: str) -> str:
+    """Model-written prose for GitHub: no closing keywords that would close other issues, no @mentions."""
+    text = re.sub(r"\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)(\s+)#(\d+)", r"\1\2issue \3", text, flags=re.I)
+    return re.sub(r"@(?=[A-Za-z0-9-])", "@\u200b", text)
+
+
 def pr_body(ticket: dict, issue: int | None) -> str:
     data, spec = ticket["data"], ticket["spec"]
     review = data.get("review") or {}
-    lines = [f"Closes #{issue}" if issue else f"Ticket {ticket['id']}", "", "## Change", data.get("summary") or spec["title"], "",
+    lines = [f"Closes #{issue}" if issue else f"Ticket {ticket['id']}", "", "## Change", neutral(data.get("summary") or spec["title"]), "",
              "Acceptance criteria:", prompts.criteria_text(spec), "", "## Validation",
              f"Measured by the graph_engineering harness in a sandbox on {data['head']} (base {data['base']}):"]
     lines += [f"- {'passed' if g['ok'] else 'FAILED'}: {g['name']}" for g in data.get("gates", [])]
     lines += ["", "## Review", f"Model review ({review.get('model', 'unknown')}): {review.get('verdict', 'none')}.",
-              str(review.get("summary", "")).strip(), "",
+              neutral(str(review.get("summary", "")).strip()), "",
               f"Implemented by a local model in {len(data.get('rounds', []))} round(s). Merging requires a person's approval."]
     return "\n".join(lines)
 
@@ -342,7 +350,7 @@ def retry(store: Store, ticket_id: str, actor: str) -> dict:
     if ticket["data"].get("failed_at") == "intake" or not ticket["spec"].get("acceptance_criteria"):
         return store.transition(ticket_id, "new", actor, "retried", expect=("failed", "rejected"), error=None)
     return store.transition(ticket_id, "accepted", actor, "retried", {"extra_round": True}, expect=("failed",),
-                            max_rounds=ticket["round"] + 1, error=None, not_before=0)
+                            max_rounds=max(ticket["max_rounds"], ticket["round"] + 1), error=None, not_before=0)
 
 
 def cancel(store: Store, ticket_id: str, actor: str, reason: str = "") -> dict:

@@ -6,6 +6,7 @@ import fnmatch
 import json
 from pathlib import Path
 import re
+import shlex
 import subprocess
 
 NAME = re.compile(r"[A-Za-z0-9_.-]{1,64}")
@@ -57,7 +58,7 @@ class Repo:
     def runner(self, path: str) -> str | None:
         for item in self.test_file_runners:
             if re.search(item["pattern"], path):
-                return item["command"].replace("{file}", path)
+                return item["command"].replace("{file}", shlex.quote(path))
         return None
 
     def protected(self, path: str) -> bool:
@@ -93,7 +94,7 @@ def detect(path: Path) -> dict:
         text = (path / "pyproject.toml").read_text() if (path / "pyproject.toml").exists() else ""
         if "pytest" in text:
             found["test_command"] = "python3 -m pytest -q"
-            found["test_file_runners"] = [{"pattern": r"\.py$", "command": "python3 -m pytest -q {file}"}]
+            found["test_file_runners"] = [{"pattern": r"(^|/)test_[^/]*\.py$|_test\.py$", "command": "python3 -m pytest -q {file}"}]
         else:
             start = "tests" if (path / "tests").is_dir() else "."
             found["test_command"] = f"python3 -m unittest discover -s {start} -q"
