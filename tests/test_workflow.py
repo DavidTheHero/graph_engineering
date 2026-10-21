@@ -63,7 +63,7 @@ class Workflow(unittest.TestCase):
         self.source = python_repo(self.root)
         self.home = self.root / "home"
         self.store, self.repos = Store(self.home / "ge.db"), Repos(self.home)
-        self.repos.save(Repo(name="calc", path=str(self.source), test_command=TEST_COMMAND, auto_accept=True,
+        self.repos.save(Repo(name="calc", path=str(self.source), test_command=TEST_COMMAND, auto_accept=True, plan=False,
                              test_file_runners=[{"pattern": r"^tests/.*\.py$", "command": "python3 -m unittest {file}"}]))
 
     def context(self, script):
@@ -170,3 +170,48 @@ class Workflow(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(available(), "no OS sandbox on this host")
+class Planning(unittest.TestCase):
+    def test_plan_is_checked_then_given_to_the_coder_and_the_reviewer(self):
+        root = temp_dir(self)
+        source = python_repo(root)
+        home = root / "home"
+        store, repos = Store(home / "ge.db"), Repos(home)
+        repos.save(Repo(name="calc", path=str(source), test_command=TEST_COMMAND,
+                        test_file_runners=[{"pattern": r"^tests/.*\.py$", "command": "python3 -m unittest {file}"}]))
+        seen = {"plans": 0, "coder": None, "review": None, "plan_feedback": None}
+        good_plan = {"approach": "add subtract beside add", "files": [{"path": "calc.py", "change": "add subtract"}],
+                     "tests": [{"criterion": 1, "file": "tests/test_sub.py", "checks": "subtract(5, 3) == 2"}]}
+
+        def script(role, messages):
+            if role == "plan":
+                seen["plans"] += 1
+                if seen["plans"] == 1:
+                    return [call("submit_plan", approach="x", files=[], tests=[])]   # covers no criterion
+                seen["plan_feedback"] = messages[1]["content"]
+                return [call("submit_plan", **good_plan)]
+            if role == "plan_review":
+                return [call("submit_plan_review", verdict="approve", problems=[], summary="covers it")]
+            if role == "review":
+                seen["review"] = messages[1]["content"]
+                return [call("submit_review", verdict="approve", findings=[], summary="ok")]
+            if seen["coder"] is None:
+                seen["coder"] = messages[1]["content"]
+            return coder()(messages)
+
+        llm = FakeLLM(script)
+        self.addCleanup(llm.close)
+        ctx = workflow.Context(home, store, repos, llm.registry(), owner="w")
+        ticket = store.create("calc", "x", "p", spec={k: SPEC[k] for k in ("title", "kind", "problem", "acceptance_criteria")},
+                              state="proposed")
+        workflow.accept(store, repos, ticket["id"], "p")
+        workflow.develop(ctx, store.claim("w", 600))
+        ticket = store.get(ticket["id"])
+        self.assertEqual(ticket["state"], "ready", ticket["error"])
+        self.assertIn("Criteria 1 have no test in the plan", seen["plan_feedback"])
+        self.assertIn("<plan>", seen["coder"])
+        self.assertIn("subtract(5, 3) == 2", seen["coder"])
+        self.assertIn("The agreed plan", seen["review"])
+        self.assertTrue(ticket["data"]["plan_record"]["approved"])

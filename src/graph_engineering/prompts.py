@@ -107,6 +107,71 @@ SUBMIT_REVIEW = {
 }
 
 
+PLAN = f"""You plan a change before anyone edits code. You can list, read and search the repository, and ask explore for broad
+questions; you cannot change anything. Read the code the ticket touches and the tests next to it, then call submit_plan:
+
+- approach: how the change works, in a few sentences, following the repository's existing patterns;
+- files: each file to change or create, and what changes in it;
+- tests: for every acceptance criterion, the test that will prove it (which file, what it checks). Tests exercise
+  real behaviour through the code's public interface; they do not stub out the code under test;
+- risks: what could break, and existing tests that may need to change (with the reason).
+
+Keep the plan to what the criteria ask. {UNTRUSTED}"""
+
+SUBMIT_PLAN = {
+    "name": "submit_plan",
+    "description": "Submit the plan. Ends the session.",
+    "parameters": {"type": "object", "properties": {
+        "approach": {"type": "string"},
+        "files": {"type": "array", "items": {"type": "object", "properties": {
+            "path": {"type": "string"}, "change": {"type": "string"}}, "required": ["path", "change"]}},
+        "tests": {"type": "array", "items": {"type": "object", "properties": {
+            "criterion": {"type": "integer"}, "file": {"type": "string"}, "checks": {"type": "string"}},
+            "required": ["criterion", "file", "checks"]}},
+        "risks": {"type": "string"}},
+        "required": ["approach", "files", "tests"]},
+}
+
+PLAN_REVIEW = f"""You check a plan against a ticket before any code is written: the plan and the acceptance criteria together
+are the contract the change will be judged by. You can list, read and search the repository; you cannot change it.
+
+Approve if the plan, carried out, would satisfy every criterion end to end, and each criterion has a test that would
+fail without the change. Request changes only for concrete gaps: a criterion not covered, a test that would not prove
+it, a wrong file or interface, or scope beyond the ticket. Then call submit_plan_review.
+
+{UNTRUSTED}"""
+
+SUBMIT_PLAN_REVIEW = {
+    "name": "submit_plan_review",
+    "description": "Submit the plan review. Ends the session.",
+    "parameters": {"type": "object", "properties": {
+        "verdict": {"type": "string", "enum": ["approve", "changes"]},
+        "problems": {"type": "array", "items": {"type": "string"}},
+        "summary": {"type": "string"}},
+        "required": ["verdict", "problems", "summary"]},
+}
+
+
+def plan_text(plan: dict) -> str:
+    files = "\n".join(f"- {f['path']}: {f['change']}" for f in plan.get("files", []))
+    tests = "\n".join(f"- criterion {t['criterion']}: {t['file']} — {t['checks']}" for t in plan.get("tests", []))
+    return (f"Approach: {plan.get('approach', '')}\n\nFiles:\n{files}\n\nTests:\n{tests}"
+            + (f"\n\nRisks: {plan['risks']}" if plan.get("risks") else ""))
+
+
+def plan_task(ticket: dict, brief: str, feedback: str | None = None) -> str:
+    text = (f"<project>\n{brief}\n</project>\n\nTicket: {ticket['title']}\n\n{ticket['problem']}\n\n"
+            f"Acceptance criteria:\n{criteria_text(ticket)}\n")
+    if feedback:
+        text += f"\nYour previous plan was not accepted:\n<feedback>\n{feedback}\n</feedback>\nRevise it.\n"
+    return text
+
+
+def plan_review_task(ticket: dict, plan: dict) -> str:
+    return (f"Ticket: {ticket['title']}\n\n{ticket['problem']}\n\nAcceptance criteria:\n{criteria_text(ticket)}\n\n"
+            f"The plan:\n{plan_text(plan)}")
+
+
 EXPLORE = f"""You answer one question about a codebase for an engineer who is busy with a task. You can list, read and search
 files; you cannot change them. Investigate until you can answer precisely, then call report with a short answer:
 the facts, with file paths and line numbers, and a code excerpt only where it matters. No more than about 300 words.
@@ -152,10 +217,12 @@ def intake_task(request: str, repo_name: str, brief: str = "") -> str:
             + f"Request from a person:\n<request>\n{request}\n</request>")
 
 
-def coding_task(ticket: dict, repo: dict, feedback: str | None = None, brief: str = "") -> str:
+def coding_task(ticket: dict, repo: dict, feedback: str | None = None, brief: str = "", plan: dict | None = None) -> str:
     text = (f"<project>\n{brief}\n</project>\n\n" if brief else "") + (f"Ticket: {ticket['title']}\n\n{ticket['problem']}\n\nAcceptance criteria:\n{criteria_text(ticket)}\n\n"
             f"Test command: {repo['test_command']}\n" + (f"Build command: {repo['build_command']}\n" if repo.get("build_command") else ""))
-    if ticket.get("relevant_files"):
+    if plan:
+        text += f"\nThe agreed plan (follow it; if it proves wrong, say why in finish):\n<plan>\n{plan_text(plan)}\n</plan>\n"
+    elif ticket.get("relevant_files"):
         text += "Likely relevant files: " + ", ".join(ticket["relevant_files"]) + "\n"
     if feedback:
         text += ("\nA previous attempt is already applied in this workspace (see `git diff`). It was not accepted:\n"
@@ -163,7 +230,8 @@ def coding_task(ticket: dict, repo: dict, feedback: str | None = None, brief: st
     return text
 
 
-def review_task(ticket: dict, diff: str, gates: str, summary: str, brief: str = "") -> str:
-    return ((f"<project>\n{brief}\n</project>\n\n" if brief else "") + f"Ticket: {ticket['title']}\n\n{ticket['problem']}\n\nAcceptance criteria:\n{criteria_text(ticket)}\n\n"
+def review_task(ticket: dict, diff: str, gates: str, summary: str, brief: str = "", plan: dict | None = None) -> str:
+    return ((f"<project>\n{brief}\n</project>\n\n" if brief else "")
+            + (f"The agreed plan:\n<plan>\n{plan_text(plan)}\n</plan>\n\n" if plan else "") + f"Ticket: {ticket['title']}\n\n{ticket['problem']}\n\nAcceptance criteria:\n{criteria_text(ticket)}\n\n"
             f"Harness results:\n{gates}\n\nThe author's summary (a claim, verify it):\n{summary}\n\n"
             f"The diff against the base revision:\n```diff\n{diff}\n```")

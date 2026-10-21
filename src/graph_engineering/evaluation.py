@@ -92,7 +92,13 @@ def run(tasks: list[Path], repos: Repos, registry: Registry, out: Path, repeat: 
                 + (f" hidden={'pass' if result['hidden']['passed'] else 'FAIL'}" if "hidden" in result else "")
                 + (f" error={result['error']}" if result["error"] and not result["passed"] else ""))
             (out / "results.json").write_text(json.dumps(results, indent=1))
+    by_task = {t: [r["passed"] for r in results if r["task"] == t] for t in dict.fromkeys(r["task"] for r in results)}
     summary = {"runs": len(results), "pass_rate": round(sum(r["passed"] for r in results) / max(1, len(results)), 3),
+               # pass@k: the task succeeded in at least one of its k trials; pass^k: in all of them (reliability).
+               "pass_at_k": round(sum(any(v) for v in by_task.values()) / max(1, len(by_task)), 3),
+               "pass_hat_k": round(sum(all(v) for v in by_task.values()) / max(1, len(by_task)), 3),
+               "hidden_pass_rate": round(sum(r.get("hidden", {}).get("passed", False) for r in results if "hidden" in r)
+                                         / max(1, sum("hidden" in r for r in results)), 3),
                "median_seconds": statistics.median([r["seconds"] for r in results]) if results else 0,
                "median_prompt_tokens": statistics.median([r["prompt_tokens"] for r in results]) if results else 0,
                "by_task": {t: f"{sum(r['passed'] for r in results if r['task'] == t)}/{sum(1 for r in results if r['task'] == t)}"

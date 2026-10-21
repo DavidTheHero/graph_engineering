@@ -88,6 +88,57 @@ def _explorer(ctx: Context, ticket: dict, workspace: Workspace, directory: Path,
     return explore
 
 
+class Cancelled(Exception):
+    pass
+
+
+def make_plan(ctx: Context, ticket: dict, work: Path, directory: Path, round_: int, brief: str, explorer) -> tuple[dict, dict]:
+    """The sprint contract: a read-only plan, checked mechanically (a test per criterion) and by the reviewer,
+    before any edit. Two attempts; after that the coder works from the last plan with the reviewer's concerns."""
+    spec = ticket["spec"]
+    criteria = set(range(1, len(spec.get("acceptance_criteria") or []) + 1))
+    feedback, plan, record = None, None, {"attempts": []}
+    for attempt in (1, 2):
+        agent, run, planner = _agent(ctx, ticket, "coding", Workspace(work), READ_ONLY, prompts.SUBMIT_PLAN, prompts.PLAN,
+                                     directory / f"plan-{attempt}", round_, max_steps=30, explorer=explorer, nudge_after=None)
+        outcome = agent.run(prompts.plan_task(spec, brief, feedback))
+        ctx.store.run_end(run, outcome.status, outcome.usage)
+        if outcome.status == "cancelled":
+            raise Cancelled()
+        if outcome.status == "error":
+            raise RuntimeError(outcome.error)
+        if outcome.status != "done":
+            feedback = f"The planning session ended without a plan ({outcome.status}). Be more direct."
+            record["attempts"].append({"status": outcome.status})
+            continue
+        candidate = outcome.result
+        uncovered = sorted(criteria - {t.get("criterion") for t in candidate.get("tests", [])})
+        if uncovered:
+            feedback = f"Criteria {', '.join(map(str, uncovered))} have no test in the plan. Every criterion needs one."
+            record["attempts"].append({"status": "uncovered", "criteria": uncovered})
+            plan = plan or candidate
+            continue
+        plan = candidate
+        agent, run, reviewer = _agent(ctx, ticket, "review", Workspace(work), READ_ONLY, prompts.SUBMIT_PLAN_REVIEW,
+                                      prompts.PLAN_REVIEW, directory / f"plan-review-{attempt}", round_, exclude={planner.name},
+                                      max_steps=15)
+        verdict = agent.run(prompts.plan_review_task(spec, plan))
+        ctx.store.run_end(run, verdict.status, verdict.usage)
+        if verdict.status == "cancelled":
+            raise Cancelled()
+        if verdict.status == "error":
+            raise RuntimeError(verdict.error)
+        result = verdict.result or {}
+        record["attempts"].append({"status": "reviewed", "verdict": result.get("verdict"), "problems": result.get("problems", [])})
+        if result.get("verdict") == "approve" or verdict.status != "done":
+            record["approved"] = result.get("verdict") == "approve"
+            return plan, record
+        feedback = "The reviewer found these gaps:\n" + "\n".join(f"- {p}" for p in result.get("problems", []))
+    record["approved"] = False
+    record["concerns"] = feedback
+    return plan or {}, record
+
+
 # ── intake ──────────────────────────────────────────────────────────────────────────────────────────────
 
 def intake(ctx: Context, ticket: dict) -> dict:
@@ -164,11 +215,24 @@ def develop(ctx: Context, ticket: dict) -> dict:
 
     brief = prompts.project_brief(work)
     explorer = _explorer(ctx, ticket, Workspace(work), directory / "coding", round_)
+    plan = data.get("plan")
+    if repo.plan and not plan:
+        try:
+            plan, plan_record = make_plan(ctx, ticket, work, directory, round_, brief, explorer)
+        except Cancelled:
+            return ctx.store.get(ticket["id"])
+        data.update(plan=plan, plan_record=plan_record)
+        ctx.store.merge_data(ticket["id"], plan=plan, plan_record=plan_record)
+        ctx.store.event(ticket["id"], "planned", "harness", {"approved": plan_record.get("approved"),
+                                                             "attempts": len(plan_record["attempts"])})
+        if plan_record.get("concerns"):
+            data["feedback"] = ((data.get("feedback") or "") + "\n\nThe plan reviewer's remaining concerns (address them):\n"
+                                + plan_record["concerns"]).strip()
     agent, run, coder = _agent(ctx, ticket, "coding", Workspace(work, sandbox, repo.run_timeout), READ_WRITE, prompts.FINISH,
                                prompts.CODING, directory / "coding", round_, max_steps=repo.coding_steps, nudge_after=15,
                                notes=root / "notes.md", explorer=explorer, evidence=True)
     outcome = agent.run(prompts.coding_task(spec, {"test_command": repo.test_command, "build_command": repo.build_command},
-                                            data.get("feedback"), brief))
+                                            data.get("feedback"), brief, plan or None))
     ctx.store.run_end(run, outcome.status, outcome.usage)
     record = {"round": round_, "coding": {"model": coder.name, **outcome.asdict()}}
     if outcome.status == "cancelled":
@@ -190,7 +254,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
         ctx.renew()
         reviewer_ws = Workspace(work)
         diff_text = gates.diff(work, data["base"], report["commit"])
-        review_text = prompts.review_task(spec, clip(diff_text, DIFF_CHARS), gates.summary(report), summary, brief)
+        review_text = prompts.review_task(spec, clip(diff_text, DIFF_CHARS), gates.summary(report), summary, brief, plan or None)
         # Same-model reviewers share the coder's blind spots: prefer another model when one fits the review.
         agent, run, reviewer = _agent(ctx, ticket, "review", reviewer_ws, READ_ONLY, prompts.SUBMIT_REVIEW, prompts.REVIEW,
                                       directory / "review", round_, exclude={coder.name},

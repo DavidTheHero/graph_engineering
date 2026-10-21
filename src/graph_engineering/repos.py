@@ -36,6 +36,7 @@ class Repo:
     auto_publish: bool = True               # open the PR as soon as gates and review pass (merge always needs a person)
     issue_required: bool = True             # create a GitHub issue and reference it with "Closes #N"
     branch_template: str = "{kind}/{issue}-{slug}"
+    plan: bool = True                       # plan and check the plan against the criteria before any edit
     max_rounds: int = 3
     coding_steps: int = 80
     run_timeout: int = 300

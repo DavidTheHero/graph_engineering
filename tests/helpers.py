@@ -30,7 +30,9 @@ class FakeLLM:
                 body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 fake.requests.append(body)
                 system = body["messages"][0]["content"]
-                role = "intake" if "turn a request" in system else "review" if "You review a change" in system else "coding"
+                role = ("intake" if "turn a request" in system else "review" if "You review a change" in system
+                        else "plan" if "You plan a change" in system else "plan_review" if "You check a plan" in system
+                        else "explore" if "You answer one question" in system else "coding")
                 reply = fake.script(role, body["messages"])
                 if isinstance(reply, str):
                     message, finish = {"role": "assistant", "content": reply}, "stop"

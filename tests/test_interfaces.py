@@ -78,6 +78,27 @@ class Interfaces(unittest.TestCase):
         self.assertEqual(functions["get_ticket"](ticket["id"])["request"], "add subtract")
         self.assertEqual(self.store.events(ticket["id"])[0]["actor"], "mcp")
 
+    def test_eval_summary_reports_pass_at_k_and_pass_hat_k(self):
+        from graph_engineering import evaluation
+        results = iter([{"passed": True}, {"passed": False}, {"passed": True}, {"passed": True}])
+
+        def fake_run_task(task, repos, registry, out, index):
+            return {"task": task["id"], "run": index, "state": "x", "passed": next(results), "rounds": 1, "seconds": 1,
+                    "error": None, "prompt_tokens": 1, "completion_tokens": 1}
+
+        tasks = []
+        for name in ("a", "b"):
+            path = self.root / f"{name}.json"
+            path.write_text(json.dumps({"id": name}))
+            tasks.append(path)
+        original = evaluation.run_task
+        evaluation.run_task = fake_run_task
+        try:
+            summary = evaluation.run(tasks, self.repos, None, self.root / "out", repeat=2, log=lambda *a: None)
+        finally:
+            evaluation.run_task = original
+        self.assertEqual((summary["pass_at_k"], summary["pass_hat_k"], summary["pass_rate"]), (1.0, 0.5, 0.75))
+
     def test_cli_registers_a_repository_and_files_a_ticket(self):
         home = self.root / "cli-home"
         out = io.StringIO()

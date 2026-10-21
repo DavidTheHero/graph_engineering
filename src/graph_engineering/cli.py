@@ -63,7 +63,10 @@ def main(argv: list[str] | None = None) -> int:
     new.add_argument("--spec", help="a JSON file with title, kind, problem, acceptance_criteria: skips intake")
     ticket.add_parser("list").add_argument("--state")
     ticket.add_parser("show").add_argument("id")
-    for name in ("accept", "approve-publish", "retry"):
+    accept = ticket.add_parser("accept")
+    accept.add_argument("id")
+    accept.add_argument("--allow-test-config", action="store_true", help="let this ticket change test configuration")
+    for name in ("approve-publish", "retry"):
         ticket.add_parser(name).add_argument("id")
     for name in ("reject", "answer", "request-changes", "cancel"):
         p = ticket.add_parser(name)
@@ -192,7 +195,8 @@ def ticket_command(args, store: Store, repos: Repos) -> int:
                 return 1
         show(workflow.approve_merge(store, args.id, who, head)["state"])
         return 0
-    action = {"accept": lambda: workflow.accept(store, repos, args.id, who),
+    action = {"accept": lambda: workflow.accept(store, repos, args.id, who,
+                                                {"allow_test_config": True} if args.allow_test_config else None),
               "approve-publish": lambda: workflow.approve_publish(store, args.id, who),
               "retry": lambda: workflow.retry(store, args.id, who),
               "reject": lambda: workflow.reject(store, args.id, who, args.text),
