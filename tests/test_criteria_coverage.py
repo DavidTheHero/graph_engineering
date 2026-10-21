@@ -58,6 +58,13 @@ class RunnerDetectionTests(unittest.TestCase):
             self.assertEqual(relevant_example(state, names), "backend/tests/api.test.js")
             self.assertEqual(relevant_example(state | {"bundle": {"files": []}, "enhanced": {}}, names), names[0])  # No signal: the first.
             self.assertIsNone(relevant_example(state, []))
+            # The file name counts when the module it imports is not in the evidence (backend/app.js was not).
+            from graph_engineering.accepted_development import relevant_examples
+            unbundled = state | {"bundle": {"files": [{"path": "backend/llm.js"}]}}
+            (root / "backend" / "tests" / "agent.test.js").write_text('import { createModel } from "../llm.js";\n')
+            ranked = relevant_examples(unbundled, names + ["backend/tests/agent.test.js"])
+            self.assertEqual(ranked[0], "backend/tests/api.test.js")
+            self.assertEqual(len(ranked), 2)
 
     def test_example_test_never_follows_a_symlink(self):
         from graph_engineering.accepted_development import example_test
