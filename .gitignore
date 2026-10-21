@@ -20,3 +20,4 @@ evidence/connectivity/opencode-probe/state/
 evidence/connectivity/opencode-probe/temp/
 evidence/evaluation/**/controller/
 evidence/evaluation/**/repositories/
+prototype/runs/

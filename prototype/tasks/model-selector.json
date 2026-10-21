@@ -1,0 +1,44 @@
+{
+  "id": "model-selector",
+  "source": "GE-FDD2275A",
+  "repo": "/Users/daviddoan/git_code/General_AI_Agent",
+  "base": "origin/main",
+  "title": "Display and select the current AI model in the chat interface",
+  "problem": "The chat interface does not show which AI model the chat is connected to, and offers no way to switch it. The backend already knows the model name (getModelName() in backend/llm.js, and agent.run() responses carry a `model` field), but there is no API endpoint for it and the React chat bar in frontend/src/App.jsx shows nothing.",
+  "acceptance_criteria": [
+    "A GET /api/model endpoint returns the name of the AI model currently connected to the chat as JSON.",
+    "The chat bar displays the connected model name on the same row as the Send button, on the left side.",
+    "The model name is switchable via a selector in that location.",
+    "Switching the model updates the backend's active model for subsequent chat requests."
+  ],
+  "setup": [
+    [
+      "npm",
+      "ci",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+      "--prefer-offline"
+    ]
+  ],
+  "test_command": "npm test",
+  "build_command": "npm run build",
+  "test_file_runners": [
+    {
+      "pattern": "^backend/tests/.*\\.test\\.js$",
+      "command": "node --test {file}"
+    },
+    {
+      "pattern": "^frontend/src/.*\\.test\\.jsx?$",
+      "command": "node node_modules/vitest/vitest.mjs run --config frontend/vite.config.js {file}"
+    }
+  ],
+  "test_file_pattern": "(^|/)tests?/|\\.test\\.[jt]sx?$",
+  "reuse": [
+    "node_modules"
+  ],
+  "env": {
+    "MCP_PYTHON": "{repo}/.venv/bin/python",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  }
+}
