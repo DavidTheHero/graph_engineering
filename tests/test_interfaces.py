@@ -80,7 +80,7 @@ class Interfaces(unittest.TestCase):
 
     def test_eval_summary_reports_pass_at_k_and_pass_hat_k(self):
         from graph_engineering import evaluation
-        results = iter([{"passed": True}, {"passed": False}, {"passed": True}, {"passed": True}])
+        results = iter([True, False, True, True])
 
         def fake_run_task(task, repos, registry, out, index):
             return {"task": task["id"], "run": index, "state": "x", "passed": next(results), "rounds": 1, "seconds": 1,
