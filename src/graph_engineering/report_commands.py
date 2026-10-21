@@ -81,6 +81,12 @@ def act(tickets,data,key):
             state.update(enhanced=enhanced,revision=number,accepted_revision=None,publication_revision=None)
             node,status='ticket_finalisation','ready_for_review'
         elif action=='accept':
+            if 'autonomy_policy_updated' in data:  # Automatic acceptance: the policy must still say so.
+                from .autonomy import policy
+                setting=policy(tickets,original['repository_id'])
+                if not setting['auto_accept'] or setting.get('updated')!=data['autonomy_policy_updated']:
+                    raise ValueError('Repository autonomy policy changed before acceptance')
+                if state.get('enhanced',{}).get('questions'):raise ValueError('Automatic acceptance requires no open questions')
             validation=state.get('finding_validation',{})
             if status!='ready_for_review' or not validation.get('source_references_valid') or not validation.get('verified_references'):
                 raise ValueError('A draft with independently checked source references is required; runtime cause remains a hypothesis')

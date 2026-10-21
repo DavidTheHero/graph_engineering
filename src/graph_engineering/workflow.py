@@ -379,7 +379,8 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                     key+=f":g{state['intake'].get('generation',0)}:s{state.get('search_round',0)}:v{state.get('validation_round',0)}:r{state.get('revision',0)}"
                 attempts = state["attempts"].copy()
                 attempts[key] = attempts.get(key, 0) + 1
-                limit = min(config["max_node_attempts"], spec.max_attempts)
+                # Accepted development follows the repository policy's budget; other modes keep each node's own cap.
+                limit = config["max_node_attempts"] if config.get("run_mode") == "accepted_development" else min(config["max_node_attempts"], spec.max_attempts)
                 if attempts[key] > limit and node_name not in ("approval_gate", "ci_policy_verification"):
                     self.store.checkpoint(run_id, node_name, {"error": "Attempt budget exhausted"}, node_name, "blocked", "exhausted")
                     return self.store.get(run_id)
