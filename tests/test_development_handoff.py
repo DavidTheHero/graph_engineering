@@ -462,6 +462,37 @@ class DevelopmentHandoffTests(unittest.TestCase):
         self.assertEqual((kinds.count('review_reconsidered'),kinds.count('review_reconsideration_failed')),(1,1))
         self.assertEqual(run['state']['review']['findings'][0]['message'],'The test still fails: actual undefined')  # The first answer stood.
 
+    def test_accepted_plan_may_name_a_source_file_outside_the_evidence_bundle(self):
+        """GE-FDD2275A: the planner chose backend/app.js (the API routes), which the investigation bundle lacked."""
+        from graph_engineering.report_commands import act as _act
+        (self.repo/'routes.py').write_text("ROUTES = {}\n")  # Unrelated to calc: never in the evidence bundle.
+        git(self.repo,'add','.');git(self.repo,'commit','-m','routes')
+        self.tickets.store.db.execute("UPDATE runs SET state=json_set(state,'$.base_sha',?) WHERE id=?",(git(self.repo,'rev-parse','HEAD').strip(),self.run['id']))
+        self.tickets.store.db.commit()
+        class OutsideBundle(DevelopmentDouble):
+            def invoke(self,role,*args,**kwargs):
+                result=super().invoke(role,*args,**kwargs)
+                if role=='planning':result['content']['files']=['calc.py','routes.py']
+                return result
+        _act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'outside-start-1')
+        flow=Workflow(self.home);flow.worker=OutsideBundle()
+        try:run=flow.execute(self.run['id'],until='model_selection')
+        finally:flow.store.close()
+        self.assertNotIn('routes.py',[f['path'] for f in run['state']['bundle']['files']])
+        self.assertEqual(run['state']['plan']['files'],['calc.py','routes.py'],run['state'].get('error'))
+        # A frozen test or a path that is not source is still refused, with the reason named.
+        class Bad(DevelopmentDouble):
+            def invoke(self,role,*args,**kwargs):
+                result=super().invoke(role,*args,**kwargs)
+                if role=='planning':result['content']['files']=['calc.py','missing.py']
+                return result
+        flow=Workflow(self.home);flow.worker=Bad()
+        try:
+            self.tickets.store.db.execute("UPDATE runs SET node='task_planning',status='ready' WHERE id=?",(self.run['id'],));self.tickets.store.db.commit()
+            with self.assertRaisesRegex(ValueError,r'missing\.py \(not a repository source file\)'):
+                flow.run_id=self.run['id'];flow.node_task_planning(flow.store.get(self.run['id'])['state'])
+        finally:flow.store.close()
+
     def test_github_publication_follows_the_repository_pr_convention(self):
         """Branch <type>/<issue>-<slug>, body with Closes #N and Change / Validation / Review sections (General_AI_Agent's PR policy)."""
         from graph_engineering.workflow import publication_branch,publication_body

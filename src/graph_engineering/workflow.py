@@ -902,10 +902,20 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         if kept:
             plan["files"] = plan["files"] + kept
             self.store.event(self.run_id, "task_planning", "plan_widened", {"kept": kept, "reason": "a repair keeps the previous plan's files and their edits"})
-        complete = {f["path"] for f in state["bundle"]["files"] if f["complete"] or state['config'].get('run_mode')=='accepted_development'}
         adapted = sorted(set(plan["files"]) & set(adaptable))
-        if not set(plan["files"]) - set(adapted) <= (set(state["repository"]["source_files"]) & complete) - set(state["frozen"]):
-            raise ValueError("Plan requests unapproved or incomplete source files")
+        source, frozen = set(state["repository"]["source_files"]), set(state["frozen"])
+        if accepted:
+            # Any repository source file: implementation reads planned files from the worktree and refuses any it cannot
+            # show whole (GE-FDD2275A planned backend/app.js, which the investigation bundle had not included, and was
+            # refused eight times with no reason).
+            allowed = source - frozen
+        else:
+            allowed = {f["path"] for f in state["bundle"]["files"] if f["complete"]} & source - frozen
+        refused = sorted(set(plan["files"]) - set(adapted) - allowed)
+        if refused:
+            reasons = ["%s (%s)" % (name, "a frozen test or policy file" if name in frozen else "not a repository source file" if name not in source
+                                    else "not shown complete in the evidence") for name in refused]
+            raise ValueError("Plan requests unapproved or incomplete source files: " + "; ".join(reasons))
         if adapted:
             self.store.event(self.run_id, "task_planning", "existing_tests_planned", {"files": adapted, "reason": "fail after the accepted change while the frozen regression passes"})
         return {"plan": plan | {"adapted_tests": adapted}}, "model_selection", "ready"
