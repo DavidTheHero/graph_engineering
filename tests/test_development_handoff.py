@@ -493,6 +493,42 @@ class DevelopmentHandoffTests(unittest.TestCase):
                 flow.run_id=self.run['id'];flow.node_task_planning(flow.store.get(self.run['id'])['state'])
         finally:flow.store.close()
 
+    def test_accepted_plan_refuses_runner_config_frozen_oversized_and_missing_files_with_feedback(self):
+        """Review of PR #18: refusals carry reasons, happen at planning, and reach the planner on its next attempt."""
+        from graph_engineering.report_commands import act as _act
+        from graph_engineering.workflow import plannable_refusals,RUNNER_CONFIG
+        for name in ('conftest.py','frontend/vite.config.js','jest.setup.ts','scripts/run.sh','setup.py','src/setupTests.js'):
+            self.assertTrue(RUNNER_CONFIG.search(name),name)
+        for name in ('backend/app.js','src/config.js','frontend/src/App.jsx','backend/setup_routes.py'):
+            self.assertFalse(RUNNER_CONFIG.search(name),name)
+        _act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'refuse-start-1')
+        flow=Workflow(self.home);flow.worker=DevelopmentDouble()
+        try:
+            state=flow.execute(self.run['id'],until='task_planning')['state']
+            base=Path(state.get('baseline_path') or state['config']['repo'])
+            (base/'conftest.py').write_text('x=1\n')
+            state=state|{'repository':state['repository']|{'source_files':state['repository']['source_files']+['conftest.py']}}
+            self.assertEqual(plannable_refusals(state,['conftest.py','calc.py','nope.py']),
+                             {'conftest.py':'test-runner, build or shell configuration','nope.py':'missing from the checkout'})
+            class Planner(DevelopmentDouble):
+                def __init__(self,files):super().__init__();self.files=files;self.prompt=None
+                def invoke(self,role,*args,**kwargs):
+                    result=super().invoke(role,*args,**kwargs)
+                    if role=='planning':self.prompt=json.loads(args[0]);result['content']['files']=self.files
+                    return result
+            frozen_test=next(iter(state['frozen']))
+            for files,reason in ((['calc.py','conftest.py'],r'conftest\.py \(test-runner, build or shell configuration\)'),
+                                 ([frozen_test],'a frozen test or policy file')):
+                flow.worker=Planner(files)
+                with self.assertRaisesRegex(ValueError,reason):flow.node_task_planning(state)
+            (base/'calc.py').write_text((base/'calc.py').read_text()+'#'*200000+'\n')
+            flow.worker=Planner(['calc.py'])
+            with self.assertRaisesRegex(ValueError,'over the implementation model'):
+                flow.node_task_planning(state|{'last_error':{'message':'Plan requests unapproved or incomplete source files: x'}})
+            self.assertIn('Your previous plan was refused',flow.worker.prompt['rejected_plan'])
+            self.assertIsInstance(flow.worker.prompt['repository_source_files'],list)
+        finally:flow.store.close()
+
     def test_github_publication_follows_the_repository_pr_convention(self):
         """Branch <type>/<issue>-<slug>, body with Closes #N and Change / Validation / Review sections (General_AI_Agent's PR policy)."""
         from graph_engineering.workflow import publication_branch,publication_body

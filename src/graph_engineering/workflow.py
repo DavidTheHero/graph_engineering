@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass, replace
 import copy
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import sqlite3
 import subprocess
@@ -243,6 +243,29 @@ TEST_FAILURE_CLAIM = re.compile(r"\b(test|tests|suite|assert\w*)\b[^.]{0,120}\b(
 def contradicts_test_run(review: dict) -> bool:
     """Whether a rejection rests on a test failing: its blocking findings cite a test, assertion or the pre-change output."""
     return any(f.get("severity") in ("critical", "required") and TEST_FAILURE_CLAIM.search(str(f.get("message", ""))) for f in review.get("findings", []))
+
+
+RUNNER_CONFIG = re.compile(r"(^|/)(conftest\.py|setup\.py|noxfile\.py|tasks\.py|[^/]*\.config\.(js|cjs|mjs|ts|cts|mts)|"
+                           r"(jest|vitest|playwright|karma|mocha|ava)[^/]*\.(js|cjs|mjs|ts)|[^/]*setup[-_.]?tests?\.(js|ts|jsx|tsx)|[^/]*\.sh)$", re.I)
+
+
+def plannable_refusals(state: dict, files: list[str]) -> dict:
+    """Planned files an accepted development may not change, with the reason (review of PR #18): test-runner and
+    build configuration (an edit there could exclude or alias tests while frozen test digests still match), and files
+    the implementer could never be shown (symlinks, missing, or over 1 MB)."""
+    worktree = Path(state.get("baseline_path") or state["config"]["repo"])
+    reasons = {}
+    for name in files:
+        path = worktree / name
+        if RUNNER_CONFIG.search(name):
+            reasons[name] = "test-runner, build or shell configuration"
+        elif any(worktree.joinpath(*PurePosixPath(name).parts[:i]).is_symlink() for i in range(1, len(PurePosixPath(name).parts) + 1)):
+            reasons[name] = "a symlink"
+        elif not path.is_file():
+            reasons[name] = "missing from the checkout"
+        elif path.stat().st_size > 1_000_000:
+            reasons[name] = "over 1 MB"
+    return reasons
 
 
 def publication_branch(state: dict, issue: int) -> str:
@@ -866,12 +889,18 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
     def node_task_planning(self, state):
         accepted = state['config'].get('run_mode') == 'accepted_development'
         task = ("Plan the source changes that make the frozen regression_test pass while every existing test keeps passing. "
-                "Select EVERY source file from the supplied bundle that must change: follow the regression test's imports and "
+                "Select EVERY source file that must change, from the supplied bundle or repository_source_files: follow the regression test's imports and "
                 "calls (for example a response assembled in one module from a value created in another needs both). "
                 "If previous_attempt is supplied, its failure shows what the last plan missed; widen the file list accordingly. "
                 "Preserve all tests and policy." if accepted else
                 "Plan a minimal source-only fix to the validated test failure. Preserve all tests and policy. Select only complete source files from the supplied bundle.")
         request = {"task": task, "candidate": state["candidate"], "evidence": state["bundle"], "additional_information": troubleshooting_context(state)}
+        if accepted:
+            shown = {f["path"] for f in state["bundle"]["files"]}
+            request["repository_source_files"] = [f for f in state["repository"]["source_files"] if f not in shown][:300]
+            last = state.get("last_error") or {}
+            if isinstance(last, dict) and str(last.get("message", "")).startswith("Plan requests"):
+                request["rejected_plan"] = "Your previous plan was refused: " + last["message"]  # The planner can correct, not repeat.
         # A repair within the round keeps the previous plan: its edits stay in the worktree, so dropping a file
         # would revert the half of the change the latest failure is not about (GE-30D05C40 oscillated between
         # {llm.js, agent.js} and {agent.js, agent.test.js}, each re-plan undoing the other). A fresh round after
@@ -908,14 +937,24 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             # Any repository source file: implementation reads planned files from the worktree and refuses any it cannot
             # show whole (GE-FDD2275A planned backend/app.js, which the investigation bundle had not included, and was
             # refused eight times with no reason).
-            allowed = source - frozen
+            allowed = source - frozen - set(plannable_refusals(state, plan["files"]))
         else:
             allowed = {f["path"] for f in state["bundle"]["files"] if f["complete"]} & source - frozen
         refused = sorted(set(plan["files"]) - set(adapted) - allowed)
         if refused:
+            special = plannable_refusals(state, plan["files"]) if accepted else {}
             reasons = ["%s (%s)" % (name, "a frozen test or policy file" if name in frozen else "not a repository source file" if name not in source
-                                    else "not shown complete in the evidence") for name in refused]
+                                    else special.get(name) or "not shown complete in the evidence") for name in refused]
             raise ValueError("Plan requests unapproved or incomplete source files: " + "; ".join(reasons))
+        if accepted:
+            # Review of PR #18: the planner may now name files it never saw, so their total size is checked here, where a
+            # refusal goes back to the planner, not in implementation where every retry would fail the same way.
+            worktree = Path(state.get("baseline_path") or state["config"]["repo"])
+            total = sum((worktree / name).stat().st_size for name in plan["files"] if (worktree / name).is_file())
+            limit = implementation_bundle_limit(state["config"])
+            if total > limit:
+                raise ValueError(f"Plan requests unapproved or incomplete source files: together {total} bytes, over the implementation "
+                                 f"model's complete-file context of {limit}; plan fewer or smaller files")
         if adapted:
             self.store.event(self.run_id, "task_planning", "existing_tests_planned", {"files": adapted, "reason": "fail after the accepted change while the frozen regression passes"})
         return {"plan": plan | {"adapted_tests": adapted}}, "model_selection", "ready"
