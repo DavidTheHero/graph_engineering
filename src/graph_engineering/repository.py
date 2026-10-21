@@ -168,7 +168,7 @@ def run_check(repo: Path, argv: list[str], trusted: bool = False, timeout: int =
     result = command(argv, repo, timeout, cancelled, env=env)
     result["passed"] = result["returncode"] == 0 and not result["timed_out"]
     # An empty test suite must not become evidence of correctness.
-    result["empty_suite"] = bool(re.search(r"Ran 0 tests|# tests 0\b|no tests ran", result["output"]))
+    result["empty_suite"] = bool(re.search(r"Ran 0 tests|# tests 0\b|no tests ran|No test files found", result["output"]))
     result["passed"] = result["passed"] and not result["empty_suite"]
     return result
 
