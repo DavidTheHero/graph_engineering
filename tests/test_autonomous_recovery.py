@@ -177,6 +177,20 @@ class AutonomousRecoveryTests(unittest.TestCase):
         self.assertTrue(str(run['state'].get('error', {}).get('message', '')).startswith('Regression repair budget exhausted'), run['state'].get('error'))
         self.assertEqual(sum(m.get('role') == 'regression_test' for m in worker.metrics), 3)  # Three proposals, not two.
 
+    def test_budget_raised_while_a_run_is_underway_applies_at_the_next_step(self):
+        """GE-30D05C40: the policy said 3 attempts, the run kept the 2 its setup had copied and blocked one attempt early."""
+        act(self.tickets, self.base | {'action': 'start_development', 'trust_execution': True}, 'raise-start-1')
+        flow = Workflow(self.home); flow.worker = DevelopmentDouble()
+        try:
+            run = flow.execute(self.run['id'], until='task_planning')
+            self.assertEqual(run['state']['config']['max_node_attempts'], 2)
+            self.set_policy('raise-policy-1', max_node_attempts=4, max_repairs=3)
+            run = flow.execute(self.run['id'], until='isolated_implementation')
+        finally:
+            flow.store.close()
+        self.assertEqual((run['state']['config']['max_node_attempts'], run['state']['config']['max_repairs']), (4, 3))
+        self.assertIn('policy_budget_applied', [e['kind'] for e in self.tickets.store.events(self.run['id'])])
+
     def test_policy_validation(self):
         with self.assertRaisesRegex(ValueError, 'recovery_rounds'):
             self.set_policy('bad-policy-1', recovery_rounds=7)

@@ -50,6 +50,15 @@ class PromptFittingTests(unittest.TestCase):
         self.assertEqual(fitted["evidence"]["files"], evidence["files"])
         self.assertLessEqual(len(fitted["evidence"]["failure_output"]), 1500)
 
+    def test_current_edits_are_trimmed_then_dropped_before_planned_files(self):
+        """PR #13: the round's applied diff is context, never at the expense of complete planned files."""
+        request = planning(20000) | {"current_edits": {"note": "n", "diff": "d" * 6000}}
+        fitted = fit_implementation_request(CONFIG, request)
+        self.assertEqual(len(fitted["current_edits"]["diff"]), 2000)
+        fitted = fit_implementation_request(CONFIG, planning(28000) | {"current_edits": {"note": "n", "diff": "d" * 6000}})
+        self.assertNotIn("current_edits", fitted)
+        self.assertEqual(len(fitted["evidence"]["files"][0]["content"]), 28000)
+
     def test_budget_follows_the_model_that_is_routed_first_not_the_strictest_fallback(self):
         """Review of PR #7: a stricter fallback model must not shrink prompts the preferred model accepts."""
         models = CONFIG["models"] | {"c": CONFIG["models"]["a"] | {"context": 32000, "label": "small-context large"}}

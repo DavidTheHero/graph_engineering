@@ -315,6 +315,7 @@ def fit_implementation_request(config: dict, request: dict) -> dict:
     def tail(key, keep):  # Output tails, in order of decreasing usefulness.
         return lambda r: r | {key: (r.get(key) or "")[-keep:]}
     steps = [tail("previous_failure", 1500),
+             lambda r: r | {"current_edits": r["current_edits"] | {"diff": r["current_edits"]["diff"][:2000]}} if r.get("current_edits") else r,
              lambda r: r | {"evidence": r["evidence"] | {"failure_output": (r["evidence"].get("failure_output") or "")[-1500:]}},
              lambda r: r | {"evidence": r["evidence"] | {"failure_output": ""}} if r.get("previous_failure") else r,  # Same text as previous_failure.
              lambda r: r | {"additional_information": [text[:300] for text in r.get("additional_information") or []]},
@@ -323,7 +324,8 @@ def fit_implementation_request(config: dict, request: dict) -> dict:
              lambda r: r | {"candidate": r["candidate"] | {"actual": (r["candidate"].get("actual") or "")[-1000:]}},
              tail("previous_failure", 600),
              lambda r: r | {"evidence": r["evidence"] | {"failure_output": (r["evidence"].get("failure_output") or "")[-600:]}},
-             lambda r: r | {"candidate": r["candidate"] | {"actual": (r["candidate"].get("actual") or "")[-300:]}}]
+             lambda r: r | {"candidate": r["candidate"] | {"actual": (r["candidate"].get("actual") or "")[-300:]}},
+             lambda r: {k: v for k, v in r.items() if k != "current_edits"}]
     for step in steps:
         if _size(request) <= budget:
             return request
@@ -468,7 +470,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             for _ in range(max_nodes):
                 run = self.store.get(run_id)
                 node_name, state = run["node"], run["state"]
-                config = state["config"]  # Nodes may rewrite budgets (development_setup applies the policy's).
+                config = state["config"]  # Accepted development takes the policy's current budgets below, every step.
                 if node_name == "done":
                     return run
                 if self.cancelled():
@@ -477,6 +479,14 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                 if node_name == until:
                     self.store.checkpoint(run_id, node_name, {}, node_name, "scanned", "yielded")
                     return self.store.get(run_id)
+                budget_changed = False
+                if config.get("run_mode") == "accepted_development":
+                    from .accepted_development import policy_budgets
+                    budgets = policy_budgets(self, state)
+                    if budgets and {k: config.get(k) for k in budgets} != budgets:
+                        state["config"] = config = config | budgets  # The policy's current budget, persisted with the attempt below.
+                        budget_changed = True
+                        self.store.event(run_id, node_name, "policy_budget_applied", budgets)
                 spec = REGISTRY[node_name]
                 input_fields = spec.inputs | OPTIONAL_INPUTS.get(node_name, {})
                 inputs = {key: state[key] for key in input_fields if key in state}
@@ -489,9 +499,9 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                 # Accepted development follows the repository policy's budget; other modes keep each node's own cap.
                 limit = config["max_node_attempts"] if config.get("run_mode") == "accepted_development" else min(config["max_node_attempts"], spec.max_attempts)
                 if attempts[key] > limit and node_name not in ("approval_gate", "ci_policy_verification"):
-                    self.store.checkpoint(run_id, node_name, {"error": "Attempt budget exhausted"}, node_name, "blocked", "exhausted")
+                    self.store.checkpoint(run_id, node_name, {"error": "Attempt budget exhausted"} | ({"config": config} if budget_changed else {}), node_name, "blocked", "exhausted")
                     return self.store.get(run_id)
-                self.store.checkpoint(run_id, node_name, {"attempts": attempts}, node_name, "running", "started")
+                self.store.checkpoint(run_id, node_name, {"attempts": attempts} | ({"config": config} if budget_changed else {}), node_name, "running", "started")
                 started = time.monotonic()
                 deadline_token = NODE_DEADLINE.set(started + spec.timeout_seconds)
                 try:
@@ -908,6 +918,10 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                    "evidence": evidence,
                    "previous_failure": state.get("verification", {}).get("output", "")[-4000:],
                    "review_feedback": state.get("review", {}),"additional_information":troubleshooting_context(state)}
+        if accepted and not fresh_round:
+            applied = git(path, "diff", "--no-ext-diff", "--no-color", state["base_sha"], "--", *state['plan']['files'])
+            if applied.strip():  # Earlier proposals of this round: the evidence already contains them.
+                request["current_edits"] = {"note": "The planned files ALREADY contain these edits from this round; the evidence shows the files as they are now. Do not re-apply them: propose only the remaining changes.", "diff": applied[:6000]}
         last = state.get("last_error") or {}
         if accepted and isinstance(last, dict) and str(last.get("message", "")).startswith(("A shortened", "A replacement", "An old fragment", "The replacement", "The marker", "Replacement", "Adapted test")):
             request["rejected_proposal"] = "Your previous proposal was rejected: " + last["message"]  # The model can correct, not repeat.
@@ -930,7 +944,10 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         def propose():
             fitted = fit() if accepted else request
             patch = self.ask(state, "implementation", fitted, HUNK_SCHEMA if accepted else PATCH_SCHEMA, routing.LARGE)
-            edits = validate_edits(path, materialize_hunks(path,patch,state['plan']['files']) if accepted else patch["files"], state["plan"]["files"], adapted=adapted)
+            skipped = []
+            edits = validate_edits(path, materialize_hunks(path,patch,state['plan']['files'],skipped,state['base_sha']) if accepted else patch["files"], state["plan"]["files"], adapted=adapted)
+            if skipped:
+                self.store.event(self.run_id, "isolated_implementation", "edits_already_applied", {"edits": skipped})
             # The model that actually wrote the patch (routing may have fallen back since model_selection).
             return {"patch":patch,"edits":edits,"edits_hash":digest(edits),"model":self.last_model}
         # Persist validated complete contents before writing so a resumed fragment
