@@ -1,3 +1,0 @@
-/* Vendored Cytoscape's container rule, served as a local stylesheet so its
-   renderer need not inject an inline style under our strict CSP. */
-.__________cytoscape_container { position: relative; }

@@ -1,9 +1,0 @@
-{
-  "mutation": "Remove accepted-revision requirement from development admission in isolated package copy",
-  "module_loaded": "D:\\git_code\\graph_engineering\\.runtime\\phase3-mutation-dwetprnm\\graph_engineering\\report_commands.py",
-  "returncode": 1,
-  "stdout": "",
-  "stderr": "test_review_edit_revision_and_development_admission_are_distinct (tests.test_intake.IntakeTests) ... FAIL\n\n======================================================================\nFAIL: test_review_edit_revision_and_development_admission_are_distinct (tests.test_intake.IntakeTests)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"D:\\git_code\\graph_engineering\\tests\\test_intake.py\", line 96, in test_review_edit_revision_and_development_admission_are_distinct\n    with self.assertRaises(ValueError):act(self.tickets,base|{'action':'send_development'},'send-before-accept')\nAssertionError: ValueError not raised\n\n----------------------------------------------------------------------\nRan 1 test in 0.823s\n\nFAILED (failures=1)\n",
-  "detected": true,
-  "live_source_modified": false
-}

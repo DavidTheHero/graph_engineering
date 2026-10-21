@@ -1,7 +1,0 @@
-{
-  "proxy_configured": false,
-  "host": "192.168.0.62",
-  "port": 18035,
-  "tcp_connected": true,
-  "latency_seconds": 0.016
-}

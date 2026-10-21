@@ -1,0 +1,91 @@
+import os
+from pathlib import Path
+import unittest
+
+from graph_engineering.sandbox import Sandbox, available
+from graph_engineering.tools import READ_ONLY, Workspace
+
+from helpers import python_repo, temp_dir
+
+
+class Tools(unittest.TestCase):
+    def setUp(self):
+        self.root = temp_dir(self)
+        self.ws = Workspace(python_repo(self.root))
+
+    def test_paths_cannot_leave_the_workspace(self):
+        for path in ("../outside.txt", "/etc/passwd", ".git/config", "tests/../../x"):
+            self.assertTrue(self.ws.call("read_file", {"path": path}, READ_ONLY).startswith("Error"), path)
+
+    def test_read_only_session_cannot_write(self):
+        self.assertIn("no tool named write_file", self.ws.call("write_file", {"path": "a", "content": "b"}, READ_ONLY))
+
+    def test_edit_errors_explain_how_to_recover(self):
+        (self.ws.root / "dup.py").write_text("x = 1\nx = 1\n    y = 2\n")
+        self.assertIn("occurs 2 times", self.ws.edit_file("dup.py", "x = 1", "x = 2"))
+        self.assertIn("check indentation", self.ws.edit_file("dup.py", "y = 2\n\n", "y = 3"))
+        self.assertIn("Read the file again", self.ws.edit_file("dup.py", "z = 9", "z = 1"))
+
+    def test_read_pages_and_caps_output(self):
+        (self.ws.root / "long.txt").write_text("\n".join(f"line {i}" for i in range(1, 1001)))
+        page = self.ws.read_file("long.txt", start_line=401)
+        self.assertIn("  401| line 401", page)
+        self.assertIn("[lines 801-1000 not shown]", page)
+        (self.ws.root / "wide.txt").write_text("\n".join("w" * 1500 for _ in range(100)))
+        self.assertLess(len(self.ws.read_file("wide.txt")), 26000)
+
+    def test_search_and_list_include_new_files(self):
+        self.ws.write_file("new_module.py", "def subtract():\n    pass\n")
+        self.assertIn("new_module.py:1:def subtract", self.ws.search("subtract"))
+        self.assertIn("new_module.py", self.ws.list_files())
+        self.assertEqual(self.ws.search("nothing_matches_this"), "No matches")
+
+
+@unittest.skipUnless(available(), "no OS sandbox on this host")
+class Confinement(unittest.TestCase):
+    """The sandbox is the trust boundary, so these run the real mechanism, not a mock."""
+
+    def setUp(self):
+        self.root = temp_dir(self)
+        work = self.root / "work"
+        work.mkdir()
+        self.sandbox = Sandbox(self.root, work)
+
+    def test_writes_are_confined_to_the_run_directory(self):
+        outside = Path.home() / f".ge-sandbox-probe-{os.getpid()}"
+        code, out, _ = self.sandbox.run(f"echo inside > ok.txt && cat ok.txt && echo x > {outside}")
+        self.assertIn("inside", out)
+        self.assertNotEqual(code, 0)
+        self.assertFalse(outside.exists())
+
+    def test_credentials_are_unreadable(self):
+        ssh = Path.home() / ".ssh"
+        if not ssh.exists():
+            self.skipTest("no ~/.ssh on this host")
+        code, out, _ = self.sandbox.run(f"ls {ssh}")
+        self.assertNotEqual(code, 0)
+
+    def test_network_is_closed_except_localhost(self):
+        code, _, _ = self.sandbox.run("python3 -c \"import socket; socket.create_connection(('1.1.1.1', 443), timeout=5)\"")
+        self.assertNotEqual(code, 0)
+        code, out, _ = self.sandbox.run("python3 -c \"import socket; s=socket.socket(); s.bind(('127.0.0.1', 0)); s.listen(); "
+                                        "socket.create_connection(s.getsockname()); print('local ok')\"")
+        self.assertEqual(code, 0, out)
+
+    def test_environment_is_minimal(self):
+        os.environ["GE_SECRET_PROBE"] = "leak"
+        self.addCleanup(os.environ.pop, "GE_SECRET_PROBE")
+        sandbox = Sandbox(self.root, self.root / "work")
+        _, out, _ = sandbox.run("env")
+        self.assertNotIn("GE_SECRET_PROBE", out)
+        self.assertNotIn("GITHUB_TOKEN", out)
+        self.assertIn(f"HOME={self.root / 'home'}", out)
+
+    def test_timeout_kills_the_process_group(self):
+        code, out, _ = self.sandbox.run("sleep 30 & sleep 30", timeout=1)
+        self.assertEqual(code, 124)
+        self.assertIn("killed after 1s", out)
+
+
+if __name__ == "__main__":
+    unittest.main()

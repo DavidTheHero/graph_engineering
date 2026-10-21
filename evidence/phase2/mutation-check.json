@@ -1,7 +1,0 @@
-{
-  "mutation": "Remove repository conflict protection by treating every ticket as an independent resource",
-  "test": "test_same_repository_is_serialized_while_other_repository_continues",
-  "mutation_detected": true,
-  "failures": 1,
-  "production_source_modified": false
-}

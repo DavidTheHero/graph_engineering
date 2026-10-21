@@ -1,0 +1,18 @@
+{
+  "id": "one-command-start",
+  "source": "General_AI_Agent issue #15 (a1f9c87)",
+  "repo": "general-ai-agent",
+  "base": "477c9cc",
+  "spec": {
+    "title": "Start the complete local app with one command",
+    "kind": "feat",
+    "problem": "Starting the complete local app currently requires separate commands for the API/UI, the Trading runtime and Ollama. Add `npm run up` to launch the existing services together, reuse a reachable Ollama server, start an unavailable local Ollama server, and stop owned processes together on exit. Initial dependency installation and model downloads remain one-time setup. Keep existing commands available. Allowed files: package.json, scripts/up.mjs, backend/tests/startup.test.js, README.md, AGENTS.md.",
+    "acceptance_criteria": [
+      "One command (`npm run up`) launches the API, the UI and the Trading runtime, plus Ollama when needed.",
+      "A running Ollama server is reused and left running on shutdown.",
+      "An unavailable remote Ollama server produces an actionable error.",
+      "A service failure stops the owned group of processes.",
+      "Existing individual commands remain available."
+    ]
+  }
+}

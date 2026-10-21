@@ -1,0 +1,258 @@
+"""The agent loop: a model calls tools on a workspace until it calls its finish tool.
+
+The loop owns the stopping conditions (step budget, stalls, repeated calls, cancellation) and the
+context, following Anthropic's context-engineering practice: keep a small working set of high-signal
+tokens. In order of cost:
+
+1. Tool-result clearing: past the working budget, old tool output is elided (the latest results stay).
+2. Notes: an ``update_notes`` tool keeps the plan and findings in a file outside the context; it is
+   shown at the start of every session, so later rounds start from what earlier ones learned.
+3. Compaction: when clearing is not enough, the model summarises its progress into the notes and the
+   conversation restarts from the task and the notes.
+4. Sub-agents: an ``explore`` tool answers a question in a fresh read-only context and returns only
+   the answer.
+
+Reasoning cut off by the output limit is handed back as notes too, since chat templates drop earlier reasoning.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+import json
+from pathlib import Path
+import time
+from typing import Callable
+
+from .llm import LLMError, Model, chat
+from .tools import Workspace
+
+CHARS_PER_TOKEN = 3.0
+WORKING_TOKENS = 40000      # the working set we aim for, well inside a long context window
+NOTES_CHARS = 6000
+
+NOTES_TOOL = {"name": "update_notes",
+              "description": "Replace your working notes: the plan, what is done, what you learned about the code (file paths, "
+                             "functions, conventions), and what is next. Notes survive when old messages are cleared and are "
+                             "shown to you in later sessions on this task. Keep them under 6000 characters.",
+              "parameters": {"type": "object", "properties": {"content": {"type": "string"}}, "required": ["content"]}}
+EXPLORE_TOOL = {"name": "explore",
+                "description": "Ask a helper to investigate a question about the codebase in its own context (for example: "
+                               "'how are API routes tested?' or 'where is the model name configured?'). It reads and searches, "
+                               "then returns a short answer with file paths. Use it for broad questions; read files yourself "
+                               "for narrow ones.",
+                "parameters": {"type": "object", "properties": {"question": {"type": "string"}}, "required": ["question"]}}
+COMPACT = ("Your context is full. Write your working notes now so that you can continue from them alone: the plan, what is "
+           "done (files changed and why), what you learned about the code (paths, functions, test conventions), the current "
+           "problem and the next steps. Reply with the notes only, under 6000 characters.")
+
+
+@dataclass
+class Outcome:
+    status: str                         # done | stalled | looping | out_of_steps | cancelled | error
+    result: dict | None = None          # the finish tool's arguments when status is done
+    steps: int = 0
+    seconds: float = 0
+    usage: dict = field(default_factory=lambda: {"prompt_tokens": 0, "completion_tokens": 0})
+    error: str | None = None
+
+    def asdict(self) -> dict:
+        return {"status": self.status, "result": self.result, "steps": self.steps, "seconds": round(self.seconds),
+                "usage": self.usage, "error": self.error}
+
+
+def validate(arguments: dict, schema: dict) -> str | None:
+    """A small JSON-schema subset: required keys, basic types, enums. Returns an error or None."""
+    types = {"string": str, "array": list, "object": dict, "integer": int, "boolean": bool, "number": (int, float)}
+    for key in schema.get("required", []):
+        if key not in arguments:
+            return f"missing required field {key}"
+    for key, spec in schema.get("properties", {}).items():
+        if key not in arguments:
+            continue
+        value = arguments[key]
+        expected = types.get(spec.get("type"))
+        if expected and not isinstance(value, expected):
+            return f"{key} must be of type {spec['type']}"
+        if "enum" in spec and value not in spec["enum"]:
+            return f"{key} must be one of {spec['enum']}"
+        if spec.get("type") == "array" and "items" in spec:
+            for item in value:
+                problem = validate(item, spec["items"]) if isinstance(item, dict) else None
+                if spec["items"].get("type") == "object" and not isinstance(item, dict):
+                    problem = f"items of {key} must be objects"
+                if problem:
+                    return f"{key}: {problem}"
+    return None
+
+
+class Agent:
+    def __init__(self, model: Model, workspace: Workspace, tools: tuple, finish: dict, system: str, *,
+                 max_steps: int = 60, nudge_after: int | None = None, transcript: Path | None = None,
+                 on_step: Callable[[dict], None] | None = None, cancelled: Callable[[], bool] = lambda: False,
+                 notes: Path | None = None, explorer: Callable[[str], str] | None = None, working_tokens: int = WORKING_TOKENS):
+        self.model, self.workspace, self.tools, self.finish, self.system = model, workspace, tools, finish, system
+        self.max_steps, self.nudge_after, self.on_step, self.cancelled = max_steps, nudge_after, on_step, cancelled
+        self.transcript = Path(transcript) if transcript else None
+        self.notes, self.explorer = (Path(notes) if notes else None), explorer
+        # The working budget, never more than the window minus the reply and the template's own framing.
+        window = (model.context - model.max_output - 2000) * CHARS_PER_TOKEN * 0.8
+        self.history_chars = int(min(window, working_tokens * CHARS_PER_TOKEN))
+        self.compactions = 0
+
+    def log(self, entry: dict) -> None:
+        if self.transcript:
+            with self.transcript.open("a") as handle:
+                handle.write(json.dumps({"at": time.time(), **entry}) + "\n")
+
+    def emit(self, step: int, kind: str, text: str) -> None:
+        if self.on_step:
+            self.on_step({"step": step, "kind": kind, "text": text[:400]})
+
+    def compact(self, messages: list) -> None:
+        """Clear the oldest tool results first, keeping the latest ten, then if needed the latest three."""
+        size = sum(len(json.dumps(m)) for m in messages)
+        for keep in (10, 3):
+            for message in [m for m in messages if m["role"] == "tool"][:-keep]:
+                if size <= self.history_chars:
+                    return
+                if not message["content"].startswith("[elided"):
+                    size -= len(json.dumps(message["content"])) - 70
+                    message["content"] = "[elided to save context; repeat the call if you still need it]"
+
+    def read_notes(self) -> str:
+        return self.notes.read_text()[:NOTES_CHARS] if self.notes and self.notes.exists() else ""
+
+    def opening(self, task: str) -> list:
+        notes = self.read_notes()
+        text = task + (f"\n\nYour notes from earlier work on this task:\n<notes>\n{notes}\n</notes>" if notes else "")
+        return [{"role": "system", "content": self.system}, {"role": "user", "content": text}]
+
+    def summarise(self, messages: list, specs: list, task: str, step: int) -> list:
+        """Compaction: the model writes its notes, and the conversation restarts from the task and those notes."""
+        reply = chat(self.model, messages + [{"role": "user", "content": COMPACT}], specs, tool_choice="none")
+        summary = (reply.content or reply.reasoning).strip()[:NOTES_CHARS]
+        if self.notes:
+            self.notes.write_text(summary)
+        self.compactions += 1
+        self.emit(step, "compact", f"context compacted ({self.compactions}); notes {len(summary)} characters")
+        fresh = self.opening(task)
+        if not self.notes:
+            fresh[1]["content"] += f"\n\nYour notes from earlier in this session:\n<notes>\n{summary}\n</notes>"
+        fresh[1]["content"] += "\n\nThe conversation was compacted. Continue from your notes; the workspace holds your changes."
+        for message in fresh:
+            self.log({**message, "compaction": self.compactions})
+        return fresh
+
+    def size(self, messages: list) -> int:
+        return sum(len(json.dumps(m)) for m in messages)
+
+    def run(self, task: str) -> Outcome:
+        started = time.time()
+        outcome = Outcome("out_of_steps")
+        messages = self.opening(task)
+        for message in messages:
+            self.log(message)
+        extra = ([NOTES_TOOL] if self.notes else []) + ([EXPLORE_TOOL] if self.explorer else [])
+        specs = self.workspace.specs(self.tools) + extra + [self.finish]
+        allowed = self.tools
+        idle = repeats = since_change = 0
+        seen: dict[str, int] = {}
+        try:
+            for step in range(1, self.max_steps + 1):
+                outcome.steps = step
+                if self.cancelled():
+                    outcome.status = "cancelled"
+                    break
+                self.compact(messages)
+                if self.size(messages) > self.history_chars:
+                    messages = self.summarise(messages, specs, task, step)
+                    seen.clear()
+                reply = chat(self.model, messages, specs)
+                for key in outcome.usage:
+                    outcome.usage[key] += reply.usage.get(key, 0)
+                message = {"role": "assistant", "content": reply.content}
+                if reply.tool_calls:
+                    message["tool_calls"] = [{"id": c["id"], "type": "function",
+                                              "function": {"name": c["name"], "arguments": c["arguments"]}} for c in reply.tool_calls]
+                messages.append(message)
+                self.log({**message, "reasoning": reply.reasoning, "finish_reason": reply.finish_reason, "step": step})
+                if reply.content.strip():
+                    self.emit(step, "say", reply.content.strip())
+                if not reply.tool_calls:
+                    idle += 1
+                    if reply.finish_reason == "length":
+                        message["content"] = ("My analysis was cut off at the output limit. Notes so far:\n"
+                                              + (reply.reasoning or reply.content)[-6000:])
+                        nudge = ("Your thinking hit the output limit. Do not redo the analysis: act on your notes now with a "
+                                 "single tool call, and think further after you see the result.")
+                        self.emit(step, "note", "thinking cut off; notes carried forward")
+                    else:
+                        nudge = f"Continue with a tool call, or call {self.finish['name']} if you are done."
+                    if idle == 4:
+                        outcome.status = "stalled"
+                        break
+                    messages.append({"role": "user", "content": nudge})
+                    self.log(messages[-1])
+                    continue
+                idle = 0
+                since_change += 1
+                for call in reply.tool_calls:
+                    result = self.dispatch(call, step, seen, allowed)
+                    if isinstance(result, Outcome):
+                        result.steps, result.usage = step, outcome.usage
+                        outcome = result
+                        break
+                    if call["name"] in ("write_file", "edit_file") and not result.startswith("Error"):
+                        seen.clear()  # files changed, so earlier reads and runs may now differ
+                        since_change = 0
+                    repeats = repeats + 1 if result.startswith("You already made this exact call") else 0
+                    messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
+                    self.log(messages[-1])
+                    if repeats >= 3:
+                        outcome = Outcome("looping", steps=step, usage=outcome.usage)
+                        break
+                if outcome.status != "out_of_steps":
+                    break
+                if self.nudge_after and since_change == self.nudge_after:
+                    messages.append({"role": "user", "content": f"You have explored for {self.nudge_after} steps without changing "
+                                     "a file. Stop exploring: state your plan in a short paragraph, then make the first change."})
+                    self.log(messages[-1])
+        except LLMError as exc:
+            outcome.status, outcome.error = "error", str(exc)
+        outcome.seconds = time.time() - started
+        self.log({"role": "outcome", **outcome.asdict()})
+        self.emit(outcome.steps, "end", outcome.status + (f": {outcome.error}" if outcome.error else ""))
+        return outcome
+
+    def dispatch(self, call: dict, step: int, seen: dict, allowed) -> str | Outcome:
+        name = call["name"]
+        try:
+            args = json.loads(call["arguments"] or "{}")
+            if not isinstance(args, dict):
+                raise ValueError("arguments must be a JSON object")
+        except ValueError as exc:
+            return f"Error: arguments are not a valid JSON object ({exc}). Call the tool again with valid JSON."
+        if name == self.finish["name"]:
+            problem = validate(args, self.finish["parameters"])
+            if problem:
+                return f"Error: {problem}. Call {name} again with every required field."
+            self.emit(step, "finish", json.dumps(args)[:400])
+            return Outcome("done", result=args)
+        signature = name + json.dumps(args, sort_keys=True)
+        if signature in seen:
+            self.emit(step, "repeat", name)
+            return (f"You already made this exact call at step {seen[signature]} and nothing has changed since, so the result "
+                    "is the same. Use what you have and take the next step.")
+        seen[signature] = step
+        if name == "update_notes" and self.notes:
+            self.notes.write_text(str(args.get("content", ""))[:NOTES_CHARS])
+            self.emit(step, "notes", str(args.get("content", ""))[:400])
+            return f"Notes saved ({min(len(str(args.get('content', ''))), NOTES_CHARS)} characters)."
+        if name == "explore" and self.explorer:
+            self.emit(step, "explore", str(args.get("question", "")))
+            answer = self.explorer(str(args.get("question", "")))
+            self.emit(step, "explored", answer[:400])
+            return answer
+        result = self.workspace.call(name, args, allowed)
+        brief = ", ".join(f"{k}={str(v)[:80]!r}" for k, v in args.items() if k not in ("content", "new_text", "old_text"))
+        self.emit(step, "tool", f"{name}({brief}) -> {result.splitlines()[0][:160] if result else ''}")
+        return result

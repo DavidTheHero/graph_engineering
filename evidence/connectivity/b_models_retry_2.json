@@ -1,9 +1,0 @@
-{
-  "probe": "b_models_retry_2",
-  "url": "http://192.168.0.62:18035/v1/models",
-  "request": null,
-  "auth": "absent",
-  "utc": "2026-10-18T12:06:28.564002+00:00",
-  "error": "URLError: <urlopen error timed out>",
-  "latency_seconds": 8.015
-}

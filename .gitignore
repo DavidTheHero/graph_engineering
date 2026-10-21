@@ -21,3 +21,7 @@ evidence/connectivity/opencode-probe/temp/
 evidence/evaluation/**/controller/
 evidence/evaluation/**/repositories/
 prototype/runs/
+.venv/
+.runtime/
+*.egg-info/
+__pycache__/

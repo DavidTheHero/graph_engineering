@@ -1,0 +1,17 @@
+{
+  "id": "model-selector",
+  "source": "graph_engineering GE-FDD2275A",
+  "repo": "general-ai-agent",
+  "base": "93a19be4",
+  "spec": {
+    "title": "Display and select the current AI model in the chat interface",
+    "kind": "feat",
+    "problem": "The chat interface does not show which AI model the chat is connected to, and offers no way to switch it. The backend already knows the model name (getModelName() in backend/llm.js, and agent.run() responses carry a `model` field), but there is no API endpoint for it and the React chat bar in frontend/src/App.jsx shows nothing.",
+    "acceptance_criteria": [
+      "A GET /api/model endpoint returns the name of the AI model currently connected to the chat as JSON.",
+      "The chat bar displays the connected model name on the same row as the Send button, on the left side.",
+      "The model name is switchable via a selector in that location.",
+      "Switching the model updates the backend's active model for subsequent chat requests."
+    ]
+  }
+}

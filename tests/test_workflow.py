@@ -1,177 +1,170 @@
-"""Controller integration tests use labelled worker doubles, never demo evidence."""
-import json
-from pathlib import Path
-import tempfile
 import unittest
-from unittest.mock import patch
 
-from graph_engineering.workflow import Workflow, initialise
-from graph_engineering.models import ModelError
-from tests.test_core import make_repo, git
+from graph_engineering import workflow
+from graph_engineering.repos import Repo, Repos
+from graph_engineering.sandbox import available
+from graph_engineering.store import Conflict, Store
 
+from helpers import SUB_SOURCE, SUB_TEST, TEST_COMMAND, FakeLLM, call, git, python_repo, temp_dir
 
-class WorkerDouble:
-    def __init__(self, fail=False, malicious=False):
-        self.metrics = []
-        self.fail, self.malicious = fail, malicious
-
-    def invoke(self, role, prompt, output_schema, model_key, run_id, **kwargs):
-        if self.fail:
-            self.metrics.append({"success": False, "model_id": "unit-test-double"})
-            raise ModelError("injected unavailable model")
-        if role == "investigation":
-            content = dict(title="Addition subtracts operands", expected="5", actual="-1", file="calc.py", line=1,
-                           severity="low", confidence=1, category="assertion", acceptance=["add(2,3) returns 5"])
-        elif role == "planning":
-            content = dict(steps=["Correct addition"], files=["calc.py"], acceptance=["Regression passes"])
-        elif role == "implementation":
-            content = dict(summary="Correct arithmetic", files=[{"path": "../owned.py" if self.malicious else "calc.py", "content": "def add(a,b): return a+b\n"}])
-        else:
-            content = dict(decision="approve", findings=[], rationale="Actual source diff restores addition")
-        metric = {"success": True, "model_key": model_key, "model_id": "unit-test-double", "latency_seconds": 0}
-        self.metrics.append(metric)
-        return dict(content=content, raw_path="unit-test-double", metrics=metric)
+SPEC = {"verdict": "ready", "title": "Add subtract", "kind": "feat", "problem": "calc has no subtract",
+        "acceptance_criteria": ["subtract(a, b) returns a - b"], "reason": "clear"}
 
 
-class WorkflowTests(unittest.TestCase):
-    def make(self, root):
-        repo = make_repo(root)
-        config = initialise(repo, root / "controller", trusted_local=True)
-        flow = Workflow(root / "controller")
-        self.addCleanup(flow.store.close)
-        flow.worker = WorkerDouble()
-        return repo, config, flow
-
-    @patch("graph_engineering.workflow.ModelClient.health", return_value={"available": True})
-    def test_automatic_merge_requires_explicit_trusted_path_scope(self, _):
-        for scope, expected in (([], "waiting_approval"), (["calc.py"], "completed")):
-            with self.subTest(scope=scope), tempfile.TemporaryDirectory() as td:
-                repo, config, flow = self.make(Path(td))
-                settings = json.loads(config.read_text())
-                settings.update(auto_merge=True, auto_merge_paths=scope)
-                config.write_text(json.dumps(settings))
-                run = flow.execute(flow.new_run(config)["id"])
-                self.assertEqual(run["status"], expected, run["state"].get("error"))
-                self.assertIsNone(flow.store.approved_head(run["id"]))
-                flow.store.close()
-
-    @patch("graph_engineering.workflow.ModelClient.health", return_value={"available": True})
-    def test_real_git_frozen_regression_approval_merge_and_restart(self, _):
-        with tempfile.TemporaryDirectory() as td:
-            repo, config, flow = self.make(Path(td))
-            run = flow.execute(flow.new_run(config)["id"])
-            self.assertEqual(run["status"], "waiting_approval", run["state"].get("error"))
-            self.assertFalse(run["state"]["gate"]["allowed"])
-            original = run["state"]["base_sha"]
-            self.assertEqual(git(repo, "rev-parse", "HEAD"), original)
-            backend = flow.backend(run["state"])
-            backend.record_check(run["state"]["pr"]["number"], run["state"]["head"], False)
-            failed = flow.execute(run["id"])
-            self.assertEqual(failed["status"], "blocked")
-            self.assertIn("checks failed or pending", failed["state"]["gate"]["reasons"])
-            backend.record_check(run["state"]["pr"]["number"], run["state"]["head"], True)
-            flow.store.close()
-            flow = Workflow(Path(td) / "controller")
-            flow.worker = WorkerDouble()
-            run = flow.execute(run["id"])
-            self.assertEqual(run["status"], "waiting_approval")
-            flow.store.approve(run["id"], run["state"]["head"], "unit-test-operator")
-            done = flow.execute(run["id"])
-            self.assertEqual(done["status"], "completed", done["state"].get("error"))
-            self.assertTrue(done["state"]["postmerge"]["passed"])
-            objects = json.loads(backend.path.read_text())
-            self.assertEqual(len(objects["issues"]), 1)
-            self.assertEqual(len(objects["prs"]), 1)
-            self.assertEqual(flow.execute(run["id"])["state"]["merge"], done["state"]["merge"])
-            flow.store.close()
-
-    @patch("graph_engineering.workflow.ModelClient.health", return_value={"available": True})
-    def test_malicious_proposal_is_blocked_and_no_pr_exists(self, _):
-        with tempfile.TemporaryDirectory() as td:
-            repo, config, flow = self.make(Path(td))
-            flow.worker = WorkerDouble(malicious=True)
-            run = flow.execute(flow.new_run(config)["id"])
-            self.assertEqual(run["status"], "blocked")
-            self.assertEqual(run["node"], "isolated_implementation")
-            self.assertFalse((Path(td) / "owned.py").exists())
-            self.assertNotIn("pr", run["state"])
-            flow.store.close()
-
-    def test_unavailable_worker_retry_and_explicit_recovery(self):
-        with tempfile.TemporaryDirectory() as td:
-            repo, config, flow = self.make(Path(td))
-            flow.worker = WorkerDouble(fail=True)
-            run = flow.execute(flow.new_run(config)["id"])
-            self.assertEqual(run["status"], "blocked")
-            self.assertEqual(len([e for e in flow.store.events(run["id"]) if e["kind"] == "failed"]), 2)
-            flow.store.clear_stop(run["id"])
-            flow.worker = WorkerDouble()
-            recovered = flow.execute(run["id"], until="task_planning")
-            self.assertEqual(recovered["status"], "scanned")
-            self.assertIn("issue", recovered["state"])
-            flow.store.stop(run["id"])
-            self.assertEqual(flow.execute(run["id"])["status"], "cancelled")
-            flow.store.close()
-
-    def test_missing_dependency_is_not_published_as_a_source_bug(self):
-        with tempfile.TemporaryDirectory() as td:
-            repo, config, flow = self.make(Path(td))
-            (repo / "calc.py").write_text("import graph_engineering_deliberately_absent_dependency\ndef add(a,b): return a+b\n")
-            git(repo, "add", "calc.py")
-            git(repo, "commit", "-m", "Require a deliberately missing dependency")
-            run = flow.execute(flow.new_run(config)["id"])
-            self.assertEqual(run["status"], "blocked")
-            self.assertEqual(run["node"], "evidence_collection")
-            self.assertNotIn("issue", run["state"])
-            self.assertEqual(flow.worker.metrics, [])
-            flow.store.close()
+def turns(messages):
+    return sum(1 for m in messages if m["role"] == "assistant")
 
 
-if __name__ == "__main__": unittest.main()
+def coder(good=True):
+    def step(messages):
+        plan = [[call("write_file", path="tests/test_sub.py", content=SUB_TEST)],
+                [call("write_file", path="calc.py", content=SUB_SOURCE if good else "def add(a, b):\n    return a + b\n")],
+                [call("run", command=TEST_COMMAND)],
+                [call("finish", summary="Added subtract with a test", coverage=[{"criterion": 1, "tests": "test_subtract"}])]]
+        return plan[min(turns(messages), 3)]
+    return step
 
 
-class DeclaredGraphTests(unittest.TestCase):
-    """The exported graph must be the executable graph: every literal handler transition is declared."""
+class Store_(unittest.TestCase):
+    def setUp(self):
+        self.store = Store(temp_dir(self) / "s.db")
 
-    def test_handler_transitions_are_declared_edges(self):
-        import ast, inspect, textwrap
-        from graph_engineering.workflow import REGISTRY, transitions
+    def test_only_declared_transitions_are_allowed(self):
+        ticket = self.store.create("calc", "do it", "person")
+        with self.assertRaises(Conflict):
+            self.store.transition(ticket["id"], "done", "person", "skip")
+        self.store.transition(ticket["id"], "proposed", "w", "proposed")
+        self.assertEqual([e["kind"] for e in self.store.events(ticket["id"])], ["created", "proposed"])
 
-        def literals(node):
-            if isinstance(node, ast.Constant) and isinstance(node.value, str):
-                return {node.value}
-            if isinstance(node, ast.IfExp):
-                return literals(node.body) | literals(node.orelse)
-            return set()
+    def test_a_person_cannot_act_on_a_leased_ticket_except_to_cancel(self):
+        ticket = self.store.create("calc", "do it", "person", spec={"title": "t", "acceptance_criteria": ["a"]}, state="proposed")
+        self.store.transition(ticket["id"], "accepted", "person", "accepted")
+        self.assertEqual(self.store.claim("worker-1", 60)["id"], ticket["id"])
+        self.assertIsNone(self.store.claim("worker-2", 60))
+        with self.assertRaises(Conflict):
+            self.store.transition(ticket["id"], "ready", "person", "sneak")
+        self.assertEqual(self.store.transition(ticket["id"], "cancelled", "person", "cancelled")["state"], "cancelled")
 
-        for name in REGISTRY:
-            tree = ast.parse(textwrap.dedent(inspect.getsource(getattr(Workflow, "node_" + name))))
-            found = set()
-            for ret in ast.walk(tree):
-                if isinstance(ret, ast.Return) and isinstance(ret.value, ast.Tuple) and len(ret.value.elts) == 3:
-                    found |= literals(ret.value.elts[1])
-            with self.subTest(node=name):
-                self.assertLessEqual(found, transitions(name))
+    def test_ready_waits_for_a_person_unless_publication_is_automatic(self):
+        ticket = self.store.create("calc", "x", "p", spec={"title": "t", "acceptance_criteria": ["a"]}, state="proposed")
+        self.store.transition(ticket["id"], "accepted", "p", "accepted")
+        self.store.transition(ticket["id"], "ready", "p", "ready", data={"publish": False})
+        self.assertIsNone(self.store.claim("w", 60))
+        workflow.approve_publish(self.store, ticket["id"], "person")
+        self.assertEqual(self.store.claim("w", 60)["id"], ticket["id"])
 
-    def test_every_declared_destination_is_a_node(self):
-        from graph_engineering.workflow import REGISTRY, transitions
-        for name in REGISTRY:
-            with self.subTest(node=name):
-                self.assertLessEqual(transitions(name) - {"blocked", "done"}, set(REGISTRY))
 
-    def test_undeclared_transition_is_rejected_at_runtime(self):
-        from graph_engineering.workflow import TransitionError
-        with tempfile.TemporaryDirectory() as td:
-            flow = Workflow(Path(td))
-            try:
-                run = flow.store.create_run({"repo": td, "backend": "local", "models": {}, "max_node_attempts": 1,
-                                             "routing": "baseline"}, "edges")
-                flow.store.checkpoint("edges", "repository_discovery", {}, "prioritisation")
-                flow.node_prioritisation = lambda state: ({"priority": "P1"}, "merge", "ready")
-                flow.store.checkpoint("edges", "prioritisation", {"candidate": {"severity": "high"}}, "prioritisation")
-                with patch("graph_engineering.workflow.RepoLock"):
-                    result = flow.execute(run["id"])
-                self.assertEqual((result["node"], result["status"]), ("prioritisation", "blocked"))
-                self.assertIn("Undeclared transition prioritisation -> merge", json.dumps(flow.store.events("edges")))
-            finally:
-                flow.store.close()
+@unittest.skipUnless(available(), "no OS sandbox on this host")
+class Workflow(unittest.TestCase):
+    def setUp(self):
+        self.root = temp_dir(self)
+        self.source = python_repo(self.root)
+        self.home = self.root / "home"
+        self.store, self.repos = Store(self.home / "ge.db"), Repos(self.home)
+        self.repos.save(Repo(name="calc", path=str(self.source), test_command=TEST_COMMAND, auto_accept=True,
+                             test_file_runners=[{"pattern": r"^tests/.*\.py$", "command": "python3 -m unittest {file}"}]))
+
+    def context(self, script):
+        llm = FakeLLM(script)
+        self.addCleanup(llm.close)
+        self.llm = llm
+        return workflow.Context(self.home, self.store, self.repos, llm.registry())
+
+    def drive(self, ctx, until, limit=12):
+        """Run steps as the scheduler would until the ticket reaches a state in ``until``."""
+        for _ in range(limit):
+            ticket = self.store.claim(ctx.owner, 600)
+            if ticket is None:
+                break
+            workflow.advance(ctx, ticket)
+            current = self.store.get(ticket["id"])
+            if current["lease_owner"]:
+                self.store.release(ticket["id"], ctx.owner)
+            if current["state"] in until:
+                return current
+        return self.store.list()[0]
+
+    def test_request_to_merged_commit(self):
+        reviews = []
+
+        def script(role, messages):
+            if role == "intake":
+                return [call("submit_ticket", **SPEC)]
+            if role == "review":
+                reviews.append(messages[1]["content"])
+                return [call("submit_review", verdict="approve", findings=[], summary="Correct and tested.")]
+            return coder()(messages)
+
+        ctx = self.context(script)
+        ticket = self.store.create("calc", "Please add a subtract function", "person")
+        ticket = self.drive(ctx, ("awaiting_merge", "failed"))
+        self.assertEqual(ticket["state"], "awaiting_merge", ticket["error"])
+        self.assertIn("PASS tests/test_sub.py fails on base, passes on result", reviews[0])
+        branch = ticket["data"]["pr"]["branch"]
+        self.assertEqual(git(self.source, "rev-parse", branch).strip(), ticket["data"]["head"])
+        self.assertNotIn("subtract", (self.source / "calc.py").read_text())  # nothing merged without approval
+
+        with self.assertRaises(Conflict):
+            workflow.approve_merge(self.store, ticket["id"], "person", "0" * 40)
+        workflow.approve_merge(self.store, ticket["id"], "person", ticket["data"]["head"])
+        ticket = self.drive(ctx, ("done",))
+        self.assertEqual(ticket["state"], "done", ticket["error"])
+        self.assertIn("def subtract", (self.source / "calc.py").read_text())
+        kinds = [e["kind"] for e in self.store.events(ticket["id"]) if e["kind"] != "agent"]
+        self.assertEqual(kinds, ["created", "proposed", "accepted", "gates", "ready", "published", "merge_approved", "merged"])
+
+    def test_failed_gates_feed_the_next_round(self):
+        prompts_seen = []
+
+        def script(role, messages):
+            if role == "intake":
+                return [call("submit_ticket", **SPEC)]
+            if role == "review":
+                return [call("submit_review", verdict="approve", findings=[], summary="ok")]
+            if turns(messages) == 0:
+                prompts_seen.append(messages[1]["content"])
+            return coder(good=len(prompts_seen) > 1)(messages)
+
+        ctx = self.context(script)
+        self.store.create("calc", "Please add subtract", "person")
+        ticket = self.drive(ctx, ("awaiting_merge", "failed"))
+        self.assertEqual(ticket["state"], "awaiting_merge", ticket["error"])
+        self.assertEqual(ticket["round"], 2)
+        self.assertNotIn("<feedback>", prompts_seen[0])
+        self.assertIn("FAILED: test suite passes", prompts_seen[1])
+
+    def test_review_changes_then_budget_spent_then_retry(self):
+        def script(role, messages):
+            if role == "intake":
+                return [call("submit_ticket", **SPEC)]
+            if role == "review":
+                return [call("submit_review", verdict="changes", summary="no",
+                             findings=[{"file": "calc.py", "problem": "missing docstring", "fix": "add one"}])]
+            return coder()(messages)
+
+        ctx = self.context(script)
+        ticket = self.store.create("calc", "Please add subtract", "person")
+        self.store.transition(ticket["id"], "new", "person", "noop", max_rounds=2) if False else None
+        ticket = self.drive(ctx, ("failed",), limit=10)
+        self.assertEqual(ticket["state"], "failed")
+        self.assertEqual(ticket["round"], 3)
+        self.assertIn("missing docstring", ticket["data"]["feedback"])
+        ticket = workflow.retry(self.store, ticket["id"], "person")
+        self.assertEqual((ticket["state"], ticket["max_rounds"]), ("accepted", 4))
+
+    def test_needs_info_and_answer(self):
+        def script(role, messages):
+            if "Clarification from the person" in messages[1]["content"]:
+                return [call("submit_ticket", **{**SPEC, "verdict": "not_actionable", "reason": "already exists"})]
+            return [call("submit_ticket", **{**SPEC, "verdict": "needs_info", "questions": ["Which module?"]})]
+
+        ctx = self.context(script)
+        ticket = self.store.create("calc", "make it better", "person")
+        ticket = self.drive(ctx, ("needs_info",))
+        self.assertEqual(ticket["state"], "needs_info")
+        workflow.answer(self.store, ticket["id"], "person", "calc.py")
+        self.assertEqual(self.drive(ctx, ("rejected",))["state"], "rejected")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -4,21 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "graph-engineering"
-version = "0.2.0"
-description = "Auditable bounded software engineering graph with local OpenCode workers"
+version = "2.0.0.dev0"
+description = "A local agentic engineering controller: tool-using local models in a sandbox, harness gates, human merge"
 requires-python = ">=3.10"
 dependencies = []
 
 [project.optional-dependencies]
-# Optional MCP server; the controller core stays dependency-free.
-mcp = ["mcp>=2.3,<3", "uvicorn>=0.31"]
+mcp = ["mcp>=1.2"]
 
 [project.scripts]
-graph-engineering = "graph_engineering.cli:main"
 graph-engineer = "graph_engineering.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-graph_engineering = ["web/*.html", "web/*.css", "web/*.js", "web/*.svg", "web/vendor/*.js", "web/vendor/*.txt"]
+graph_engineering = ["web/*"]

@@ -1,237 +1,92 @@
-"""Single-host, restartable multi-process dispatch of existing graph nodes."""
+"""Worker threads that lease due tickets and run one workflow step each."""
 from __future__ import annotations
 
-from contextlib import closing, contextmanager
 import json
 import os
-from pathlib import Path
-import subprocess
-import sys
+import socket
+import threading
 import time
-import uuid
+import traceback
 
-from . import routing
-from .models import ModelClient, load_models, model_health
-from .runtime import BusyError, RepoLock, now
-from .scheduling_policy import effective_rank, retry_delay
-from .tickets import Tickets
-from .workflow import Workflow
+from .store import Store
+from .workflow import Context, advance
 
-
-# Graph node -> (worker role, requested tier). Concrete models come from routing.select.
-ROLES = {'issue_detection':('investigation',routing.SMALL), 'task_planning':('planning',routing.LARGE),
-         'request_triage':('classification',routing.SMALL),'problem_investigation':('root_investigation',routing.LARGE),
-         'question_answering':('question_answering',routing.SMALL),
-         'regression_authoring':('regression_test',routing.LARGE),'regression_review':('regression_review',routing.SMALL),
-         'repository_investigation':('investigation',routing.SMALL),
-         'isolated_implementation':('implementation',routing.LARGE), 'independent_review':('review',routing.SMALL)}
+LEASE = 300          # seconds; renewed by a heartbeat while the step runs
+HEARTBEAT = 60
+BACKOFF = (60, 300, 900)
+MAX_ERRORS = 3
 
 
-def required_model(ticket, health=None):
-    """The model this ticket's next step will use, or raise RoutingError when none may run it."""
-    role = ROLES.get(ticket['node'])
-    if not role: return None
-    name, tier = role
-    if ticket['node']=='regression_review':
-        from .accepted_development import regression_review_model
-        tier=regression_review_model(ticket['state'])
-    return routing.select(ticket['state']['config'], name, tier, health)[0]
+class Scheduler:
+    def __init__(self, ctx: Context, workers: int = 1, poll: float = 5):
+        self.ctx, self.workers, self.poll = ctx, workers, poll
+        self.stop = threading.Event()
+        self.threads: list[threading.Thread] = []
+        self.status: dict[str, dict] = {}
 
+    def start(self) -> None:
+        for index in range(self.workers):
+            thread = threading.Thread(target=self.loop, args=(f"{socket.gethostname()}:{os.getpid()}:{index}",), daemon=True)
+            thread.start()
+            self.threads.append(thread)
 
-def resource_key(ticket):
-    config = ticket['state']['config']
-    return str(Path(config.get('source_repo', ticket['repo'])).resolve()).casefold()
+    def shutdown(self, timeout: float = 5) -> None:
+        self.stop.set()
+        for thread in self.threads:
+            thread.join(timeout)
 
-
-def observe_models(tickets, timeout=2):
-    observations = {}
-    for key, config in load_models(tickets.store.root).items():
-        result = model_health(config, timeout=timeout)
-        observations[key] = result
-        with tickets.db:
-            tickets.db.execute('INSERT OR REPLACE INTO model_observations VALUES(?,?,?)',
-                               (key,time.time(),json.dumps(result)))
-    return observations
-
-
-def claim(tickets: Tickets, workers=2):
-    db = tickets.db
-    db.execute('BEGIN IMMEDIATE')
-    try:
-        rows = tickets.list(); lookup = {t['id']:t for t in rows}
-        active = [t for t in rows if t['lease_owner']]
-        if len(active) >= workers or tickets.setting('paused', False):
-            db.rollback(); return None
-        capacity = tickets.setting('model_capacity', {'a':1,'b':1})
-        eligible = [t for t in rows if not t.get('cancel') and tickets.queue(t,lookup)[0] in ('high','normal','low','intake')]
-        eligible.sort(key=lambda t:(effective_rank(t['priority'],t['created'],time.time()),t['created'],t['id']))
-        health = routing.observed_health(db)
-        for ticket in eligible:
-            # routing.select already skips models observed unavailable; it raises when none remain.
+    def loop(self, owner: str) -> None:
+        while not self.stop.is_set():
             try:
-                model, reason = required_model(ticket, health), ''
-            except routing.RoutingError as exc:
-                model, reason = None, str(exc) + '; awaiting health recovery or routing change'
-            if not reason and any(resource_key(a) == resource_key(ticket) for a in active):
-                reason = 'Repository is owned by another active ticket'
-            elif not reason and model and sum(a['lease_model'] == model for a in active) >= capacity.get(model,1):
-                reason = f'Model {model.upper()} capacity is occupied'
-            if reason:
-                db.execute('UPDATE tickets SET last_reason=? WHERE id=?', (reason,ticket['id']))
-                continue
-            owner = uuid.uuid4().hex
-            source_queue = tickets.queue(ticket,lookup)[0]
-            db.execute('''UPDATE tickets SET lease_owner=?,lease_model=?,lease_started=?,last_reason='',updated=?
-                          WHERE id=? AND lease_owner IS NULL''', (owner,model,time.time(),time.time(),ticket['id']))
-            tickets.store._event(ticket['run_id'], 'queue:' + source_queue, 'queue_dispatched',
-                {'ticket_id':ticket['id'],'source':'queue:' + source_queue,'destination':ticket['node'],
-                 'execution_attempt_id':owner,'model_key':model})
-            db.commit()
-            return tickets.get(ticket['id'])
-        db.commit(); return None
-    except BaseException:
-        db.rollback(); raise
+                worked = self.once(owner)
+            except Exception:  # the loop must survive a broken store call; the next poll retries
+                traceback.print_exc()
+                worked = False
+            if not worked:
+                self.stop.wait(self.poll)
 
+    def once(self, owner: str) -> bool:
+        store: Store = self.ctx.store
+        ticket = store.claim(owner, LEASE)
+        if ticket is None:
+            self.status[owner] = {"idle": True, "at": time.time()}
+            return False
+        self.status[owner] = {"ticket": ticket["id"], "state": ticket["state"], "since": time.time()}
+        beat = threading.Event()
 
-def recover(tickets, protected_pids=()):
-    """Kernel worker locks, not a wall-clock lease expiry, decide ownership."""
-    for ticket in tickets.list():
-        if not ticket['lease_owner']: continue
-        if ticket['lease_pid'] in protected_pids: continue
+        def heartbeat():
+            while not beat.wait(HEARTBEAT):
+                store.renew(ticket["id"], owner, LEASE)
+
+        threading.Thread(target=heartbeat, daemon=True).start()
+        ctx = Context(self.ctx.home, store, self.ctx.repos, self.ctx.registry, owner=owner,
+                      renew=lambda: store.renew(ticket["id"], owner, LEASE))
         try:
-            with RepoLock(tickets.store.root, 'ticket:' + ticket['id']):
-                with tickets.db:
-                    # Fence a worker that was launched but had not acquired its lock.
-                    tickets.db.execute('''UPDATE tickets SET lease_owner=NULL,lease_pid=NULL,lease_model=NULL,
-                        not_before=?,last_reason=? WHERE id=?''',
-                        (time.time()+2,'Controller/worker interruption reconciled',ticket['id']))
-                    if ticket['status'] == 'running':
-                        tickets.db.execute("UPDATE runs SET status='ready' WHERE id=?", (ticket['run_id'],))
-                    tickets.store._event(ticket['run_id'],ticket['node'],'worker_recovered',
-                        {'ticket_id':ticket['id'],'execution_attempt_id':ticket['lease_owner']})
-        except BusyError:
-            pass
-
-
-def execute_assignment(home, ticket_id, owner):
-    with RepoLock(home, 'ticket:' + ticket_id):
-        # Reuse exactly one Store/connection per process, never across worker threads.
-        tickets = Tickets(home)
-        try:
-            ticket = tickets.get(ticket_id)
-            if ticket['lease_owner'] != owner: return 0
-            workflow = Workflow(home)
-            try:
-                # Read-only/assisted scans yield before implementation planning.
-                until = 'task_planning' if ticket['state']['config'].get('run_mode') in ('metadata','scan') else None
-                workflow.execute(ticket['run_id'], until=until, single_step=True)
-            finally:
-                workflow.store.close()
-            current = tickets.get(ticket_id)
-            last = tickets.db.execute('SELECT kind FROM events WHERE run_id=? ORDER BY seq DESC LIMIT 1', (ticket['run_id'],)).fetchone()
-            tickets.classify(current)
-            delay = retry_delay(max(1,current['retries']+1)) if last and last[0] == 'retry_scheduled' else 0
-            if last and last[0] == 'retry_backoff':
-                # Infrastructure fault: the workflow chose the backoff; the ticket waits in the Retry queue.
-                delay = max(0, current['state'].get('retry_not_before', 0) - time.time())
-            with tickets.db:
-                tickets.db.execute('''UPDATE tickets SET lease_owner=NULL,lease_pid=NULL,lease_model=NULL,
-                    not_before=?,updated=? WHERE id=? AND lease_owner=?''', (time.time()+delay,time.time(),ticket_id,owner))
-                queued = tickets.get(ticket_id)
-                queue = tickets.queue(queued,{t['id']:t for t in tickets.list()})[0]
-                tickets.store._event(ticket['run_id'],current['node'],'dispatch_checkpoint',
-                    {'ticket_id':ticket_id,'execution_attempt_id':owner,'source':ticket['node'],
-                     'destination':current['node'] if queue == 'done' else 'queue:'+queue,
-                     'next_node':current['node'],'status':current['status']})
-            return 0
-        except BaseException as exc:
-            with tickets.db:
-                row = tickets.db.execute('SELECT run_id FROM tickets WHERE id=?', (ticket_id,)).fetchone()
-                if row:
-                    tickets.db.execute("UPDATE runs SET status='blocked' WHERE id=?", (row[0],))
-                    tickets.store._event(row[0],'scheduler','worker_failed',
-                        {'ticket_id':ticket_id,'execution_attempt_id':owner,'message':type(exc).__name__ + ': ' + str(exc)})
-                tickets.db.execute('UPDATE tickets SET lease_owner=NULL,lease_pid=NULL,lease_model=NULL,last_reason=? WHERE id=? AND lease_owner=?',
-                    ('Worker process failed; manual retry required',ticket_id,owner))
-            return 1
+            advance(ctx, ticket)
+            fresh = store.get(ticket["id"])
+            if fresh["lease_owner"] == owner:  # the step ended without a transition (waiting for a person)
+                store.release(ticket["id"], owner)
+            if fresh["data"].get("errors"):
+                store.merge_data(ticket["id"], errors=0)
+        except Exception as exc:
+            self.failed(ticket, owner, exc)
         finally:
-            tickets.store.close()
+            beat.set()
+        return True
 
-
-@contextmanager
-def scheduler_lock(home, patience=3.0):
-    """Hold the scheduler lock for the block, waiting out a dashboard's momentary liveness probe.
-
-    The lock is entered exactly once; re-entering a RepoLock would reopen its file and drop the held lock.
-    """
-    deadline = time.monotonic() + patience
-    while True:
-        lock = RepoLock(home, 'scheduler')
-        try:
-            lock.__enter__()
-            break
-        except BusyError:
-            if time.monotonic() >= deadline:
-                raise
-            time.sleep(0.1)
-    try:
-        yield lock
-    finally:
-        lock.__exit__(None, None, None)
-
-
-def serve_scheduler(home, workers=2, once=False, poll=.5):
-    if not 1 <= workers <= 8: raise ValueError('Worker concurrency must be between 1 and 8')
-    home = Path(home).resolve()
-    children = []
-    with scheduler_lock(home):
-        tickets = Tickets(home)
-        try:
-            tickets.set_setting('workers',workers)
-            last_health = 0
-            sweep_error, sweep_reported, sweep_repeats = None, 0.0, 0
-            while True:
-                tickets.set_setting('worker_service',{'pid':os.getpid(),'observed':time.time()})
-                children = [p for p in children if p.poll() is None]
-                recover(tickets, {p.pid for p in children})
-                from .autonomy import dispatch
-                if not tickets.setting('paused',False):
-                    try:
-                        dispatch(tickets)
-                        if sweep_error is not None:
-                            tickets.set_setting('autonomy_sweep_error', None); sweep_error = None
-                    except Exception as exc:  # The policy sweep is advisory: claiming and running work must continue.
-                        # Reported when the error changes and at most once a minute while it repeats (review of PR #17).
-                        key = repr(exc)[:300]
-                        if key != sweep_error or time.time() - sweep_reported > 60:
-                            import traceback
-                            if sweep_repeats: print(f'(previous sweep error repeated {sweep_repeats} times)', file=sys.stderr)
-                            traceback.print_exc()
-                            tickets.set_setting('autonomy_sweep_error', {'error': key, 'at': time.time()})
-                            sweep_error, sweep_reported, sweep_repeats = key, time.time(), 0
-                        else:
-                            sweep_repeats += 1
-                if time.time() - last_health > 30:
-                    observe_models(tickets); last_health = time.time()
-                while True:
-                    ticket = claim(tickets,tickets.setting('workers',workers))
-                    if ticket is None: break
-                    command = [sys.executable,'-m','graph_engineering','--home',str(home),'worker-step',
-                               ticket['id'],ticket['lease_owner']]
-                    kwargs = {'creationflags':subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {'start_new_session':True}
-                    log = home / 'scheduler-workers.log'
-                    try:
-                        with log.open('ab') as output:
-                            child = subprocess.Popen(command,stdin=subprocess.DEVNULL,stdout=output,stderr=output,**kwargs)
-                        children.append(child)
-                        with tickets.db:
-                            tickets.db.execute('UPDATE tickets SET lease_pid=? WHERE id=? AND lease_owner=?',
-                                               (child.pid,ticket['id'],ticket['lease_owner']))
-                    except OSError:
-                        recover(tickets); raise
-                if once:
-                    for child in children: child.wait(timeout=650)
-                    return
-                time.sleep(poll)
-        finally:
-            tickets.store.close()
+    def failed(self, ticket: dict, owner: str, exc: Exception) -> None:
+        """An infrastructure error (model server down, disk, GitHub outage): retry with backoff, then stop."""
+        store = self.ctx.store
+        errors = (store.get(ticket["id"])["data"].get("errors") or 0) + 1
+        message = f"{type(exc).__name__}: {exc}"
+        store.event(ticket["id"], "step_error", owner, {"state": ticket["state"], "error": message, "attempt": errors,
+                                                        "trace": traceback.format_exc()[-2000:]})
+        store.merge_data(ticket["id"], errors=errors)
+        if errors >= MAX_ERRORS and ticket["state"] in ("new", "accepted"):
+            store.release(ticket["id"], owner)
+            failed_at = "intake" if ticket["state"] == "new" else "develop"
+            store.transition(ticket["id"], "failed", owner, "step_failed", {"error": message},
+                             data={**store.get(ticket["id"])["data"], "failed_at": failed_at}, error=f"stopped after {errors} errors: {message}")
+            return
+        delay = BACKOFF[min(errors, len(BACKOFF)) - 1]
+        store.release(ticket["id"], owner, error=f"{message} (retrying in {delay // 60} min)", not_before=time.time() + delay)
