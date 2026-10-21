@@ -54,6 +54,7 @@ def current(flow,state):
 
 def recoverable(ticket):
     """Whether an automatic retry of this blocked/escalated development can change the outcome."""
+    if ticket.get('paused') or ticket.get('cancel') or ticket.get('lease_owner'):return False  # dispatch never touches these.
     state=ticket['state'];error=state.get('error')
     message=str(error.get('message','') if isinstance(error,dict) else error or '')
     if ticket['status']=='escalated':return state['config'].get('run_mode')=='accepted_development'
@@ -63,6 +64,7 @@ def recoverable(ticket):
 
 def acceptable(ticket):
     """An investigated ticket with independently verified references and nothing left to ask."""
+    if ticket.get('paused') or ticket.get('cancel') or ticket.get('lease_owner'):return False  # dispatch never touches these.
     state=ticket['state'];validation=state.get('finding_validation') or {};draft=state.get('enhanced') or {}
     return (ticket['status']=='ready_for_review' and state['config'].get('run_mode')=='intake'
             and bool(validation.get('source_references_valid') and validation.get('verified_references'))
@@ -73,17 +75,17 @@ def dispatch(tickets):
     for ticket in tickets.list():
         state=ticket['state'];repo=state.get('intake',{}).get('repository_id')
         if not repo or ticket['lease_owner'] or ticket.get('cancel') or ticket['paused']:continue
-        setting=policy(tickets,repo)
+        setting=policy(tickets,repo);cycle=f"{state['revision']}c{state.get('acceptance_cycle',0)}"  # Per acceptance cycle.
         try:
             if setting['auto_accept'] and acceptable(ticket):
                 act(tickets,{'ticket_id':ticket['id'],'revision':state['revision'],'actor':setting['actor'],'action':'accept',
-                    'autonomy_policy_updated':setting['updated']},'autoaccept-'+ticket['id']+'-'+str(state['revision']))
+                    'autonomy_policy_updated':setting['updated']},'autoaccept-'+ticket['id']+'-'+cycle)
                 continue
             if not setting['development']:continue
             if ticket['status'] in ('ready_for_development','development_queued') and state.get('accepted_revision')==state.get('revision'):
                 act(tickets,{'ticket_id':ticket['id'],'revision':state['revision'],'actor':setting['actor'],
                     'action':'start_development','trust_execution':True,'autonomy_policy_updated':setting['updated']},
-                    'autostart-'+ticket['id']+'-'+str(state['revision'])+'-'+digest(setting)[:8])
+                    'autostart-'+ticket['id']+'-'+cycle+'-'+digest(setting)[:8])
             elif ticket['status'] in ('blocked','escalated') and recoverable(ticket):
                 recover(tickets,ticket,setting)
         except ValueError as exc:
@@ -113,5 +115,5 @@ def recover(tickets,ticket,setting):
         tickets.db.execute("UPDATE runs SET state=json_set(state,'$.autonomy_recoveries',?) WHERE id=?",(used+1,run_id))
         tickets.store._event(run_id,ticket['node'],'autonomy_recovery',{'round':used+1,'limit':setting['recovery_rounds'],'actor':setting['actor'],
             'status':ticket['status'],'error':str((state.get('error') or {}).get('message','') if isinstance(state.get('error'),dict) else state.get('error') or '')[:300]})
-    tickets.command(ticket['id'],'retry',{},'autorecover-'+ticket['id']+'-'+str(used+1))
+    tickets.command(ticket['id'],'retry',{},'autorecover-'+ticket['id']+'-'+f"{state.get('acceptance_cycle',0)}-{used+1}")
     return True

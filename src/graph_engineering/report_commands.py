@@ -9,7 +9,7 @@ from .runtime import digest,now
 DEVELOPMENT_STATE=('development','development_information','question_answer_request','question_answers','error','last_error',
     'baseline','baseline_path','frozen','bundle','regression','regression_feedback','regression_review','regression_review_round',
     'regression_validation_round','regression_baseline','plan','implementation_model','worktree','branch','patch','verification',
-    'head','diff','review','issue','delivery_revision')
+    'head','diff','review','issue','delivery_revision','autonomy_recoveries','development_round')
 
 
 def act(tickets,data,key):
@@ -61,7 +61,9 @@ def act(tickets,data,key):
             state['clarifications']=[*state.get('clarifications',[]),*({'actor':n['actor'],'at':n['at'],'text':n['text']} for n in state.get('development_information',[]))]
             for field in DEVELOPMENT_STATE:state.pop(field,None)
             state['config'].update(run_mode='intake',repo=state['config']['source_repo'])
-            state.update(attempts={},repairs=0,accepted_revision=None,publication_revision=None,intake_phase='Ready for Review')
+            # A new acceptance cycle: automatic acceptance, start and recovery keys must not collide with the last one's.
+            state.update(attempts={},repairs=0,accepted_revision=None,publication_revision=None,intake_phase='Ready for Review',
+                         acceptance_cycle=state.get('acceptance_cycle',0)+1)
             db.execute('UPDATE tickets SET retries=0,not_before=0 WHERE id=?',(ticket['id'],))
             node,status='ticket_finalisation','ready_for_review'
         elif action=='edit_enhancement':

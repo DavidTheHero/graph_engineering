@@ -121,6 +121,54 @@ class AutonomousRecoveryTests(unittest.TestCase):
         dispatch(self.tickets)
         self.assertEqual(self.tickets.get(second['ticket_id'])['status'], 'ready_for_review')
 
+    def test_paused_stop_stays_visible_and_is_not_recovered(self):
+        """Review of PR #8: dispatch never touches a paused ticket, so hiding it would lose it."""
+        act(self.tickets, self.base | {'action': 'start_development', 'trust_execution': True}, 'paused-start-1')
+        self.tickets.store.db.execute("UPDATE runs SET status='blocked',state=json_set(state,'$.error','stalled') WHERE id=?", (self.run['id'],))
+        self.tickets.store.db.commit()
+        self.tickets.command(self.ticket['ticket_id'], 'pause', {}, 'paused-pause-1')
+        self.set_policy('paused-policy-1', recovery_rounds=3)
+        self.assertEqual([i['ticket_id'] for i in items(self.tickets)], [self.ticket['ticket_id']])
+        dispatch(self.tickets)
+        ticket = self.tickets.get(self.ticket['ticket_id'])
+        self.assertEqual((ticket['status'], ticket['retries'], ticket['state'].get('autonomy_recoveries', 0)), ('blocked', 0, 0))
+        # A paused scheduler sweeps nothing either: the operator must still see the stop.
+        self.tickets.command(self.ticket['ticket_id'], 'resume', {}, 'paused-resume-1')
+        self.tickets.set_setting('paused', True)
+        self.assertEqual([i['ticket_id'] for i in items(self.tickets)], [self.ticket['ticket_id']])
+
+    def test_revised_requirement_is_accepted_again_with_fresh_recovery_rounds(self):
+        """Review of PR #8: the second acceptance cycle must not reuse the first cycle's idempotency keys."""
+        self.set_policy('revise-policy-1', auto_accept=True, recovery_rounds=2)
+        dispatch(self.tickets)  # Accepted in setUp; the policy starts development.
+        self.assertEqual(self.tickets.get(self.ticket['ticket_id'])['node'], 'development_setup')
+        self.tickets.store.db.execute("UPDATE runs SET status='blocked',state=json_set(state,'$.error','stalled','$.autonomy_recoveries',2) WHERE id=?", (self.run['id'],))
+        self.tickets.store.db.commit()
+        act(self.tickets, self.base | {'action': 'revise_requirement'}, 'revise-1')
+        ticket = self.tickets.get(self.ticket['ticket_id'])
+        self.assertEqual((ticket['status'], ticket['state'].get('autonomy_recoveries', 0), ticket['state']['acceptance_cycle']), ('ready_for_review', 0, 1))
+        dispatch(self.tickets)  # Accepted again...
+        dispatch(self.tickets)  # ...and started again, with the same revision number.
+        ticket = self.tickets.get(self.ticket['ticket_id'])
+        self.assertEqual((ticket['status'], ticket['node']), ('ready', 'development_setup'))
+        self.assertEqual(ticket['last_reason'], '')  # Nothing deferred silently.
+
+    def test_whole_run_execution_honours_the_policy_attempt_budget(self):
+        """Review of PR #8: a single execute() must see the budget development_setup applied, not the run's old one."""
+        class PassingRegression(DevelopmentDouble):
+            def invoke(self, role, *args, **kwargs):
+                result = super().invoke(role, *args, **kwargs)
+                if role == 'regression_test':
+                    result['content']['content'] = 'import unittest\nfrom calc import add\nclass R(unittest.TestCase):\n def test_x(self): self.assertEqual(add(9,6),3)\n'
+                return result
+        self.set_policy('whole-run-policy-1', max_node_attempts=3)
+        dispatch(self.tickets)
+        worker = PassingRegression()
+        run = self.run_development(worker)
+        self.assertEqual(run['status'], 'blocked')
+        self.assertTrue(str(run['state'].get('error', {}).get('message', '')).startswith('Regression repair budget exhausted'), run['state'].get('error'))
+        self.assertEqual(sum(m.get('role') == 'regression_test' for m in worker.metrics), 3)  # Three proposals, not two.
+
     def test_policy_validation(self):
         with self.assertRaisesRegex(ValueError, 'recovery_rounds'):
             self.set_policy('bad-policy-1', recovery_rounds=7)

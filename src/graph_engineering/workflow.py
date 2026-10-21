@@ -362,6 +362,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             for _ in range(max_nodes):
                 run = self.store.get(run_id)
                 node_name, state = run["node"], run["state"]
+                config = state["config"]  # Nodes may rewrite budgets (development_setup applies the policy's).
                 if node_name == "done":
                     return run
                 if self.cancelled():
