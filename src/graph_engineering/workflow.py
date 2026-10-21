@@ -130,6 +130,7 @@ OPTIONAL_OUTPUTS = {"evidence_collection": {"outcome": STR},
                     'regression_validation':{k:STR if k=='fingerprint' else DICT for k in ('regression_baseline','baseline','validation','candidate','fingerprint','frozen','bundle')},
                     "deduplication": {"duplicate_of": STR, "outcome": STR},
                     "ticket_finalisation": {"self_resolution": DICT, "search_round": {"type": "integer"}},
+                    "test_execution": {"last_error": DICT, "adapted_digests": DICT},
                     "escalation": {"error": STR}, "approval_gate": {"policy_snapshot": DICT},
                     # Clarification mode resets the intake investigation like an operator clarification.
                     "question_answering": {"clarifications": ARRAY, "intake": DICT, "search_round": {"type": "integer"},
@@ -828,7 +829,8 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                                                **({"review_findings": review} if review and not review.get("approved") else {})}
                 if state.get("worktree_round", 0) == state.get("development_round", 0):
                     previous = state["plan"]
-                    request["previous_attempt"]["note"] = "These files stay planned and keep their current edits; add the files the failure shows were missing."
+                    request["previous_attempt"]["note"] = ("These files stay planned and keep their current edits; add any file the "
+                                                           + ("review findings" if state["verification"].get("passed") else "failure") + " shows is missing.")
         if accepted:
             request = fit_planning_request(state["config"], request)
             if request.get("shortened_for_budget"):
@@ -836,8 +838,8 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         adaptable = sorted(set(adaptable_tests(self, state)) | set(previous.get("adapted_tests") or [])) if accepted else []
         if adaptable:
             request["adaptable_existing_tests"] = adaptable
-            request["task"] += (" The frozen regression now passes but these EXISTING tests fail because they pin the behaviour the accepted "
-                                "requirement changes; you may include them in files ONLY to adapt those assertions: " + ", ".join(adaptable) + ".")
+            request["task"] += (" The frozen regression now passes but these EXISTING tests fail, or were adapted this round, because they pin the "
+                                "behaviour the accepted requirement changes; you may include them in files ONLY to adapt those assertions: " + ", ".join(adaptable) + ".")
         plan = self.ask(state, "planning", request, PLAN_SCHEMA, routing.LARGE)
         kept = [f for f in previous.get("files", []) if f not in plan["files"]]
         if kept:
@@ -968,10 +970,18 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             if not str(exc).startswith("Adapted test"):
                 raise
             # The edit overstepped the adaptation bounds: tell the implementer and repair, instead of burning this step.
-            self.store.event(self.run_id, "test_execution", "adapted_test_refused", {"message": str(exc)})
+            # The refused test goes back to the accepted commit (review of PR #12: a repair keeps planned files, so
+            # the overstepping edit would otherwise stay in the worktree and be refused again on every repair).
+            path = Path(state["worktree"])
+            adapted = (state.get("plan") or {}).get("adapted_tests") or []
+            refused = [name for name in adapted if name in str(exc)] or list(adapted)
+            for name in refused:
+                git(path, "checkout", state["base_sha"], "--", name)
+            self.store.event(self.run_id, "test_execution", "adapted_test_refused", {"message": str(exc), "reverted": refused})
             return {"verification": {"passed": False, "returncode": None, "timed_out": False, "empty_suite": False,
                                      "output": "Adapted test refused before any test ran: " + str(exc)},
-                    "head": state.get("head", ""), "diff": state.get("diff", "")}, "repair", "ready"
+                    "head": state.get("head", ""), "diff": state.get("diff", ""), "last_error": {"message": str(exc)},
+                    "adapted_digests": {k: v for k, v in (state.get("adapted_digests") or {}).items() if k not in refused}}, "repair", "ready"
         path = Path(state["worktree"])
         if state['config'].get('parallel_quality') and state['config']['build_commands']:
             from .quality import parallel_checks

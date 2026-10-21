@@ -162,7 +162,9 @@ asserts the exact old key list) legitimately needs the pinning test updated. Und
 flag `adapt_existing_tests` the controller allows that, bounded at five points:
 
 1. a plan may include an existing test only once the frozen regression passes and only if that test
-   fails in the latest verification (`adaptable_tests`; recorded as `existing_tests_planned`);
+   fails in the latest verification (`adaptable_tests`; recorded as `existing_tests_planned`); a test
+   adapted earlier in the same round stays adaptable, and an edit refused by bound 4 is reverted to the
+   accepted commit before the repair (`adapted_test_refused`);
 2. the implementer is told to adapt only the assertions that pin the old behaviour;
 3. `validate_edits` accepts only those test paths; all other test files stay out of scope;
 4. `adapted_test_intact`: the file must keep every test definition and gain no skip markers;

@@ -84,8 +84,8 @@ class ModelBoundaryTests(unittest.TestCase):
     def test_context_limit_before_process_and_unknown_model(self):
         with tempfile.TemporaryDirectory() as tmp:
             worker = OpenCodeWorker(Path(tmp), default_models())
-            with self.assertRaises(ModelError):
-                worker.invoke("discovery", "x" * 40001, {"type": "object"}, "a", "run")
+            with self.assertRaises(ModelError):  # The registry budget (90 000 for the 150K-context default) bounds the prompt.
+                worker.invoke("discovery", "x" * 90001, {"type": "object"}, "a", "run")
             with self.assertRaises(ModelError):
                 worker.invoke("discovery", "classify", {"type": "object"}, "missing", "run")
             with self.assertRaises(ModelError):

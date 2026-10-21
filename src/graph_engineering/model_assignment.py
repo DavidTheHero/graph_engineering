@@ -28,7 +28,7 @@ import statistics
 import tempfile
 import time
 
-from .models import ModelClient, ModelEndpoint, ModelError, OpenCodeWorker, load_models
+from .models import ModelClient, ModelEndpoint, ModelError, OpenCodeWorker, default_input_budget, load_models
 from .routing import LARGE, ROLE_TIERS, SMALL
 
 # ---- role requirements -------------------------------------------------------
@@ -348,7 +348,7 @@ def entry(profile: dict, previous: dict | None = None) -> dict:
     large_context = (context or 0) >= 32768
     base = {"endpoint": profile["endpoint"], "model_id": profile["model_id"], "context": context,
             "output": 4096 if large_context else 1024, "timeout": 120, "startup_timeout": 45,
-            "input_budget_bytes": 40000 if large_context else max(2000, int((context or 4096) * 0.75)),
+            "input_budget_bytes": default_input_budget(context),
             "structured_output": True, "tools": False, "label": profile["model_id"]}
     merged = base | {k: v for k, v in (previous or {}).items() if k in ModelEndpoint.__dataclass_fields__}
     return merged | {"endpoint": profile["endpoint"], "model_id": profile["model_id"], "context": context}
