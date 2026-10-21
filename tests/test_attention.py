@@ -109,6 +109,17 @@ class ProjectionTests(unittest.TestCase):
         dead = item(row("blocked", "problem_investigation") | {"retries": 3})
         self.assertEqual((dead["kind"], dead["actions"]), ("dead_letter", []))
 
+    def test_stopped_development_offers_revision_and_shows_recorded_notes(self):
+        notes = [{"text": "drop the role feature", "actor": "op", "at": 1}]
+        dead = item(row("blocked", "regression_review", mode="accepted_development", enhanced=DRAFT,
+                        error="Regression review rejected twice", development_information=notes) | {"retries": 3})
+        self.assertEqual((dead["kind"], self.kinds(dead)),
+                         ("dead_letter", ["answer_questions", "development_information", "revise_requirement"]))
+        revise = dead["actions"][-1]
+        self.assertTrue(revise["primary"] and revise["confirm"])
+        self.assertIn("Your note: drop the role feature", dead["context"])
+        self.assertFalse(any("scoped follow-up" in line for line in dead["context"]))
+
 
 class LiveProjectionTests(unittest.TestCase):
     """Real intake graph (labelled inference double): projection, command round-trip and MCP."""

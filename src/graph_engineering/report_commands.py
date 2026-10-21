@@ -5,6 +5,12 @@ import re
 from .report_store import INVESTIGATION_BUDGET,report,revision
 from .runtime import digest,now
 
+# Everything accepted development derives from the frozen revision; revising the requirement discards it.
+DEVELOPMENT_STATE=('development','development_information','question_answer_request','question_answers','error','last_error',
+    'baseline','baseline_path','frozen','bundle','regression','regression_feedback','regression_review','regression_review_round',
+    'regression_validation_round','regression_baseline','plan','implementation_model','worktree','branch','patch','verification',
+    'head','diff','review','issue','delivery_revision')
+
 
 def act(tickets,data,key):
     if not isinstance(key,str) or not re.fullmatch(r'[A-Za-z0-9_-]{8,100}',key):raise ValueError('Idempotency key required')
@@ -21,7 +27,7 @@ def act(tickets,data,key):
         if type(data.get('revision')) is not int or data['revision']!=current:raise ValueError('Ticket revision changed; reload before acting')
         action=data.get('action');actor=data.get('actor','')
         if ticket.get('cancel') or ticket['status']=='cancelled':raise ValueError('Ticket is cancelled. Use Retry with backoff explicitly before another action.')
-        if state['config'].get('run_mode')=='accepted_development' and action not in ('publish_development','development_information','answer_questions'):raise ValueError('Development has started with a frozen accepted revision; add troubleshooting information, ask the question-answering model, or use pause, cancel or retry to control execution.')
+        if state['config'].get('run_mode')=='accepted_development' and action not in ('publish_development','development_information','answer_questions','revise_requirement'):raise ValueError('Development has started with a frozen accepted revision; add troubleshooting information, ask the question-answering model, revise the requirement once stopped, or use pause, cancel or retry to control execution.')
         if not isinstance(actor,str) or not actor.strip() or len(actor)>120:raise ValueError('A named operator is required')
         actor=actor.strip()
         node=ticket['node'];status=ticket['status']
@@ -32,7 +38,13 @@ def act(tickets,data,key):
             if status!='blocked' and not waiting:raise ValueError('Question answering requires a blocked ticket or an investigated ticket waiting for clarification')
             if not isinstance(questions,list) or not questions:raise ValueError('This ticket has no persisted unresolved questions')
             if waiting and state['intake'].get('generation',0)>=INVESTIGATION_BUDGET:raise ValueError('Further-investigation budget exhausted; create a scoped follow-up ticket')
-            state['question_answer_request']={'return_node':node,'return_error':state.get('error'),'mode':'clarification' if waiting else 'blocked',
+            return_node,return_error=node,state.get('error')
+            if node=='question_answering':
+                # Re-asking after question answering itself blocked keeps the original checkpoint and its error.
+                prior=state.get('question_answer_request') or {}
+                if prior.get('return_node') in (None,'question_answering'):raise ValueError('The checkpoint to return to after question answering was lost; use Retry with backoff')
+                return_node,return_error=prior['return_node'],prior.get('return_error')
+            state['question_answer_request']={'return_node':return_node,'return_error':return_error,'mode':'clarification' if waiting else 'blocked',
                 'requested_by':actor,'requested_at':now(),'questions_hash':digest(questions)}
             state['attempts']={k:v for k,v in state.get('attempts',{}).items() if not k.startswith('question_answering:')}
             node,status='question_answering','ready'
@@ -42,13 +54,26 @@ def act(tickets,data,key):
             if not isinstance(text,str) or not text.strip() or len(text)>4000:raise ValueError('Provide troubleshooting information in 1–4000 characters')
             if len(notes)>=5:raise ValueError('Five troubleshooting notes already recorded; create a scoped follow-up for further changes')
             state['development_information']=[*notes,{'text':text,'actor':actor,'at':now()}]
+        elif action=='revise_requirement':
+            if state['config'].get('run_mode')!='accepted_development' or status not in ('blocked','escalated','failed'):raise ValueError('Revising the requirement requires a stopped development ticket')
+            # Troubleshooting answers become clarifications of the requirement under review. Nothing runs until the
+            # operator accepts a revision and authorises development again, which then starts from setup.
+            state['clarifications']=[*state.get('clarifications',[]),*({'actor':n['actor'],'at':n['at'],'text':n['text']} for n in state.get('development_information',[]))]
+            for field in DEVELOPMENT_STATE:state.pop(field,None)
+            state['config'].update(run_mode='intake',repo=state['config']['source_repo'])
+            state.update(attempts={},repairs=0,accepted_revision=None,publication_revision=None,intake_phase='Ready for Review')
+            db.execute('UPDATE tickets SET retries=0,not_before=0 WHERE id=?',(ticket['id'],))
+            node,status='ticket_finalisation','ready_for_review'
         elif action=='edit_enhancement':
             content=data.get('changes');allowed={'title','problem_statement','expected_behaviour','observed_behaviour',
-                'root_cause_hypothesis','proposed_solution','acceptance_criteria','validation_plan','reproduction_steps'}
+                'root_cause_hypothesis','proposed_solution','acceptance_criteria','validation_plan','reproduction_steps','questions'}
             if not isinstance(content,dict) or not content or not set(content)<=allowed:raise ValueError('Only technical prose and criteria are editable; original report and evidence are immutable')
             if not state.get('enhanced'):raise ValueError('No enhanced draft exists yet')
             for field,value in content.items():
-                if field in ('acceptance_criteria','validation_plan','reproduction_steps'):
+                if field=='questions':
+                    # Answered questions may be removed, so an empty list is valid.
+                    if not isinstance(value,list) or len(value)>8 or any(not isinstance(x,str) or not x.strip() or len(x)>1000 for x in value):raise ValueError('Open questions must be at most eight nonempty lines')
+                elif field in ('acceptance_criteria','validation_plan','reproduction_steps'):
                     if not isinstance(value,list) or not 1<=len(value)<=20 or any(not isinstance(x,str) or not x.strip() or len(x)>1000 for x in value):raise ValueError('Criteria must be a nonempty bounded list')
                 elif not isinstance(value,str) or not value.strip() or len(value)>(180 if field=='title' else 8000):raise ValueError('Invalid edited text')
             number,enhanced=revision(db,ticket['id'],'operator:'+key,state['enhanced']|content,

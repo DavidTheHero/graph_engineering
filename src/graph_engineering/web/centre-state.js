@@ -31,9 +31,17 @@ export async function json(path,options={}) {
   try {const response=await fetch(path,{cache:'no-store',signal:controller.signal,...options});const data=await response.json();if(!response.ok)throw Error(data.error||`Request failed (${response.status})`);return data;}
   finally {clearTimeout(timer);}
 }
-export function command(path,data,key=crypto.randomUUID()) {
+export async function command(path,data,key=crypto.randomUUID()) {
   if(!state.control)throw Error('Operator controls are disabled. Start the centre command.');
-  return json(path,{method:'POST',headers:{'Content-Type':'application/json','X-GE-CSRF':state.csrf,'Idempotency-Key':key},body:JSON.stringify(data)});
+  const send=()=>json(path,{method:'POST',headers:{'Content-Type':'application/json','X-GE-CSRF':state.csrf,'Idempotency-Key':key},body:JSON.stringify(data)});
+  try {return await send();}
+  catch(error) {
+    // A controller restart issues a new CSRF token; refresh it and resend once under the same idempotency key.
+    if(!/CSRF header required/.test(error.message))throw error;
+    const session=await json('/api/session');state.control=session.control_enabled;state.csrf=session.csrf;
+    if(!state.control)throw Error('Operator controls are disabled. Start the centre command.');
+    return send();
+  }
 }
 export function toast(text) {$('#toast').textContent=text;$('#toast').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>{$('#toast').hidden=true;},5000);}
 export function showError(error) {$('#centre-error').textContent=error.message||String(error);$('#centre-error').hidden=false;}

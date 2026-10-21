@@ -180,13 +180,21 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
                                    primary=True))
         if developing and draft.get("questions"):
             actions.append(intake_action("answer_questions", ask_label))
+        notes = state.get("development_information", []) if developing else []
         if developing:
             actions.append(intake_action("development_information", "Add troubleshooting information", input="text"))
+            actions.append(intake_action("revise_requirement", "Revise requirement", primary=not retry_left,
+                                         help="Returns the ticket to review so you can edit the acceptance criteria and "
+                                              "open questions. Your notes are kept; retries reset after you accept again.",
+                                         confirm="Stop development and return this ticket to review?"))
         return base | {"kind": "blocked" if retry_left and status == "blocked" else "dead_letter",
                        "headline": f"Stopped at {node.replace('_', ' ')}" + ("" if retry_left else ": retry limit reached"),
                        "context": [c for c in [_short(message, 300) if message else None,
                                                f"Retries used: {ticket['retries']}/{ticket['max_retries']}",
-                                               None if retry_left else "Review the failure and create a scoped follow-up ticket."] if c],
+                                               *[f"Your note: {_short(n['text'], 200)}" for n in notes[-2:]],
+                                               ("Notes guide the next attempt but do not change the accepted criteria; "
+                                                "use Revise requirement if the criteria are wrong.") if notes else None,
+                                               None if retry_left or developing else "Review the failure and create a scoped follow-up ticket."] if c],
                        "actions": actions}
     return None
 

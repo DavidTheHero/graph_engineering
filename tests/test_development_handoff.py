@@ -118,6 +118,112 @@ class DevelopmentHandoffTests(unittest.TestCase):
             self.assertEqual(call['model_key'],'b')
         finally:flow.store.close()
 
+    @patch('graph_engineering.workflow.ModelClient.health',return_value={'available':True})
+    def test_reasking_after_question_answering_blocked_returns_to_original_checkpoint(self,_):
+        act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'reask-start-1')
+        state=self.tickets.get(self.ticket['ticket_id'])['state']
+        state['config']['routing']='multimodel'
+        state['enhanced']['questions']=['Which inputs reproduce the failure?']
+        state['development_information']=[{'text':'Use real input values 9 and 6.','actor':'test-operator','at':1}]
+        self.tickets.store.checkpoint(self.run['id'],'regression_review',
+            {'attempts':{'regression_review:0':2},'error':'Attempt budget exhausted',**{k:v for k,v in state.items() if k in ('config','enhanced','development_information')}},
+            'regression_review','blocked')
+        act(self.tickets,self.base|{'action':'answer_questions'},'reask-answer-1')
+        # The question-answering worker itself fails and blocks at its own node.
+        self.tickets.store.checkpoint(self.run['id'],'question_answering',{'error':{'type':'KeyError','message':"'question_answering'"}},
+            'question_answering','blocked')
+        act(self.tickets,self.base|{'action':'answer_questions'},'reask-answer-2')
+        request=self.tickets.get(self.ticket['ticket_id'])['state']['question_answer_request']
+        self.assertEqual((request['return_node'],request['return_error']),('regression_review','Attempt budget exhausted'))
+        flow=Workflow(self.home);flow.worker=DevelopmentDouble()
+        try:
+            answered=flow.execute(self.run['id'])
+            self.assertEqual((answered['node'],answered['status']),('regression_review','blocked'))
+            self.assertEqual(answered['state']['error'],'Attempt budget exhausted')
+        finally:flow.store.close()
+
+    def test_reasking_without_a_recorded_checkpoint_is_refused(self):
+        act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'lost-start-1')
+        state=self.tickets.get(self.ticket['ticket_id'])['state']
+        self.tickets.store.checkpoint(self.run['id'],'question_answering',
+            {'enhanced':state['enhanced']|{'questions':['Which inputs reproduce the failure?']},
+             'question_answer_request':{'return_node':'question_answering','mode':'blocked'}},'question_answering','blocked')
+        with self.assertRaisesRegex(ValueError,'checkpoint to return to'):
+            act(self.tickets,self.base|{'action':'answer_questions'},'lost-answer-1')
+
+    def test_revise_requirement_returns_exhausted_ticket_to_review_and_restarts_cleanly(self):
+        act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'revise-start-1')
+        self.tickets.store.checkpoint(self.run['id'],'regression_review',
+            {'regression_review':{'approved':False,'findings':[]},'regression_review_round':2,
+             'error':'Regression review rejected twice; refine the accepted requirement'},'regression_review','blocked')
+        act(self.tickets,self.base|{'action':'development_information','text':'Drop the role feature.'},'revise-note-1')
+        self.tickets.db.execute("UPDATE tickets SET retries=3 WHERE id=?",(self.ticket['ticket_id'],));self.tickets.db.commit()
+        with self.assertRaises(ValueError):self.tickets.command(self.ticket['ticket_id'],'retry',{},'revise-retry-1')
+        result=act(self.tickets,self.base|{'action':'revise_requirement'},'revise-requirement-1')
+        self.assertEqual(result['status'],'ready_for_review')
+        ticket=self.tickets.get(self.ticket['ticket_id']);state=ticket['state']
+        self.assertEqual((ticket['node'],ticket['retries'],state['config']['run_mode']),('ticket_finalisation',0,'intake'))
+        self.assertEqual(state['config']['repo'],state['config']['source_repo'])
+        self.assertIsNone(state['accepted_revision'])
+        for field in ('development','development_information','regression_review','regression_review_round','error'):
+            self.assertNotIn(field,state)
+        self.assertEqual(state['clarifications'][-1]['text'],'Drop the role feature.')
+        # The operator edits the criteria, clears the answered questions, accepts and authorises development again.
+        act(self.tickets,self.base|{'action':'edit_enhancement','changes':{'acceptance_criteria':['Adding 9 and 6 returns 15.'],'questions':[]}},'revise-edit-1')
+        revised=self.base|{'revision':2}
+        act(self.tickets,revised|{'action':'accept'},'revise-accept-1')
+        act(self.tickets,revised|{'action':'start_development','trust_execution':True},'revise-restart-1')
+        ticket=self.tickets.get(self.ticket['ticket_id'])
+        self.assertEqual((ticket['node'],ticket['status']),('development_setup','ready'))
+        self.assertEqual(ticket['state']['enhanced']['questions'],[])
+        self.assertEqual(ticket['state']['development']['authorised_revision'],2)
+
+    @patch('graph_engineering.workflow.ModelClient.health',return_value={'available':True})
+    def test_setup_after_an_earlier_attempt_starts_from_clean_checkouts_and_current_timeout(self,_):
+        act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'clean-setup-start')
+        flow=Workflow(self.home);flow.worker=DevelopmentDouble()
+        try:first=flow.execute(self.run['id'])
+        finally:flow.store.close()
+        self.assertEqual(first['status'],'ready_for_delivery',first['state'].get('error'))
+        baseline=Path(first['state']['baseline_path'])
+        self.assertTrue((baseline/first['state']['regression']['path']).is_file())  # Installed by regression validation.
+        config_path=self.tickets.db.execute('SELECT config_path FROM registered_repositories WHERE id=?',(self.registration['id'],)).fetchone()[0]
+        config=json.loads(Path(config_path).read_text(encoding='utf-8-sig'));config['command_timeout']=300
+        Path(config_path).write_text(json.dumps(config),encoding='utf-8')
+        # As after Revise requirement: development restarts at setup on the same run.
+        self.tickets.store.checkpoint(self.run['id'],'development_setup',{},'development_setup','ready')
+        flow=Workflow(self.home);flow.worker=DevelopmentDouble()
+        try:second=flow.execute(self.run['id'])
+        finally:flow.store.close()
+        self.assertEqual(second['status'],'ready_for_delivery',second['state'].get('error'))
+        self.assertEqual(second['state']['config']['command_timeout'],300)
+
+    def test_revise_requirement_requires_a_stopped_development_ticket(self):
+        with self.assertRaisesRegex(ValueError,'stopped development ticket'):
+            act(self.tickets,self.base|{'action':'revise_requirement'},'revise-intake-1')
+        act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'revise-running-start')
+        with self.assertRaisesRegex(ValueError,'stopped development ticket'):
+            act(self.tickets,self.base|{'action':'revise_requirement'},'revise-running-1')
+
+    @patch('graph_engineering.workflow.ModelClient.health',return_value={'available':True})
+    def test_regression_reviewer_sees_operator_notes_and_feature_framing(self,_):
+        act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'review-notes-start')
+        state=self.tickets.get(self.ticket['ticket_id'])['state']
+        self.tickets.store.checkpoint(self.run['id'],'development_setup',
+            {'error':'Attempt budget exhausted','triage':state.get('triage',{})|{'category':'feature'}},'development_setup','blocked')
+        act(self.tickets,self.base|{'action':'development_information','text':'Drop the role feature.'},'review-notes-note')
+        self.tickets.command(self.ticket['ticket_id'],'retry',{},'review-notes-retry')
+        class ReviewDouble(DevelopmentDouble):
+            prompt=''
+            def invoke(self,role,*args,**kwargs):
+                if role=='regression_review':ReviewDouble.prompt=args[0]
+                return super().invoke(role,*args,**kwargs)
+        flow=Workflow(self.home);flow.worker=ReviewDouble()
+        try:flow.execute(self.run['id'])
+        finally:flow.store.close()
+        self.assertIn('Drop the role feature.',ReviewDouble.prompt)
+        self.assertIn('NEW FEATURE',ReviewDouble.prompt)
+
     def test_exhaustion_projection_explains_both_retry_limits(self):
         from graph_engineering.scheduling_policy import execution_limits
         act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'limits-start-1')
