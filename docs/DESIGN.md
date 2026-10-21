@@ -31,6 +31,7 @@ evaluator-optimizer pattern: its findings go back to the coding agent.
 | Evaluator-optimizer | review agent in a fresh context; findings and failed gates feed the next round |
 | Routing | `models.json` assigns roles to models: small model for triage, large for coding |
 | Agent-computer interface | `tools.py`: few tools, exact-match edits with helpful errors, line-numbered reads, clipped output |
+| Context engineering | notes, tool-result clearing, compaction, explore sub-agent, opening brief (below) |
 | Transparency | every model turn and tool call is a transcript line; the control centre shows them live |
 | Guardrails and stopping conditions | step and token budgets, repeat detection, sandbox, human merge |
 | Measure | `evals/`: fixed tasks, repeated runs, pass rate |
@@ -87,22 +88,39 @@ Each step is idempotent and leased, so a crash restarts the step, not the ticket
 
 ```
 src/graph_engineering/
-  llm.py        OpenAI-compatible chat with tools; model registry and role routing
-  sandbox.py    OS sandbox for commands; workspace preparation
-  tools.py      the agent-computer interface: read-only and read-write tool sets
-  agent.py      the agent loop: budgets, context editing, repeat guard, transcripts
-  gates.py      the harness's checks
-  prompts.py    system prompts for intake, coding and review
-  repos.py      repository registration and detection of test/build commands
-  store.py      SQLite: tickets, append-only events, agent runs
-  workflow.py   the state machine; one function per step
-  github.py     issue, branch, PR, status, merge gate, merge
-  scheduler.py  leased worker threads that advance tickets
-  web.py        control centre: JSON API and one page
-  mcp_server.py MCP tools for other agents (no approvals)
-  cli.py        graph-engineer command
-evals/          tasks and the eval runner
+  llm.py         OpenAI-compatible chat with tools; model registry and role routing
+  sandbox.py     OS sandbox for commands; workspace preparation
+  tools.py       the agent-computer interface: read-only and read-write tool sets
+  agent.py       the agent loop: budgets, context engineering, repeat guard, transcripts
+  prompts.py     system prompts, finish tools and the opening project brief
+  gates.py       the harness's checks
+  repos.py       repository registration and detection of setup/test/build commands
+  store.py       SQLite: tickets, append-only events, agent runs, declared transitions
+  workflow.py    the state machine: intake, development rounds, publication, merge, a person's actions
+  publish.py     GitHub (issue, PR, status, merge gate, merge) and local publication
+  scheduler.py   leased worker threads with heartbeats and backoff
+  web.py, web/   control centre: JSON API and one page
+  mcp_server.py  MCP tools for other agents (no approvals)
+  evaluation.py  eval runner
+  cli.py         graph-engineer command
+evals/tasks/     eval tasks from real tickets
 ```
+
+## Context engineering
+
+Following Anthropic's *Effective context engineering for AI agents*, each agent works from the smallest
+high-signal context that lets it act:
+
+- **Right-altitude prompts**: short principles and a workflow, no lists of special cases.
+- **Hybrid retrieval**: the opening message carries the project's own agent guide (AGENTS.md, CLAUDE.md,
+  CONTRIBUTING.md or README) and a compact layout; everything else the agent finds just in time with search and read.
+- **Token-efficient tools**: clipped output, paged reads, errors that say how to recover.
+- **Tool-result clearing**: past a 40K-token working budget, old tool output is elided, the latest results kept.
+- **Notes**: `update_notes` keeps the plan and findings in a file outside the context; every session on the
+  ticket, including later rounds, opens with them.
+- **Compaction**: if clearing is not enough, the model writes its notes and the conversation restarts from task and notes.
+- **Sub-agents**: `explore(question)` answers a broad question in a fresh read-only context; only the answer
+  (about 300 words) enters the coder's context.
 
 Python standard library only; `gh`, Git and the target repository's toolchain are external.
 The MCP SDK is an optional extra.

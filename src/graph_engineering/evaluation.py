@@ -26,7 +26,7 @@ from .workflow import Context, accept, develop
 
 
 def run_task(task: dict, repos: Repos, registry: Registry, out: Path, index: int) -> dict:
-    home = out / f"{task['id']}-{index}"
+    home = (out / f"{task['id']}-{index}").resolve()
     if home.exists():
         shutil.rmtree(home)
     repo = repos.get(task["repo"])

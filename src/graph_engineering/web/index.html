@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>graph_engineering</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --text: #1b1f24; --muted: #5f6b7a; --border: #dde2e8; --accent: #2f5bea;
+  --ok: #1a7f37; --bad: #c62828; --warn: #9a6700; --chip: #eef1f5; --code: #f2f4f7; --you: #fff6e0;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0f1216; --panel: #171b21; --text: #e6e9ee; --muted: #9aa5b4; --border: #2a313b; --accent: #7aa2ff;
+          --ok: #4ac26b; --bad: #ff6b6b; --warn: #e3b341; --chip: #222831; --code: #12161b; --you: #2b2414; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--panel); }
+header h1 { font-size: 16px; margin: 0; }
+header .meta { color: var(--muted); font-size: 12px; }
+main { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; height: calc(100vh - 50px); }
+aside { border-right: 1px solid var(--border); overflow-y: auto; padding: 12px; }
+section { overflow-y: auto; padding: 20px 24px; }
+form.new { display: grid; gap: 8px; margin-bottom: 14px; }
+textarea, select, input { width: 100%; font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+textarea { min-height: 70px; resize: vertical; }
+button { font: inherit; border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.danger { color: var(--bad); }
+button:disabled { opacity: .5; cursor: default; }
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 16px 4px 6px; }
+.ticket { padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+.ticket:hover { background: var(--chip); }
+.ticket.selected { border-color: var(--accent); background: var(--chip); }
+.ticket.you { background: var(--you); }
+.ticket .title { font-weight: 550; }
+.ticket .sub { color: var(--muted); font-size: 12px; }
+.state { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 99px; background: var(--chip); color: var(--muted); }
+.state.done { color: var(--ok); } .state.failed, .state.rejected { color: var(--bad); }
+.state.awaiting_merge, .state.proposed, .state.needs_info { color: var(--warn); }
+.pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-left: 6px; animation: p 1.2s infinite; }
+@keyframes p { 50% { opacity: .25; } }
+.detail h3 { font-size: 20px; margin: 0 0 4px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin: 14px 0; }
+.card h4 { margin: 0 0 8px; font-size: 13px; }
+.error { color: var(--bad); white-space: pre-wrap; }
+ol { margin: 0; padding-left: 20px; }
+.checks div { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.ok { color: var(--ok); } .bad { color: var(--bad); }
+.feed { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; max-height: 360px; overflow-y: auto; }
+.feed div { padding: 2px 0; border-bottom: 1px dashed var(--border); white-space: pre-wrap; word-break: break-word; }
+.feed .k { color: var(--muted); }
+pre.diff { background: var(--code); padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 12px; max-height: 520px; }
+pre.diff .a { color: var(--ok); } pre.diff .d { color: var(--bad); } pre.diff .h { color: var(--accent); }
+.empty { color: var(--muted); padding: 40px 0; text-align: center; }
+a { color: var(--accent); }
+@media (max-width: 760px) { main { grid-template-columns: 1fr; height: auto; } aside { border-right: 0; } section { padding: 16px; } }
+</style>
+</head>
+<body>
+<header><h1>graph_engineering</h1><span class="meta" id="meta"></span></header>
+<main>
+  <aside>
+    <form class="new" id="new">
+      <select id="repo" aria-label="Repository"></select>
+      <textarea id="request" placeholder="What do you want changed? Describe it in your own words." aria-label="Request"></textarea>
+      <button class="primary" type="submit">File ticket</button>
+    </form>
+    <div id="list"></div>
+  </aside>
+  <section id="detail"><div class="empty">Select a ticket, or file one.</div></section>
+</main>
+<script>
+const YOU = ["proposed", "needs_info", "awaiting_merge", "failed"];
+const ORDER = [["Needs you", t => YOU.includes(t.state) || (t.state === "ready" && !t.working)],
+               ["In progress", t => ["new", "accepted", "merging"].includes(t.state) || (t.state === "ready" && t.working)],
+               ["Finished", t => ["done", "rejected", "cancelled"].includes(t.state)]];
+let state = { tickets: [] }, selected = location.hash.slice(1) || null, feedAfter = 0, feedFor = null;
+const diffs = {};  // ticket id -> diff text once the person opened it; survives the periodic re-render
+
+const el = (tag, attrs = {}, ...children) => {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) k === "class" ? node.className = v : k.startsWith("on") ? node[k] = v : node.setAttribute(k, v);
+  for (const c of children.flat()) if (c != null) node.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return node;
+};
+const api = async (path, body) => {
+  const response = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json", "X-GE": "1" }, body: JSON.stringify(body) });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || response.statusText);
+  return data;
+};
+const ago = t => { const s = Math.round(Date.now() / 1000 - t); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`; };
+
+async function refresh() {
+  try { state = await api("/api/state"); } catch { return; }
+  const working = state.workers.filter(w => w.ticket).length;
+  document.getElementById("meta").textContent = `${Object.keys(state.models.models).join(", ")} · ${state.workers.length} worker(s), ${working} busy`;
+  const repo = document.getElementById("repo");
+  if (!repo.options.length) for (const r of state.repos) repo.append(el("option", { value: r.name }, `${r.name}${r.slug ? " · " + r.slug : " · local"}`));
+  const list = document.getElementById("list");
+  list.replaceChildren(...ORDER.map(([name, test]) => {
+    const items = state.tickets.filter(test);
+    return items.length ? [el("h2", {}, `${name} (${items.length})`), ...items.map(t => el("div", {
+      class: `ticket ${t.id === selected ? "selected" : ""} ${name === "Needs you" ? "you" : ""}`, onclick: () => select(t.id) },
+      el("div", { class: "title" }, t.title), el("div", { class: "sub" }, `${t.id} · `, el("span", { class: `state ${t.state}` }, t.state.replace("_", " ")),
+      t.working ? el("span", { class: "pulse", title: "an agent is working" }) : null, ` · ${t.repo} · ${ago(t.updated)}`)))] : [];
+  }).flat());
+  if (selected) await renderDetail();
+}
+
+function select(id) { selected = id; location.hash = id; feedAfter = 0; feedFor = null; refresh(); }
+
+async function action(name, body = {}) {
+  try { await api(`/api/tickets/${selected}/${name}`, body); await refresh(); } catch (e) { alert(e.message); }
+}
+
+function actions(t) {
+  const pr = t.data.pr || {};
+  const buttons = [];
+  if (t.state === "proposed") buttons.push(el("button", { class: "primary", onclick: () => action("accept") }, "Accept and develop"),
+    el("button", { class: "danger", onclick: () => { const r = prompt("Why reject?"); if (r !== null) action("reject", { text: r }); } }, "Reject"));
+  if (t.state === "needs_info") buttons.push(el("button", { class: "primary", onclick: () => { const r = prompt("Your answer"); if (r) action("answer", { text: r }); } }, "Answer the questions"));
+  if (t.state === "ready" && !t.working) buttons.push(el("button", { class: "primary", onclick: () => action("approve-publish") }, "Publish pull request"));
+  if (t.state === "awaiting_merge") buttons.push(el("button", { class: "primary", onclick: () => {
+      if (confirm(`Merge ${pr.url || pr.branch} at ${pr.head.slice(0, 12)}?\nThe merge also needs the repository's checks to pass.`)) action("approve-merge", { head: pr.head });
+    } }, "Approve merge"));
+  if (["ready", "awaiting_merge"].includes(t.state)) buttons.push(el("button", { onclick: () => { const r = prompt("What should change?"); if (r) action("request-changes", { text: r }); } }, "Request changes"));
+  if (["failed", "rejected"].includes(t.state)) buttons.push(el("button", { class: "primary", onclick: () => action("retry") }, "Retry"));
+  if (!["done", "cancelled", "rejected"].includes(t.state)) buttons.push(el("button", { class: "danger", onclick: () => { if (confirm("Cancel this ticket?")) action("cancel"); } }, "Cancel"));
+  return buttons;
+}
+
+async function renderDetail() {
+  let t;
+  try { t = await api(`/api/tickets/${selected}`); } catch { return; }
+  const spec = t.spec, data = t.data, pr = data.pr || {};
+  const detail = document.getElementById("detail");
+  const keep = detail.querySelector(".feed");
+  const rounds = (data.rounds || []).map(r => el("div", { class: "card" }, el("h4", {}, `Round ${r.round} · coding ${r.coding.status} in ${r.coding.steps} steps (${r.coding.model})`),
+    el("div", { class: "checks" }, (r.gates || []).map(g => el("div", { class: g.ok ? "ok" : "bad" }, `${g.ok ? "✓" : "✗"} ${g.name}`))),
+    r.review ? el("p", {}, el("b", {}, `Review (${r.review.model}): ${r.review.verdict || r.review.status}. `), r.review.summary || "",
+      r.review.findings?.length ? el("ul", {}, r.review.findings.map(f => el("li", {}, `${f.file}: ${f.problem} → ${f.fix}`))) : null) : null));
+  const questions = t.events.filter(e => e.kind === "questions").slice(-1)[0];
+  detail.replaceChildren(el("div", { class: "detail" },
+    el("h3", {}, spec.title || "New request"),
+    el("div", { class: "row" }, el("span", { class: `state ${t.state}` }, t.state.replace("_", " ")), t.working ? el("span", { class: "pulse" }) : null,
+      `${t.id} · ${t.repo} · round ${t.round}/${t.max_rounds}`, pr.url ? el("a", { href: pr.url, target: "_blank", rel: "noopener" }, `PR #${pr.number}`) : pr.branch ? `branch ${pr.branch}` : null),
+    el("div", { class: "row" }, actions(t)),
+    t.error ? el("div", { class: "card error" }, t.error) : null,
+    questions && t.state === "needs_info" ? el("div", { class: "card" }, el("h4", {}, "Questions from the intake agent"), el("ol", {}, questions.data.questions.map(q => el("li", {}, q)))) : null,
+    el("div", { class: "card" }, el("h4", {}, "Request"), el("div", { style: "white-space:pre-wrap" }, t.request)),
+    spec.problem ? el("div", { class: "card" }, el("h4", {}, "Ticket"), el("p", {}, spec.problem), el("ol", {}, (spec.acceptance_criteria || []).map(c => el("li", {}, c)))) : null,
+    ...rounds,
+    el("div", { class: "card" }, el("h4", {}, "Live activity"), keep || el("div", { class: "feed" })),
+    ["ready", "awaiting_merge", "merging", "done"].includes(t.state) || (data.rounds || []).length ? el("div", { class: "card" }, el("h4", {}, "Change"),
+      diffs[t.id] !== undefined ? diffView(diffs[t.id]) : el("button", { onclick: async ev => { diffs[t.id] = (await api(`/api/tickets/${t.id}/diff`)).diff; ev.target.replaceWith(diffView(diffs[t.id])); } }, "Show diff")) : null,
+    el("div", { class: "card" }, el("h4", {}, "History"), el("div", { class: "feed" , style: "max-height:220px" },
+      t.events.map(e => el("div", {}, el("span", { class: "k" }, `${new Date(e.at * 1000).toLocaleString()} ${e.actor} `), `${e.kind} ${e.data.to ? "→ " + e.data.to : ""} ${e.data.reason || e.data.error || ""}`))))));
+  await feed(t.id);
+}
+
+function diffView(text) {
+  if (!text) return el("div", { class: "empty" }, "No diff available yet.");
+  return el("pre", { class: "diff" }, text.split("\n").map(line => el("span", { class: line.startsWith("+++") || line.startsWith("---") || line.startsWith("@@") ? "h" : line.startsWith("+") ? "a" : line.startsWith("-") ? "d" : "" }, line + "\n")));
+}
+
+async function feed(id) {
+  const box = document.querySelector(".feed");
+  if (feedFor !== id) { box.replaceChildren(); feedAfter = 0; feedFor = id; }
+  const events = await api(`/api/tickets/${id}/events?after=${feedAfter}`);
+  for (const e of events) {
+    feedAfter = e.seq;
+    if (e.kind !== "agent") continue;
+    box.append(el("div", {}, el("span", { class: "k" }, `${e.actor} #${e.data.step} ${e.data.kind} `), e.data.text));
+  }
+  if (events.length) box.scrollTop = box.scrollHeight;
+}
+
+document.getElementById("new").onsubmit = async ev => {
+  ev.preventDefault();
+  const request = document.getElementById("request");
+  try { const t = await api("/api/tickets", { repo: document.getElementById("repo").value, request: request.value }); request.value = ""; select(t.id); }
+  catch (e) { alert(e.message); }
+};
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>
