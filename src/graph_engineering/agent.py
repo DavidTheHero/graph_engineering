@@ -107,16 +107,23 @@ class Agent:
         if self.on_step:
             self.on_step({"step": step, "kind": kind, "text": text[:400]})
 
-    def compact(self, messages: list) -> None:
-        """Clear the oldest tool results first, keeping the latest ten, then if needed the latest three."""
+    def compact(self, messages: list, seen: dict | None = None) -> None:
+        """Clear the oldest tool results first, keeping the latest ten, then if needed the latest three.
+
+        A cleared result is forgotten by the repeat guard too, so the agent may make that call again."""
         size = sum(len(json.dumps(m)) for m in messages)
+        cleared = set()
         for keep in (10, 3):
             for message in [m for m in messages if m["role"] == "tool"][:-keep]:
                 if size <= self.history_chars:
-                    return
+                    break
                 if not message["content"].startswith("[elided"):
                     size -= len(json.dumps(message["content"])) - 70
                     message["content"] = "[elided to save context; repeat the call if you still need it]"
+                    cleared.add(message.get("tool_call_id"))
+        if seen is not None and cleared:
+            for signature in [s for s, (_, call_id) in seen.items() if call_id in cleared]:
+                del seen[signature]
 
     def read_notes(self) -> str:
         return self.notes.read_text()[:NOTES_CHARS] if self.notes and self.notes.exists() else ""
@@ -155,14 +162,14 @@ class Agent:
         specs = self.workspace.specs(self.tools) + extra + [self.finish]
         allowed = self.tools
         idle = repeats = since_change = 0
-        seen: dict[str, int] = {}
+        seen: dict[str, tuple[int, str]] = {}   # call signature -> (step, tool call id) of results still in context
         try:
             for step in range(1, self.max_steps + 1):
                 outcome.steps = step
                 if self.cancelled():
                     outcome.status = "cancelled"
                     break
-                self.compact(messages)
+                self.compact(messages, seen)
                 if self.size(messages) > self.history_chars:
                     messages = self.summarise(messages, specs, task, step)
                     seen.clear()
@@ -240,9 +247,9 @@ class Agent:
         signature = name + json.dumps(args, sort_keys=True)
         if signature in seen:
             self.emit(step, "repeat", name)
-            return (f"You already made this exact call at step {seen[signature]} and nothing has changed since, so the result "
+            return (f"You already made this exact call at step {seen[signature][0]} and nothing has changed since, so the result "
                     "is the same. Use what you have and take the next step.")
-        seen[signature] = step
+        seen[signature] = (step, call["id"])
         if name == "update_notes" and self.notes:
             self.notes.write_text(str(args.get("content", ""))[:NOTES_CHARS])
             self.emit(step, "notes", str(args.get("content", ""))[:400])

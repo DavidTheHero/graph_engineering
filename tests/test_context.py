@@ -71,6 +71,26 @@ class Context(unittest.TestCase):
         self.assertEqual(agent.compactions, 0)
         self.assertTrue(any(m.get("content", "").startswith("[elided") for m in llm.requests[-1]["messages"] if m["role"] == "tool"))
 
+    def test_a_cleared_result_may_be_requested_again(self):
+        """Live failure: clearing said 'repeat the call', the repeat guard refused it, the run ended as looping."""
+        (self.repo / "mid.txt").write_text("\n".join("z" * 1000 for _ in range(4)))
+        steps = 0
+
+        def script(role, messages):
+            nonlocal steps
+            steps += 1
+            if steps <= 12:
+                return [call("read_file", path="mid.txt", start_line=1, end_line=100 + steps)]
+            if steps == 13:
+                return [call("read_file", path="mid.txt", start_line=1, end_line=101)]  # the first read, long cleared
+            return [call("finish", summary="s", coverage=[])]
+
+        agent, llm = self.agent(script, working_tokens=12000, max_steps=20)
+        outcome = agent.run("task")
+        self.assertEqual(outcome.status, "done")
+        replies = [m["content"] for m in llm.requests[-1]["messages"] if m["role"] == "tool"]
+        self.assertTrue(replies[-1].startswith("mid.txt"), replies[-1][:80])
+
     def test_explore_returns_only_the_answer(self):
         questions = []
 
