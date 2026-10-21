@@ -4,13 +4,13 @@ from contextvars import copy_context
 from threading import Event
 import uuid
 
-from .repository import run_check
+from .repository import run_check, test_environment
 
 
 def parallel_checks(flow,state,path):
     commands=[state['config']['test_command'],*state['config']['build_commands']]
     if len(commands)>4: raise ValueError('Parallel quality supports at most four explicitly configured independent commands')
-    cancelled=Event();results={};children={};pending={}
+    cancelled=Event();results={};children={};pending={};env=test_environment(state['config'])
     with ThreadPoolExecutor(max_workers=len(commands)) as pool:
         for index,argv in enumerate(commands):
             child=f'{flow.run_id}-quality-{uuid.uuid4().hex[:8]}'
@@ -19,7 +19,7 @@ def parallel_checks(flow,state,path):
                 'child_task_id':child,'source':'test_execution','destination':'child:'+child,
                 'agent_id':'regression-runner' if index==0 else 'build-runner','argv':argv,'status':'running'})
             future=pool.submit(copy_context().run,run_check,path,argv,state['config']['trusted_local'],
-                               state['config']['command_timeout'],cancelled.is_set)
+                               state['config']['command_timeout'],cancelled.is_set,env)
             pending[future]=index
         while pending:
             if flow.cancelled(): cancelled.set()

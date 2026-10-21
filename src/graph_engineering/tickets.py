@@ -189,7 +189,8 @@ class Tickets:
                 if ticket['lease_owner']: raise ValueError('An active worker cannot be retried')
                 if ticket['status'] not in ('blocked','cancelled','escalated','failed'): raise ValueError('Only unresolved executions may be retried')
                 if ticket['retries'] >= ticket['max_retries']: raise ValueError('Retry budget exhausted')
-                state = ticket['state']; state.pop('error', None); state.pop('infrastructure_failures', None)
+                state = ticket['state']; previous_error = state.pop('error', None); state.pop('infrastructure_failures', None)
+                previous_message = str(previous_error.get('message', '') if isinstance(previous_error, dict) else previous_error or '')
                 state.setdefault('attempts', {})[f"{ticket['node']}:{state.get('repairs',0)}"] = 0
                 if state['config'].get('run_mode')=='intake':
                     state['attempts']={key:0 if key.startswith(ticket['node']+':') else count for key,count in state['attempts'].items()}
@@ -198,6 +199,13 @@ class Tickets:
                     retry_node='regression_authoring'
                     state['regression_review_round']=0
                     state['attempts'][f"{retry_node}:{state.get('repairs',0)}"] = 0
+                elif retry_node=='regression_validation' and previous_message.startswith('Regression repair budget exhausted'):
+                    # Re-running a rejected test cannot succeed: write a new one, keeping the rejection feedback.
+                    retry_node='regression_authoring'
+                    state.update(regression_review_round=0,regression_validation_round=0)
+                    state.pop('regression',None);state.pop('regression_review',None)
+                    state['attempts']={key:0 if key.split(':')[0] in ('regression_authoring','regression_review','regression_validation') else count
+                                       for key,count in state['attempts'].items()}
                 self.db.execute('UPDATE runs SET node=?,status=?,cancel=0,state=? WHERE id=?',
                                 (retry_node,'ready',json.dumps(state),run_id))
                 updates = {'retries':ticket['retries']+1, 'paused':False,

@@ -50,7 +50,8 @@ def test_environment(config: dict) -> dict[str, str]:
     interpreter = python_interpreter(config.get("python_environment"))
     if interpreter is not None:
         env["PATH"] = str(interpreter.parent) + os.pathsep + env.get("PATH", "")
-        env["VIRTUAL_ENV"] = str(interpreter.parent.parent)
+        if (interpreter.parent.parent / "pyvenv.cfg").is_file():  # Only a real virtual environment.
+            env["VIRTUAL_ENV"] = str(interpreter.parent.parent)
     return env
 
 

@@ -66,7 +66,13 @@ def set_python_environment(tickets, repo_id, interpreter):
     value = str(Path(interpreter).absolute()) if interpreter else None
     python_interpreter(value)
     if value:  # The interpreter must actually start.
-        probe = subprocess.run([value, '-c', 'import sys; print(sys.version.split()[0])'], capture_output=True, text=True, timeout=20)
+        # Startup hooks in its site-packages (.pth, sitecustomize) are repository-controlled code: no controller
+        # secrets in the environment, isolated mode, and a neutral working directory.
+        from .repository import clean_environment
+        import tempfile
+        with tempfile.TemporaryDirectory() as neutral:
+            probe = subprocess.run([value, '-I', '-c', 'import sys; print(sys.version.split()[0])'], capture_output=True, text=True,
+                                   timeout=20, env=clean_environment(), cwd=neutral)
         if probe.returncode: raise ValueError('python_environment interpreter failed to start')
     path = Path(repo['config_path']); config = json.loads(path.read_text(encoding='utf-8-sig'))
     if value: config['python_environment'] = value
