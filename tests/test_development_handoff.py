@@ -462,6 +462,73 @@ class DevelopmentHandoffTests(unittest.TestCase):
         self.assertEqual((kinds.count('review_reconsidered'),kinds.count('review_reconsideration_failed')),(1,1))
         self.assertEqual(run['state']['review']['findings'][0]['message'],'The test still fails: actual undefined')  # The first answer stood.
 
+    def test_accepted_plan_may_name_a_source_file_outside_the_evidence_bundle(self):
+        """GE-FDD2275A: the planner chose backend/app.js (the API routes), which the investigation bundle lacked."""
+        from graph_engineering.report_commands import act as _act
+        (self.repo/'routes.py').write_text("ROUTES = {}\n")  # Unrelated to calc: never in the evidence bundle.
+        git(self.repo,'add','.');git(self.repo,'commit','-m','routes')
+        self.tickets.store.db.execute("UPDATE runs SET state=json_set(state,'$.base_sha',?) WHERE id=?",(git(self.repo,'rev-parse','HEAD').strip(),self.run['id']))
+        self.tickets.store.db.commit()
+        class OutsideBundle(DevelopmentDouble):
+            def invoke(self,role,*args,**kwargs):
+                result=super().invoke(role,*args,**kwargs)
+                if role=='planning':result['content']['files']=['calc.py','routes.py']
+                return result
+        _act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'outside-start-1')
+        flow=Workflow(self.home);flow.worker=OutsideBundle()
+        try:run=flow.execute(self.run['id'],until='model_selection')
+        finally:flow.store.close()
+        self.assertNotIn('routes.py',[f['path'] for f in run['state']['bundle']['files']])
+        self.assertEqual(run['state']['plan']['files'],['calc.py','routes.py'],run['state'].get('error'))
+        # A frozen test or a path that is not source is still refused, with the reason named.
+        class Bad(DevelopmentDouble):
+            def invoke(self,role,*args,**kwargs):
+                result=super().invoke(role,*args,**kwargs)
+                if role=='planning':result['content']['files']=['calc.py','missing.py']
+                return result
+        flow=Workflow(self.home);flow.worker=Bad()
+        try:
+            self.tickets.store.db.execute("UPDATE runs SET node='task_planning',status='ready' WHERE id=?",(self.run['id'],));self.tickets.store.db.commit()
+            with self.assertRaisesRegex(ValueError,r'missing\.py \(not a repository source file\)'):
+                flow.run_id=self.run['id'];flow.node_task_planning(flow.store.get(self.run['id'])['state'])
+        finally:flow.store.close()
+
+    def test_accepted_plan_refuses_runner_config_frozen_oversized_and_missing_files_with_feedback(self):
+        """Review of PR #18: refusals carry reasons, happen at planning, and reach the planner on its next attempt."""
+        from graph_engineering.report_commands import act as _act
+        from graph_engineering.workflow import plannable_refusals,RUNNER_CONFIG
+        for name in ('conftest.py','frontend/vite.config.js','jest.setup.ts','scripts/run.sh','setup.py','src/setupTests.js'):
+            self.assertTrue(RUNNER_CONFIG.search(name),name)
+        for name in ('backend/app.js','src/config.js','frontend/src/App.jsx','backend/setup_routes.py'):
+            self.assertFalse(RUNNER_CONFIG.search(name),name)
+        _act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'refuse-start-1')
+        flow=Workflow(self.home);flow.worker=DevelopmentDouble()
+        try:
+            state=flow.execute(self.run['id'],until='task_planning')['state']
+            base=Path(state.get('baseline_path') or state['config']['repo'])
+            (base/'conftest.py').write_text('x=1\n')
+            state=state|{'repository':state['repository']|{'source_files':state['repository']['source_files']+['conftest.py']}}
+            self.assertEqual(plannable_refusals(state,['conftest.py','calc.py','nope.py']),
+                             {'conftest.py':'test-runner, build or shell configuration','nope.py':'missing from the checkout'})
+            class Planner(DevelopmentDouble):
+                def __init__(self,files):super().__init__();self.files=files;self.prompt=None
+                def invoke(self,role,*args,**kwargs):
+                    result=super().invoke(role,*args,**kwargs)
+                    if role=='planning':self.prompt=json.loads(args[0]);result['content']['files']=self.files
+                    return result
+            frozen_test=next(iter(state['frozen']))
+            for files,reason in ((['calc.py','conftest.py'],r'conftest\.py \(test-runner, build or shell configuration\)'),
+                                 ([frozen_test],'a frozen test or policy file')):
+                flow.worker=Planner(files)
+                with self.assertRaisesRegex(ValueError,reason):flow.node_task_planning(state)
+            (base/'calc.py').write_text((base/'calc.py').read_text()+'#'*200000+'\n')
+            flow.worker=Planner(['calc.py'])
+            with self.assertRaisesRegex(ValueError,'over the implementation model'):
+                flow.node_task_planning(state|{'last_error':{'message':'Plan requests unapproved or incomplete source files: x'}})
+            self.assertIn('Your previous plan was refused',flow.worker.prompt['rejected_plan'])
+            self.assertIsInstance(flow.worker.prompt['repository_source_files'],list)
+        finally:flow.store.close()
+
     def test_github_publication_follows_the_repository_pr_convention(self):
         """Branch <type>/<issue>-<slug>, body with Closes #N and Change / Validation / Review sections (General_AI_Agent's PR policy)."""
         from graph_engineering.workflow import publication_branch,publication_body
