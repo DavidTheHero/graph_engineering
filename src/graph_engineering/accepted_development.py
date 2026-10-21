@@ -9,7 +9,7 @@ import shutil
 
 from . import routing
 from .investigation import obj
-from .repository import discover,git,run_check,source_bundle,command
+from .repository import discover,git,run_check,source_bundle,command,test_environment
 from .runtime import digest
 
 REGRESSION_SCHEMA=obj({'content':{'type':'string','minLength':20,'maxLength':6000},
@@ -71,6 +71,13 @@ def registered_timeout(flow,state):
     return value if type(value) is int and 1<=value<=600 else state['config']['command_timeout']
 
 
+def registered_setting(flow,state,name):
+    """A repository-level setting from the current registration (None when absent)."""
+    row=flow.store.db.execute('SELECT config_path FROM registered_repositories WHERE id=?',(state['intake']['repository_id'],)).fetchone()
+    if not row or not Path(row[0]).is_file():return None
+    return json.loads(Path(row[0]).read_text(encoding='utf-8-sig')).get(name)
+
+
 def prepare_dependencies(flow,state,path):
     from .autonomy import current
     path=Path(path)
@@ -126,6 +133,8 @@ class AcceptedDevelopmentNodes:
         finally:tickets.store.close()
         discard_checkouts(self,path)
         config=state['config']|{'repo':str(path),'base':'graph-base','auto_merge':False,'command_timeout':registered_timeout(self,state)}
+        declared=registered_setting(self,state,'python_environment')
+        if declared:config['python_environment']=declared
         if config['backend']=='github':
             remote=git(Path(config['source_repo']),'remote','get-url','origin')
             if remote.removesuffix('.git').casefold()!=('https://github.com/'+config['slug']).casefold():raise ValueError('GitHub delivery remote must match the approved repository slug')
@@ -183,7 +192,7 @@ class AcceptedDevelopmentNodes:
     def node_regression_validation(self,state):
         if not state['regression_review']['approved']:raise ValueError('Independent regression review required')
         path=Path(state['baseline_path']);regression=state['regression'];install_regression(path,regression)
-        receipts=[run_check(path,regression['argv'],True,state['config']['command_timeout'],self.cancelled) for _ in range(2)]
+        receipts=[run_check(path,regression['argv'],True,state['config']['command_timeout'],self.cancelled,test_environment(state['config'])) for _ in range(2)]
         self.store.event(self.run_id,'regression_validation','regression_test_result',{'receipts':receipts,'graph_node':'regression_validation'})
         for receipt in receipts:
             if (receipt['passed'] or receipt['timed_out'] or receipt['empty_suite'] or

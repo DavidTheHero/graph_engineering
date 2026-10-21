@@ -15,7 +15,7 @@ from .models import ModelClient, ModelError, OpenCodeWorker, load_models, model_
 from . import routing
 from .routing import PROFILES as ROUTING_PROFILES
 from .publication import GitHubBackend, LocalBackend, merge_gate
-from .repository import Cancelled, Worktree, discover, git, run_check, source_bundle, tracked, validate_edits
+from .repository import Cancelled, Worktree, discover, git, run_check, source_bundle, tracked, validate_edits, python_interpreter, test_environment
 from .runtime import BusyError, RepoLock, Store, digest, redact, NODE_DEADLINE
 from .scheduling_policy import retry_delay
 from .investigation import InvestigationNodes, INVESTIGATION_CONTRACTS
@@ -269,6 +269,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         for name in ("trusted_local", "auto_merge", "allow_same_model_review"):
             if type(config.get(name)) is not bool:
                 raise ValueError(f"{name} must be a JSON boolean")
+        python_interpreter(config.get("python_environment"))  # Fails closed on an invalid declared interpreter.
         for name in ("auto_merge_paths", "protected_paths"):
             if not isinstance(config.get(name, []), list) or not all(isinstance(p, str) for p in config.get(name, [])):
                 raise ValueError(f"{name} must be an explicit string list")
@@ -525,9 +526,10 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             return metadata_check(path,state['repository'])
         config = state["config"]
         if config.get('run_mode')=='accepted_development':prepare_dependencies(self,state,path)
-        result=run_check(path, config["test_command"], config["trusted_local"], config["command_timeout"], self.cancelled)
+        env=test_environment(config)
+        result=run_check(path, config["test_command"], config["trusted_local"], config["command_timeout"], self.cancelled, env)
         if state.get('regression'):
-            regression=run_check(path,state['regression']['argv'],config['trusted_local'],config['command_timeout'],self.cancelled)
+            regression=run_check(path,state['regression']['argv'],config['trusted_local'],config['command_timeout'],self.cancelled,env)
             result.update(regression=regression,passed=result['passed'] and regression['passed'])
             result['output']+='\nFrozen accepted-ticket regression:\n'+regression['output']
         return result
@@ -711,7 +713,8 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             verification,builds = parallel_checks(self,state,path)
         else:
             verification = self.check(state, path)
-            builds = [run_check(path, argv, state["config"]["trusted_local"], state["config"]["command_timeout"], self.cancelled)
+            builds = [run_check(path, argv, state["config"]["trusted_local"], state["config"]["command_timeout"], self.cancelled,
+                                test_environment(state["config"]))
                       for argv in state["config"]["build_commands"]]
         verification["builds"] = builds
         verification["passed"] = verification["passed"] and all(b["passed"] for b in builds)

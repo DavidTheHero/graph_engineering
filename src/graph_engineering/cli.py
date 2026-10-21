@@ -110,6 +110,9 @@ def parser() -> argparse.ArgumentParser:
     repo_commands.add_parser("list", help="list registered repositories")
     repo_inspect = repo_commands.add_parser("inspect", help="detected ecosystems and commands; executes nothing")
     repo_inspect.add_argument("repository_id")
+    repo_python = repo_commands.add_parser("set-python", help="use an existing Python interpreter (e.g. the repo's .venv) for test runs")
+    repo_python.add_argument("repository_id")
+    repo_python.add_argument("interpreter", nargs="?", help="absolute path to python; omit to clear")
     ticket = commands.add_parser("ticket", help="create natural-language tickets")
     ticket_commands = ticket.add_subparsers(dest="ticket_command", required=True)
     ticket_create = ticket_commands.add_parser("create", help="persist a plain-language problem and queue investigation")
@@ -284,6 +287,8 @@ def _platform_command(args) -> int:
                                         "code execution needs explicit trust."})
         elif args.command == "repo" and args.repo_command == "list":
             _emit(repositories.repositories(tickets))
+        elif args.command == "repo" and args.repo_command == "set-python":
+            _emit(repositories.set_python_environment(tickets, args.repository_id, args.interpreter))
         elif args.command == "repo":
             _emit(repositories.inspect(tickets, args.repository_id))
         elif args.command == "ticket":

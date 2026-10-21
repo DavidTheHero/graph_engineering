@@ -8,7 +8,7 @@ import re
 
 from . import routing
 from .adapters import CODE_SUFFIXES, DOC_SUFFIXES
-from .repository import command, discover, git, run_check
+from .repository import command, discover, git, run_check, test_environment
 from .report_store import report, revision
 from .runtime import digest, redact
 
@@ -282,7 +282,7 @@ class InvestigationNodes:
             tickets=Tickets(self.root)
             try:path=_snapshot(tickets,Path(state['config']['source_repo']),state['base_sha'])
             finally:tickets.store.close()
-            result=run_check(path,state['config']['test_command'],True,state['config']['command_timeout'],self.cancelled)|{'executed':True,'commit':state['base_sha']}
+            result=run_check(path,state['config']['test_command'],True,state['config']['command_timeout'],self.cancelled,test_environment(state['config']))|{'executed':True,'commit':state['base_sha']}
             result['worktree_clean']=not bool(git(path,'status','--porcelain'))
             if not result['worktree_clean']:result.update(passed=False,limitation='Repository test modified its isolated snapshot')
         return {'reproduction':result},'finding_validation','ready'
