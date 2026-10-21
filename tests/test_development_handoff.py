@@ -460,6 +460,44 @@ class DevelopmentHandoffTests(unittest.TestCase):
         self.assertEqual((kinds.count('review_reconsidered'),kinds.count('review_reconsideration_failed')),(1,1))
         self.assertEqual(run['state']['review']['findings'][0]['message'],'The test still fails: actual undefined')  # The first answer stood.
 
+    def test_github_publication_follows_the_repository_pr_convention(self):
+        """Branch <type>/<issue>-<slug>, body with Closes #N and Change / Validation / Review sections (General_AI_Agent's PR policy)."""
+        from graph_engineering.workflow import publication_branch,publication_body
+        state={'triage':{'category':'feature'},'candidate':{'title':'Feature Request: Display & Select Current AI Model in Chat Interface!'},
+               'patch':{'summary':'Expose the model name.'},'plan':{'files':['backend/agent.js','backend/llm.js'],'adapted_tests':['backend/tests/agent.test.js']},
+               'head':'f'*40,'base_sha':'0'*40,'regression':{'path':'backend/tests/graph_x.test.js'},
+               'verification':{'passed':True},'review':{'decision':'approve','rationale':'Correct.','model':'b'}}
+        self.assertEqual(publication_branch(state,17),'feat/17-feature-request-display-select-current-ai-model')
+        self.assertEqual(publication_branch(state|{'triage':{'category':'bug'},'candidate':{'title':'!!!'}},3),'fix/3-change')
+        body=publication_body(state,17)
+        for needle in ('Closes #17','## Change','## Validation','## Review','backend/tests/agent.test.js','passes at the tested head','approve'):
+            self.assertIn(needle,body)
+        self.assertLess(body.index('## Change'),body.index('## Validation'))
+        # Review of PR #15: the node wires the convention through the GitHub backend, chooses the published name once
+        # (durable effect), and takes a suffixed name when a branch of that name with other history exists.
+        class FakeGitHub:
+            kind='github'
+            def __init__(self,taken=None):self.taken=taken;self.calls=[]
+            def remote_branch_head(self,name):self.calls.append(('head',name));return self.taken
+            def ensure_pr(self,key,title,body,branch,head,remote_branch=None):
+                self.calls.append(('ensure_pr',branch,remote_branch));return {'number':18,'url':'u','key':key,'head':head,'branch':remote_branch}
+            def reconcile_pr(self,key,branch,head,remote_branch=None):self.calls.append(('reconcile',remote_branch));return {'number':18,'url':'u','key':key,'head':head,'branch':remote_branch}
+            def publish_review(self,number,body):return {'id':1}
+            def record_check(self,number,head,passed):return {'recorded':True}
+        full=state|{'issue':{'number':17},'fingerprint':'fp','branch':'graph/run1'}
+        for taken,expected in ((None,'feat/17-feature-request-display-select-current-ai-model'),('f'*40,'feat/17-feature-request-display-select-current-ai-model'),
+                               ('b'*40,'feat/17-feature-request-display-select-current-ai-model-'+self.run['id'][:6])):
+            fake=FakeGitHub(taken)
+            flow=Workflow(self.home);flow.run_id=self.run['id']
+            try:
+                with patch.object(Workflow,'backend',return_value=fake):
+                    updates,node,status=flow.node_pull_request_creation(full)
+                    self.assertEqual((updates['pr']['branch'],node),(expected,'ci_policy_verification'))
+                    self.assertIn(('ensure_pr','graph/run1',expected),fake.calls)
+                    self.assertEqual(flow.store.effect(self.run['id'],'remote_branch',lambda:{'name':'other'})['name'],expected)  # Chosen once.
+                flow.store.db.execute("DELETE FROM effects WHERE run_id=? AND key IN ('remote_branch','pr','review_comment','test_status')",(self.run['id'],));flow.store.db.commit()
+            finally:flow.store.close()
+
     def test_fragment_edits_reject_ambiguous_matches_and_outside_paths(self):
         from graph_engineering.accepted_development import materialize_hunks
         for edits in ([{'path':'../owned.py','old':'a','new':'b'}],[{'path':'calc.py','old':'a','new':'b'}]):

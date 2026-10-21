@@ -344,7 +344,20 @@ class GitHubBackend:
             result["key"] = key
         if "head" in item:
             result["head"] = item["head"]["sha"]
+            if item["head"].get("ref"):
+                result["branch"] = item["head"]["ref"]  # The name the change is published under.
         return result
+
+    def remote_branch_head(self, name):
+        """The commit a branch of that name points to on GitHub, or None when no such branch exists."""
+        _git(self.repo, "check-ref-format", f"refs/heads/{name}")
+        listed = _git(self.repo, "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential",
+                      "ls-remote", "--heads", f"https://github.com/{self.slug}.git", f"refs/heads/{name}")
+        for line in listed.splitlines():
+            sha, _, ref = line.partition("\t")
+            if ref.strip() == f"refs/heads/{name}":
+                return _head(sha.strip())
+        return None
 
     def _matches(self, collection, key, branch=None):
         marker = _marker(key)
@@ -394,13 +407,14 @@ class GitHubBackend:
             raise PublicationError("Uncertain issue outcome; no unique observed issue, refusing creation. Resume after remote visibility is confirmed")
         return self._brief(matches[0], key)
 
-    def reconcile_pr(self, key, branch, head):
-        matches = self._matches("pulls", key, branch)
+    def reconcile_pr(self, key, branch, head, remote_branch=None):
+        published = remote_branch or branch
+        matches = self._matches("pulls", key, published)
         if len(matches) != 1:
             raise PublicationError("Uncertain PR outcome; no unique observed PR, refusing creation")
         item = matches[0]
         if (_marker(key) not in (item.get("body") or "") or item["head"]["sha"] != head
-                or item["head"]["ref"] != branch or item["base"]["ref"] != self.base):
+                or item["head"]["ref"] != published or item["base"]["ref"] != self.base):
             raise PublicationError("Reconciled PR has conflicting ownership/base/head")
         return self._brief(item, key)
 
@@ -419,14 +433,19 @@ class GitHubBackend:
             payload["state"] = state
         return self._api(f"{self.prefix}/issues/{int(number)}", "PATCH", payload)
 
-    def ensure_pr(self, key, title, body, branch, head):
+    def ensure_pr(self, key, title, body, branch, head, remote_branch=None):
+        """``remote_branch``: the name the tested local ``branch`` is published under (a repository's branch
+        convention such as ``feat/17-model-name``); the PR head is that name."""
         _head(head)
         _git(self.repo, "check-ref-format", "--branch", branch)
-        matches = self._matches("pulls", key, branch)
+        published = remote_branch or branch
+        if published != branch:
+            _git(self.repo, "check-ref-format", f"refs/heads/{published}")  # A full ref name: no shorthand expansion.
+        matches = self._matches("pulls", key, published)
         if matches:
             item = matches[0]
             if (_marker(key) not in (item.get("body") or "") or item["head"]["sha"] != head
-                    or item["head"]["ref"] != branch or item["base"]["ref"] != self.base):
+                    or item["head"]["ref"] != published or item["base"]["ref"] != self.base):
                 raise PublicationError("existing PR belongs to another task/base/head")
             return self._brief(item, key)
         if _git(self.repo, "rev-parse", "--verify", f"refs/heads/{branch}") != head:
@@ -439,13 +458,18 @@ class GitHubBackend:
                                   r"^url\..*\.(insteadof|pushinsteadof)$"], capture_output=True, text=True, timeout=10,**background_options())
         if rewrites.returncode not in (0, 1) or rewrites.stdout.strip():
             raise PublicationError("Git URL rewrite configuration requires manual publication")
+        if published != branch:
+            existing = self.remote_branch_head(published)
+            if existing not in (None, head):  # A person's branch of the same name: never pushed over, named clearly.
+                raise PublicationError(f"remote branch {published} already exists with other history ({existing[:12]}); "
+                                       "it is not touched, choose another published name")
         _git(self.repo, "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential",
-             "push", "--porcelain", f"https://github.com/{self.slug}.git", f"refs/heads/{branch}:refs/heads/{branch}")
+             "push", "--porcelain", f"https://github.com/{self.slug}.git", f"refs/heads/{branch}:refs/heads/{published}")
         try:
             item = self._api(f"{self.prefix}/pulls", "POST", dict(
-                title=title, body=body + "\n\n" + _marker(key), head=branch, base=self.base))
+                title=title, body=body + "\n\n" + _marker(key), head=published, base=self.base))
         except PublicationError:
-            matches = self._matches("pulls", key, branch)
+            matches = self._matches("pulls", key, published)
             if not matches:
                 raise
             item = matches[0]
