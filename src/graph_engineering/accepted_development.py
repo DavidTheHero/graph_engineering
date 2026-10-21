@@ -126,6 +126,15 @@ def current_environment(config,registration):
     return config|({'python_environment':registration['python_environment']} if registration.get('python_environment') else {})
 
 
+def policy_budgets(flow,state):
+    """The repository policy's current development budgets (bounded by BUDGETS), empty when the policy is off.
+    Applied at every accepted-development step, not only at setup: a budget raised while a run is stuck must count."""
+    from .autonomy import BUDGETS, current
+    setting=current(flow,state)
+    if not setting['development']:return {}
+    return {k:max(BUDGETS[k][0],min(BUDGETS[k][1],int(setting[k]))) for k in ('max_repairs','max_node_attempts')}
+
+
 def registered_config(flow,state):
     """The repository's current registration configuration (None when the registration is gone)."""
     row=flow.store.db.execute('SELECT config_path FROM registered_repositories WHERE id=?',(state['intake']['repository_id'],)).fetchone()
@@ -214,7 +223,10 @@ def guard_hidden_tail(content,old):
             raise ValueError('An old fragment ends inside a long line whose remainder may have been shown shortened; end that old line with the "…[line truncated]" marker (and its replacement too) to keep the remainder, or anchor on complete lines')
 
 
-def materialize_hunks(path,patch,allowed):
+def materialize_hunks(path,patch,allowed,skipped=None):
+    """``skipped`` (a list, when given) receives the edits whose replacement text is already present exactly once
+    while the old fragment is absent: the edit was applied in an earlier proposal of this round (GE-30D05C40: the
+    27B re-proposed the ``model`` key its previous proposal had added, anchored on the line as it no longer was)."""
     result={}
     for edit in patch['edits']:
         name=edit['path']
@@ -223,11 +235,15 @@ def materialize_hunks(path,patch,allowed):
         if target.is_symlink() or Path(path).resolve() not in target.resolve().parents:raise ValueError('Replacement path escapes worktree')
         content=result.get(name,target.read_text(encoding='utf-8'))
         old,new=expand_shortened_lines(content,edit['old'],edit['new'])
-        if content.count(old)!=1:
+        matches=content.count(old)
+        if matches==0 and skipped is not None and new.strip() and content.count(new)==1:
+            skipped.append({'path':name,'new':edit['new'][:160]});continue
+        if matches!=1:
             # The model can only correct what it is told: the file, the match count and the fragment (GE-30D05C40: the
             # 27B anchored on a line the previous round had already changed and was told only "exactly one").
-            raise ValueError('Replacement requires exactly one matching source fragment: %s has %d matches for %r; the file content shown is current, anchor on it'
-                             %(name,content.count(old),edit['old'][:160]))
+            shown=edit['old'][:160]+(' …(first 160 of %d characters)'%len(edit['old']) if len(edit['old'])>160 else '')
+            raise ValueError('Replacement requires exactly one matching source fragment: %s has %d matches for the fragment between <<< and >>>: '
+                             '<<<%s>>>; the file content shown to you is current, anchor on it'%(name,matches,shown))
         guard_hidden_tail(content,old)
         result[name]=content.replace(old,new,1)
     return [{'path':name,'content':content} for name,content in result.items()]
@@ -245,10 +261,7 @@ class AcceptedDevelopmentNodes:
         discard_checkouts(self,path)
         config=state['config']|{'repo':str(path),'base':'graph-base','auto_merge':False,'command_timeout':registered_timeout(self,state)}
         config=current_environment(config,registered_config(self,state))
-        from .autonomy import BUDGETS, current
-        setting=current(self,state)
-        if setting['development']:  # The policy owns the budgets of autonomous development (bounded by BUDGETS).
-            config|={k:max(BUDGETS[k][0],min(BUDGETS[k][1],int(setting[k]))) for k in ('max_repairs','max_node_attempts')}
+        config|=policy_budgets(self,state)
         if config['backend']=='github':
             remote=git(Path(config['source_repo']),'remote','get-url','origin')
             if remote.removesuffix('.git').casefold()!=('https://github.com/'+config['slug']).casefold():raise ValueError('GitHub delivery remote must match the approved repository slug')

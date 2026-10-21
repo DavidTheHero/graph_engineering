@@ -358,10 +358,11 @@ class DevelopmentHandoffTests(unittest.TestCase):
         self.tickets.store.db.execute("UPDATE runs SET state=json_set(state,'$.base_sha',?) WHERE id=?",(git(self.repo,'rev-parse','HEAD').strip(),self.run['id']))
         self.tickets.store.db.commit()
         class Narrowing(DevelopmentDouble):
-            def __init__(self):super().__init__();self.plans=0;self.implementations=0;self.last_planning_prompt=None;self.rejections=[]
+            def __init__(self):super().__init__();self.plans=0;self.implementations=0;self.last_planning_prompt=None;self.rejections=[];self.current=[]
             def invoke(self,role,*args,**kwargs):
                 result=super().invoke(role,*args,**kwargs)
-                if role=='implementation':self.rejections.append('rejected_proposal' in json.loads(args[0]))
+                if role=='implementation':
+                    prompt=json.loads(args[0]);self.rejections.append('rejected_proposal' in prompt);self.current.append(prompt.get('current_edits',{}).get('diff',''))
                 if role=='planning':
                     self.last_planning_prompt=args[0]
                     self.plans+=1;result['content']['files']=['calc.py','util.py'] if self.plans==1 else ['calc.py']
@@ -387,14 +388,24 @@ class DevelopmentHandoffTests(unittest.TestCase):
         widened=json.loads(flow.worker.last_planning_prompt)
         self.assertIn('note',widened['previous_attempt'])
         self.assertEqual((flow.worker.rejections,run['state'].get('last_error')),([True,False],{}))
+        self.assertEqual((flow.worker.current[0],'# touched' in flow.worker.current[1]),('',True))  # The second proposal sees the first's edits.
 
     def test_fragment_edits_reject_ambiguous_matches_and_outside_paths(self):
         from graph_engineering.accepted_development import materialize_hunks
         for edits in ([{'path':'../owned.py','old':'a','new':'b'}],[{'path':'calc.py','old':'a','new':'b'}]):
             with self.assertRaises(ValueError):materialize_hunks(self.repo,{'edits':edits},['calc.py'])
         # GE-30D05C40: the refusal names the file, the match count and the fragment so the next proposal can correct it.
-        with self.assertRaisesRegex(ValueError,r"calc.py has 0 matches for 'return a\*b'"):
+        with self.assertRaisesRegex(ValueError,r"calc\.py has 0 matches for the fragment between <<< and >>>: <<<return a\*b>>>"):
             materialize_hunks(self.repo,{'edits':[{'path':'calc.py','old':'return a*b','new':'return a+b'}]},['calc.py'])
+        with self.assertRaisesRegex(ValueError,r"first 160 of 200 characters"):
+            materialize_hunks(self.repo,{'edits':[{'path':'calc.py','old':'z'*200,'new':'y'}]},['calc.py'])
+        # An edit whose replacement is already in the file (applied by an earlier proposal this round) is skipped, not refused.
+        skipped=[]
+        out=materialize_hunks(self.repo,{'edits':[{'path':'calc.py','old':'return a+b','new':'return a-b'},{'path':'calc.py','old':'def add','new':'def add'}]},['calc.py'],skipped)
+        self.assertEqual([s['path'] for s in skipped],['calc.py'])
+        self.assertEqual(out[0]['path'],'calc.py')  # The second edit (old == new, present once) still applies as a no-op.
+        with self.assertRaises(ValueError):  # Without the skip list the refusal stands.
+            materialize_hunks(self.repo,{'edits':[{'path':'calc.py','old':'return a+b','new':'return a-b'}]},['calc.py'])
 
     def test_partial_dependency_directory_does_not_count_as_success(self):
         from graph_engineering.accepted_development import prepare_dependencies

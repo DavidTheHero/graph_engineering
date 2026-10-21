@@ -138,7 +138,12 @@ ended with a person pressing Retry. The repository autonomy policy now owns reco
 
 * **Budgets.** With `development` on, `max_repairs` and `max_node_attempts` (1–4 each) come from the
   policy; accepted-development nodes use that attempt budget directly, and the regression authoring
-  and review rounds scale with it.
+  and review rounds scale with it. The engine applies the policy's current budgets at every step
+  (`policy_budget_applied`), so a budget raised while a run is stuck counts at its next attempt.
+* **Proposals build on the round.** The implementer is shown the diff of edits earlier proposals of
+  the round already made (`current_edits`), an edit whose replacement text is already present is
+  skipped rather than refused (`edits_already_applied`), and a fragment refusal names the file, the
+  match count and the fragment.
 * **Recovery rounds.** A blocked or escalated development is retried automatically, with the restart
   the stop needs (re-author, fresh setup, re-plan), for `recovery_rounds` (0–6) rounds. Each round is
   an `autonomy_recovery` event; when the ticket's retry limit is exhausted the round extends it by one
