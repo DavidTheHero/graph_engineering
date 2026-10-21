@@ -145,10 +145,19 @@ def retrieve(repo,sha,keywords,original,files=()):
 
 
 def prompt_budget(config,role='root_investigation',schema=None):
-    """Bytes the strictest model permitted for ``role`` accepts (same rule as the worker), minus the schema."""
-    limits=[min(m.get('input_budget_bytes',40000),40000,max((m.get('context') or 100000)-m.get('output',4096)-2048,0))
-            for key in routing.candidates(config,role) for m in [config['models'][key]]]
-    return (min(limits) if limits else 40000)-len(json.dumps(PROPOSAL if schema is None else schema).encode())-256
+    """Bytes the model routed first for ``role`` accepts (the worker's own rule), minus the schema.
+
+    The first candidate is the one ``ask`` uses; a stricter fallback model must not shrink prompts
+    the preferred model accepts (a health-driven fallback is still checked by the worker itself)."""
+    try:
+        ordered=routing.candidates(config,role)
+    except routing.RoutingError:
+        ordered=[]
+    model=config['models'].get(ordered[0],{}) if ordered else {}
+    small=bool(ordered) and routing.tier_of(config['models'],ordered[0])==routing.SMALL
+    limit=min(model.get('input_budget_bytes',40000),12000 if small else 40000,
+              max((model.get('context') or 100000)-model.get('output',4096)-2048,0))
+    return limit-len(json.dumps(PROPOSAL if schema is None else schema).encode())-256
 
 
 def _size(prompt):

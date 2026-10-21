@@ -208,17 +208,24 @@ def fit_implementation_request(config: dict, request: dict) -> dict:
     planned files (edits must match their exact complete text). Too large planned files fail clearly."""
     from .investigation import _size, prompt_budget
     budget = prompt_budget(config, "implementation", HUNK_SCHEMA)
-    for key, keep in (("previous_failure", 1500), ("additional_information", None), ("previous_failure", 600)):
+    def tail(key, keep):  # Output tails, in order of decreasing usefulness.
+        return lambda r: r | {key: (r.get(key) or "")[-keep:]}
+    steps = [tail("previous_failure", 1500),
+             lambda r: r | {"evidence": r["evidence"] | {"failure_output": (r["evidence"].get("failure_output") or "")[-1500:]}},
+             lambda r: r | {"additional_information": [text[:300] for text in r.get("additional_information") or []]},
+             lambda r: r | {"review_feedback": {k: (v[:1500] if isinstance(v, str) else v) for k, v in (r.get("review_feedback") or {}).items()
+                                                if k in ("approved", "decision", "rationale", "findings")}},
+             lambda r: r | {"candidate": r["candidate"] | {"actual": (r["candidate"].get("actual") or "")[-1000:]}},
+             tail("previous_failure", 600),
+             lambda r: r | {"evidence": r["evidence"] | {"failure_output": (r["evidence"].get("failure_output") or "")[-600:]}}]
+    for step in steps:
         if _size(request) <= budget:
             return request
-        if key == "additional_information":
-            request = request | {key: [text[:300] for text in request.get(key) or []]}
-        else:
-            request = request | {key: request.get(key, "")[-keep:]}
-    if _size(request) > budget and isinstance(request["candidate"].get("actual"), str):
-        request = request | {"candidate": request["candidate"] | {"actual": request["candidate"]["actual"][-1000:]}}
+        request = step(request)
     if _size(request) > budget:
-        raise ValueError("Planned source files exceed the implementation model's input budget; split the task into smaller changes")
+        files = sum(len(f["content"]) for f in request["evidence"]["files"])
+        raise ValueError(f"Implementation prompt ({_size(request)} bytes, {files} of them planned source) exceeds the model's "
+                         f"input budget of {budget} bytes even with context shortened; split the task into smaller changes")
     return request
 
 
@@ -754,10 +761,9 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                    "evidence": evidence,
                    "previous_failure": state.get("verification", {}).get("output", "")[-4000:],
                    "review_feedback": state.get("review", {}),"additional_information":troubleshooting_context(state)}
-        if accepted:
-            request = fit_implementation_request(state["config"], request)
         def propose():
-            patch = self.ask(state, "implementation", request, HUNK_SCHEMA if accepted else PATCH_SCHEMA, routing.LARGE)
+            fitted = fit_implementation_request(state["config"], request) if accepted else request
+            patch = self.ask(state, "implementation", fitted, HUNK_SCHEMA if accepted else PATCH_SCHEMA, routing.LARGE)
             edits = validate_edits(path, materialize_hunks(path,patch,state['plan']['files']) if accepted else patch["files"], state["plan"]["files"])
             # The model that actually wrote the patch (routing may have fallen back since model_selection).
             return {"patch":patch,"edits":edits,"edits_hash":digest(edits),"model":self.last_model}

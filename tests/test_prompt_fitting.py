@@ -39,6 +39,25 @@ class PromptFittingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "split the task"):
             fit_implementation_request(CONFIG, too_big)
 
+    def test_log_inside_evidence_and_review_feedback_are_shortened_before_giving_up(self):
+        """Review of PR #7: a 31 KB planned file with a 6 KB bundle log must fit, not raise."""
+        evidence = {"files": [{"path": "a.js", "content": "x" * 31000, "complete": True}], "failure_output": "l" * 6000}
+        request = {"task": "t", "plan": {}, "candidate": {"actual": "a" * 500}, "evidence": evidence,
+                   "previous_failure": "f" * 4000, "review_feedback": {"approved": False, "rationale": "r" * 3000, "raw": "z" * 2000},
+                   "additional_information": []}
+        fitted = fit_implementation_request(CONFIG, request)
+        self.assertLessEqual(_size(fitted), prompt_budget(CONFIG, "implementation", HUNK_SCHEMA))
+        self.assertEqual(fitted["evidence"]["files"], evidence["files"])
+        self.assertLessEqual(len(fitted["evidence"]["failure_output"]), 1500)
+
+    def test_budget_follows_the_model_that_is_routed_first_not_the_strictest_fallback(self):
+        """Review of PR #7: a stricter fallback model must not shrink prompts the preferred model accepts."""
+        models = default_models() | {"c": default_models()["a"] | {"context": 32000, "label": "small-context large"}}
+        config = {"models": models, "routing": "assigned", "role_routes": {"implementation": ["a", "c"], "planning": ["a", "c"]}}
+        self.assertEqual(prompt_budget(config, "implementation", HUNK_SCHEMA), prompt_budget(CONFIG, "implementation", HUNK_SCHEMA))
+        reversed_routes = config | {"role_routes": {"implementation": ["c", "a"]}}
+        self.assertLess(prompt_budget(reversed_routes, "implementation", HUNK_SCHEMA), prompt_budget(CONFIG, "implementation", HUNK_SCHEMA))
+
 
 if __name__ == "__main__":
     unittest.main()
