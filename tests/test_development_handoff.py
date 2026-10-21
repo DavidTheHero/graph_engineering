@@ -390,6 +390,33 @@ class DevelopmentHandoffTests(unittest.TestCase):
         self.assertEqual((flow.worker.rejections,run['state'].get('last_error')),([True,False],{}))
         self.assertEqual((flow.worker.current[0],'# touched' in flow.worker.current[1]),('',True))  # The second proposal sees the first's edits.
 
+    def test_rejection_that_contradicts_the_passing_test_run_is_reconsidered_once(self):
+        """GE-30D05C40: the 9B reviewer read the pre-change baseline ("actual: undefined") as the current result and
+        rejected a passing change. The prompt now states the controller's run as facts; a rejection while the suite
+        passed is re-asked once with the contradiction, both answers recorded, the second decision standing."""
+        from graph_engineering.report_commands import act as _act
+        class MisreadingReviewer(DevelopmentDouble):
+            def __init__(self):super().__init__();self.prompts=[]
+            def invoke(self,role,*args,**kwargs):
+                if role!='review':return super().invoke(role,*args,**kwargs)
+                prompt=json.loads(args[0]);self.prompts.append(prompt)
+                if 'reconsider' in prompt:content={'decision':'approve','findings':[],'rationale':'The suite passed; the finding relied on the pre-change output.'}
+                else:content={'decision':'request_changes','findings':[{'severity':'critical','file':'calc.py','line':1,'message':'The test still fails: actual undefined'}],'rationale':'test fails'}
+                metric={'role':role,'success':True,'model_key':'b','model_id':'misreading-reviewer','latency_seconds':0}
+                self.metrics.append(metric);return {'content':content,'metrics':metric,'raw_path':'misreading-reviewer'}
+        _act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'reconsider-start-1')
+        flow=Workflow(self.home);worker=MisreadingReviewer();flow.worker=worker
+        try:run=flow.execute(self.run['id'])
+        finally:flow.store.close()
+        self.assertEqual(run['status'],'ready_for_delivery',run['state'].get('error'))
+        first,second=worker.prompts
+        self.assertEqual((first['verification']['full_suite_passed'],first['verification']['regression_test_passed']),(True,True))
+        self.assertTrue(first['output_before_change'].startswith('At the accepted commit, BEFORE this diff'))
+        self.assertNotIn('baseline_output',first);self.assertIn('test_output_after_change',first)
+        self.assertEqual(second['prior_review']['decision'],'request_changes')
+        self.assertEqual(run['state']['review']['prior_review']['findings'][0]['severity'],'critical')  # Kept for audit.
+        self.assertEqual([e['data']['second_decision'] for e in self.tickets.store.events(self.run['id']) if e['kind']=='review_reconsidered'],['approve'])
+
     def test_fragment_edits_reject_ambiguous_matches_and_outside_paths(self):
         from graph_engineering.accepted_development import materialize_hunks
         for edits in ([{'path':'../owned.py','old':'a','new':'b'}],[{'path':'calc.py','old':'a','new':'b'}]):
