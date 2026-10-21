@@ -46,6 +46,26 @@ class RunnerDetectionTests(unittest.TestCase):
             py = regression_runners({"repository": {"adapter": "python", "test_files": ["tests/test_a.py"]}, "baseline_path": folder, "config": {"repo": folder}}, "run1")
             self.assertEqual((py[0]["name"], py[0]["path"]), ("unittest", "tests/test_graph_run1.py"))
 
+    def test_the_example_is_the_test_that_imports_the_files_under_change(self):
+        from graph_engineering.accepted_development import relevant_example
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); (root / "backend" / "tests").mkdir(parents=True)
+            (root / "backend" / "tests" / "agent-loop.test.js").write_text('import { runAgentLoop } from "../agent-loop.js";\n')
+            (root / "backend" / "tests" / "api.test.js").write_text('import request from "supertest";\nimport { createApp } from "../app.js";\n// GET /health\n')
+            state = {"baseline_path": folder, "config": {"repo": folder}, "bundle": {"files": [{"path": "backend/app.js"}, {"path": "backend/llm.js"}]},
+                     "enhanced": {"acceptance_criteria": ["A GET /api/model endpoint returns the model"], "proposed_solution": ""}}
+            names = ["backend/tests/agent-loop.test.js", "backend/tests/api.test.js"]
+            self.assertEqual(relevant_example(state, names), "backend/tests/api.test.js")
+            self.assertEqual(relevant_example(state | {"bundle": {"files": []}, "enhanced": {}}, names), names[0])  # No signal: the first.
+            self.assertIsNone(relevant_example(state, []))
+            # The file name counts when the module it imports is not in the evidence (backend/app.js was not).
+            from graph_engineering.accepted_development import relevant_examples
+            unbundled = state | {"bundle": {"files": [{"path": "backend/llm.js"}]}}
+            (root / "backend" / "tests" / "agent.test.js").write_text('import { createModel } from "../llm.js";\n')
+            ranked = relevant_examples(unbundled, names + ["backend/tests/agent.test.js"])
+            self.assertEqual(ranked[0], "backend/tests/api.test.js")
+            self.assertEqual(len(ranked), 2)
+
     def test_example_test_never_follows_a_symlink(self):
         from graph_engineering.accepted_development import example_test
         with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as outside:
