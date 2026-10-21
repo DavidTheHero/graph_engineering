@@ -12,6 +12,8 @@ import subprocess
 NAME = re.compile(r"[A-Za-z0-9_.-]{1,64}")
 SLUG = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 TEST_FILES = r"(^|/)(tests?|__tests__)/|\.(test|spec)\.[cm]?[jt]sx?$|(^|/)test_[^/]*\.py$|_test\.(py|go)$"
+TEST_CONFIG = ("pytest.ini", "conftest.py", "*/conftest.py", "tox.ini", "noxfile.py", "jest.config.*", "*/jest.config.*",
+               "vitest.config.*", "*/vitest.config.*", "vitest.workspace.*", ".mocharc*", "karma.conf.*", "phpunit.xml*")
 GENERATED = ("node_modules/*", "*/node_modules/*", ".venv/*", "dist/*", "*/dist/*", "*.db", "*.sqlite", "*.sqlite3", ".env", ".env.*")
 
 
@@ -28,6 +30,7 @@ class Repo:
     test_file_pattern: str = TEST_FILES
     test_file_runners: list = field(default_factory=list)   # [{"pattern", "command" with {file}}]; else the full suite
     protected_paths: list = field(default_factory=lambda: [".github/*"])
+    test_config_paths: list = field(default_factory=lambda: list(TEST_CONFIG))   # decide which tests run: guarded
     trusted: bool = False                   # allow running without an OS sandbox
     auto_accept: bool = False               # tickets the intake agent marks ready start development without a person
     auto_publish: bool = True               # open the PR as soon as gates and review pass (merge always needs a person)
@@ -60,6 +63,9 @@ class Repo:
             if re.search(item["pattern"], path):
                 return item["command"].replace("{file}", shlex.quote(path))
         return None
+
+    def test_config(self, path: str) -> bool:
+        return any(fnmatch.fnmatch(path, pattern) for pattern in self.test_config_paths)
 
     def protected(self, path: str) -> bool:
         return any(fnmatch.fnmatch(path, pattern) for pattern in self.protected_paths)

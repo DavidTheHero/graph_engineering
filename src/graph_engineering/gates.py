@@ -1,6 +1,7 @@
 """The harness's own judgement of a workspace. Nothing here trusts what an agent said it did."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import platform
 import shutil
@@ -60,8 +61,27 @@ def checkout(work: Path, revision: str, target: Path, dependencies: list[str] | 
     return target
 
 
-def run_gates(repo: Repo, work: Path, base: str, sandbox: Sandbox, scratch: Path, dependencies: list[str] | None = None) -> dict:
-    """``dependencies``: the ignored directories setup installed; anything else untracked is left out of the checks."""
+def test_scripts(work: Path, revision: str) -> dict:
+    """The package.json scripts that run tests (test, test:*, pretest...) at a revision."""
+    try:
+        scripts = json.loads(git(work, "show", f"{revision}:package.json")).get("scripts", {})
+    except (RuntimeError, ValueError):
+        return {}
+    return {k: v for k, v in scripts.items() if "test" in k}
+
+
+def test_configuration(repo: Repo, work: Path, base: str, commit: str, rows: list) -> list[str]:
+    """Changes to what decides which tests run. The agent must not be able to make the gate easier."""
+    changed = [p for s, p in rows if repo.test_config(p)]
+    if any(p == "package.json" for _, p in rows) and test_scripts(work, base) != test_scripts(work, commit):
+        changed.append("package.json test scripts")
+    return changed
+
+
+def run_gates(repo: Repo, work: Path, base: str, sandbox: Sandbox, scratch: Path, dependencies: list[str] | None = None,
+              allow_test_config: bool = False) -> dict:
+    """``dependencies``: the ignored directories setup installed; anything else untracked is left out of the checks.
+    ``allow_test_config``: a person allowed this ticket to change test configuration."""
     dependencies = [] if dependencies is None else dependencies
     rows = changes(work, base)
     commit = snapshot(work, base)
@@ -78,6 +98,10 @@ def run_gates(repo: Repo, work: Path, base: str, sandbox: Sandbox, scratch: Path
     checks.append(check("leaves protected paths alone", not protected, ", ".join(protected)))
     generated = [p for s, p in rows if s != "D" and repo.generated(p)]
     checks.append(check("adds no generated or local files", not generated, ", ".join(generated)))
+    config = test_configuration(repo, work, base, commit, rows)
+    checks.append(check("leaves test configuration alone", allow_test_config or not config,
+                        ("changed: " + ", ".join(config) + ". Test configuration decides what the gates run; change the "
+                         "tests and source instead, or ask a person to allow it on the ticket") if config else ""))
 
     live = [p for s, p in tests if s != "D"]
     if live:

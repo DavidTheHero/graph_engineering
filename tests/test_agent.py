@@ -114,3 +114,50 @@ class Validation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Evidence(unittest.TestCase):
+    """Finish must cite commands that actually ran after the last change."""
+
+    def setUp(self):
+        self.root = temp_dir(self)
+        self.repo = python_repo(self.root)
+
+    def run_agent(self, plan):
+        from graph_engineering.sandbox import Sandbox
+        llm = FakeLLM(lambda role, messages: plan[min(sum(m["role"] == "assistant" for m in messages), len(plan) - 1)])
+        self.addCleanup(llm.close)
+        work = self.root / "box" / "work"
+        import shutil
+        shutil.copytree(self.repo, work)
+        ws = Workspace(work, Sandbox(self.root, work, trusted=True))
+        agent = Agent(llm.model(), ws, READ_WRITE, FINISH, "system", evidence=True, max_steps=8)
+        return agent.run("task"), llm
+
+    def last_tool_reply(self, llm):
+        return [m for m in llm.requests[-1]["messages"] if m["role"] == "tool"][-1]["content"]
+
+    def test_uncited_or_stale_evidence_is_refused(self):
+        test = "python3 -m unittest discover -s tests -q"
+        outcome, llm = self.run_agent([
+            [call("run", command=test)],
+            [call("write_file", path="calc.py", content="def add(a, b):\n    return a + b\n")],
+            [call("finish", summary="s", coverage=[], evidence=[{"command": test, "exit_code": 0}])],
+            [call("run", command=test)],
+            [call("finish", summary="s", coverage=[], evidence=[{"command": test, "exit_code": 0}])]])
+        self.assertEqual(outcome.status, "done")
+        refusals = [m["content"] for m in llm.requests[-1]["messages"] if m["role"] == "tool" and m["content"].startswith("Error")]
+        self.assertIn("was not run after your last file change", refusals[0])
+
+    def test_wrong_exit_code_and_missing_evidence_are_refused(self):
+        outcome, llm = self.run_agent([
+            [call("finish", summary="s", coverage=[])],
+            [call("run", command="false")],
+            [call("finish", summary="s", coverage=[], evidence=[{"command": "false", "exit_code": 0}])],
+            [call("finish", summary="s", coverage=[], evidence=[{"command": "false", "exit_code": 1}])],
+            [call("finish", summary="s", coverage=[], evidence=[{"command": "false", "exit_code": 1}], unresolved="it fails")]])
+        self.assertEqual(outcome.status, "done")
+        errors = [m["content"] for m in llm.requests[-1]["messages"] if m["role"] == "tool" and m["content"].startswith("Error")]
+        self.assertIn("finish needs evidence", errors[0])
+        self.assertIn("last exited 1, not 0", errors[1])
+        self.assertIn("no cited command passed", errors[2])

@@ -20,7 +20,9 @@ def coder(good=True):
         plan = [[call("write_file", path="tests/test_sub.py", content=SUB_TEST)],
                 [call("write_file", path="calc.py", content=SUB_SOURCE if good else "def add(a, b):\n    return a + b\n")],
                 [call("run", command=TEST_COMMAND)],
-                [call("finish", summary="Added subtract with a test", coverage=[{"criterion": 1, "tests": "test_subtract"}])]]
+                [call("finish", summary="Added subtract with a test", coverage=[{"criterion": 1, "tests": "test_subtract"}],
+                      **({"evidence": [{"command": TEST_COMMAND, "exit_code": 0}]} if good else
+                         {"evidence": [{"command": TEST_COMMAND, "exit_code": 1}], "unresolved": "subtract still fails"}))]]
         return plan[min(turns(messages), 3)]
     return step
 

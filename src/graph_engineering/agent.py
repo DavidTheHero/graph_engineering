@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import re
 from pathlib import Path
 import time
 from typing import Callable
@@ -88,7 +89,8 @@ class Agent:
     def __init__(self, model: Model, workspace: Workspace, tools: tuple, finish: dict, system: str, *,
                  max_steps: int = 60, nudge_after: int | None = None, transcript: Path | None = None,
                  on_step: Callable[[dict], None] | None = None, cancelled: Callable[[], bool] = lambda: False,
-                 notes: Path | None = None, explorer: Callable[[str], str] | None = None, working_tokens: int = WORKING_TOKENS):
+                 notes: Path | None = None, explorer: Callable[[str], str] | None = None, working_tokens: int = WORKING_TOKENS,
+                 evidence: bool = False):
         self.model, self.workspace, self.tools, self.finish, self.system = model, workspace, tools, finish, system
         self.max_steps, self.nudge_after, self.on_step, self.cancelled = max_steps, nudge_after, on_step, cancelled
         self.transcript = Path(transcript) if transcript else None
@@ -97,6 +99,9 @@ class Agent:
         window = (model.context - model.max_output - 2000) * CHARS_PER_TOKEN * 0.8
         self.history_chars = int(min(window, working_tokens * CHARS_PER_TOKEN))
         self.compactions = 0
+        self.evidence = evidence          # finish must cite commands actually run after the last file change
+        self.commands: list[tuple[int, str, int]] = []   # (step, command, exit code) of every run call
+        self.last_change = 0
 
     def log(self, entry: dict) -> None:
         if self.transcript:
@@ -230,6 +235,24 @@ class Agent:
         self.emit(outcome.steps, "end", outcome.status + (f": {outcome.error}" if outcome.error else ""))
         return outcome
 
+    def check_evidence(self, args: dict) -> str | None:
+        """Evidence, not assertions: every cited command must have run, after the last file change, with that exit code."""
+        items = args.get("evidence") or []
+        if not items:
+            return ("finish needs evidence: run the test command after your last change, then cite it with its exit code "
+                    "in the evidence field")
+        for item in items:
+            command = str(item.get("command", "")).strip()
+            runs = [code for step, ran, code in self.commands if ran == command and step >= self.last_change]
+            if not runs:
+                return (f"evidence `{command}` was not run after your last file change (step {self.last_change}); "
+                        "run it now and cite the result")
+            if runs[-1] != item.get("exit_code"):
+                return f"evidence `{command}` last exited {runs[-1]}, not {item.get('exit_code')}"
+        if not (args.get("unresolved") or "").strip() and all(item.get("exit_code") != 0 for item in items):
+            return "no cited command passed; fix the failures, or say in unresolved what is left"
+        return None
+
     def dispatch(self, call: dict, step: int, seen: dict, allowed) -> str | Outcome:
         name = call["name"]
         try:
@@ -239,7 +262,7 @@ class Agent:
         except ValueError as exc:
             return f"Error: arguments are not a valid JSON object ({exc}). Call the tool again with valid JSON."
         if name == self.finish["name"]:
-            problem = validate(args, self.finish["parameters"])
+            problem = validate(args, self.finish["parameters"]) or (self.check_evidence(args) if self.evidence else None)
             if problem:
                 return f"Error: {problem}. Call {name} again with every required field."
             self.emit(step, "finish", json.dumps(args)[:400])
@@ -260,6 +283,11 @@ class Agent:
             self.emit(step, "explored", answer[:400])
             return answer
         result = self.workspace.call(name, args, allowed)
+        if name == "run":
+            match = re.match(r"exit code (-?\d+)", result)
+            self.commands.append((step, str(args.get("command", "")).strip(), int(match.group(1)) if match else -1))
+        elif name in ("write_file", "edit_file") and not result.startswith("Error"):
+            self.last_change = step
         brief = ", ".join(f"{k}={str(v)[:80]!r}" for k, v in args.items() if k not in ("content", "new_text", "old_text"))
         self.emit(step, "tool", f"{name}({brief}) -> {result.splitlines()[0][:160] if result else ''}")
         return result

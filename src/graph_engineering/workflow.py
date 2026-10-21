@@ -165,7 +165,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
     explorer = _explorer(ctx, ticket, Workspace(work), directory / "coding", round_)
     agent, run, coder = _agent(ctx, ticket, "coding", Workspace(work, sandbox, repo.run_timeout), READ_WRITE, prompts.FINISH,
                                prompts.CODING, directory / "coding", round_, max_steps=repo.coding_steps, nudge_after=15,
-                               notes=root / "notes.md", explorer=explorer)
+                               notes=root / "notes.md", explorer=explorer, evidence=True)
     outcome = agent.run(prompts.coding_task(spec, {"test_command": repo.test_command, "build_command": repo.build_command},
                                             data.get("feedback"), brief))
     ctx.store.run_end(run, outcome.status, outcome.usage)
@@ -178,7 +178,8 @@ def develop(ctx: Context, ticket: dict) -> dict:
         raise RuntimeError(outcome.error)
 
     ctx.renew()
-    report = gates.run_gates(repo, work, data["base"], sandbox, directory, data.get("dependencies"))
+    report = gates.run_gates(repo, work, data["base"], sandbox, directory, data.get("dependencies"),
+                             allow_test_config=bool(spec.get("allow_test_config")))
     (directory / "gates.json").write_text(json.dumps(report, indent=1))
     record["gates"] = [{"name": c["name"], "ok": c["ok"]} for c in report["checks"]]
     ctx.store.event(ticket["id"], "gates", "harness", {"round": round_, "passed": report["passed"], "checks": record["gates"]})

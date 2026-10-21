@@ -61,6 +61,29 @@ class Gates(unittest.TestCase):
         self.assertFalse(checks["test suite passes"])
         self.assertFalse(checks["leaves protected paths alone"])
 
+    def test_test_configuration_is_guarded_unless_allowed(self):
+        (self.work / "tests" / "test_sub.py").write_text(SUB_TEST)
+        (self.work / "calc.py").write_text(SUB_SOURCE)
+        (self.work / "tests" / "conftest.py").write_text("collect_ignore = ['test_add.py']\n")
+        _, checks = self.gate()
+        self.assertFalse(checks["leaves test configuration alone"])
+        report = run_gates(self.repo, self.work, self.base, self.sandbox, self.root / "run", allow_test_config=True)
+        self.assertTrue({c["name"]: c["ok"] for c in report["checks"]}["leaves test configuration alone"])
+
+    def test_package_test_scripts_are_guarded_but_other_scripts_are_not(self):
+        import json
+        (self.work / "package.json").write_text(json.dumps({"scripts": {"test": "node --test", "up": "node up.mjs"}}))
+        from helpers import git as run_git
+        run_git(self.work, "add", "-A")
+        run_git(self.work, "-c", "user.email=t@e", "-c", "user.name=t", "commit", "-qm", "pkg")
+        base = run_git(self.work, "rev-parse", "HEAD").strip()
+        (self.work / "package.json").write_text(json.dumps({"scripts": {"test": "node --test", "up": "node up2.mjs", "dev": "x"}}))
+        report = run_gates(self.repo, self.work, base, self.sandbox, self.root / "run")
+        self.assertTrue({c["name"]: c["ok"] for c in report["checks"]}["leaves test configuration alone"])
+        (self.work / "package.json").write_text(json.dumps({"scripts": {"test": "true", "up": "node up.mjs"}}))
+        report = run_gates(self.repo, self.work, base, self.sandbox, self.root / "run")
+        self.assertFalse({c["name"]: c["ok"] for c in report["checks"]}["leaves test configuration alone"])
+
     def test_generated_files_are_refused(self):
         (self.work / "tests" / "test_sub.py").write_text(SUB_TEST)
         (self.work / "calc.py").write_text(SUB_SOURCE)

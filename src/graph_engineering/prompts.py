@@ -51,8 +51,9 @@ Work like this:
 3. Implement the change. Keep it focused on the ticket; no unrelated refactors or formatting.
 4. Run your tests, then the full test suite, then the build. Fix what breaks. Never weaken, skip or delete
    existing tests to get green.
-5. When every acceptance criterion is implemented and covered by a test, call finish. If something cannot be
-   done, call finish anyway and say exactly what is missing.
+5. When every acceptance criterion is implemented and covered by a test, call finish with evidence: the commands
+   you ran after your last change (at least the test command) and their exit codes. The harness checks the evidence
+   against what you actually ran. If something cannot be done, call finish anyway and say exactly what is missing.
 
 Think briefly before each action and act in small steps: one tool call, look at the result, then decide.
 You do not need a complete design before you start; test results will tell you what is missing.
@@ -72,7 +73,10 @@ FINISH = {
         "coverage": {"type": "array", "items": {"type": "object", "properties": {
             "criterion": {"type": "integer"}, "tests": {"type": "string", "description": "Test names that cover it"}},
             "required": ["criterion", "tests"]}},
-        "unresolved": {"type": "string", "description": "Anything not done, or empty"}},
+        "unresolved": {"type": "string", "description": "Anything not done, or empty"},
+        "evidence": {"type": "array", "description": "Commands you ran after your last file change that show the result, "
+                     "with their exit codes, e.g. the test command", "items": {"type": "object", "properties": {
+                         "command": {"type": "string"}, "exit_code": {"type": "integer"}}, "required": ["command", "exit_code"]}}},
         "required": ["summary", "coverage"]},
 }
 
