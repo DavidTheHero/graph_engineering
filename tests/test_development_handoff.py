@@ -276,7 +276,14 @@ class DevelopmentHandoffTests(unittest.TestCase):
         try:
             run=flow.execute(self.run['id']);self.assertEqual(run['status'],'blocked')
             self.assertEqual(run['node'],'regression_validation');self.assertNotIn('worktree',run['state'])
+            self.assertIn('PASSED on the original source',run['state']['regression_feedback'])  # It says why.
         finally:flow.store.close()
+        # GE-30D05C40: retrying a rejected regression writes a new test with the feedback, never re-runs the old one.
+        self.tickets.command(self.ticket['ticket_id'],'retry',{},'regression-retry-1')
+        state=self.tickets.store.get(self.run['id'])
+        self.assertEqual((state['node'],state['state']['regression_validation_round']),('regression_authoring',0))
+        self.assertNotIn('regression',state['state'])
+        self.assertIn('PASSED on the original source',state['state']['regression_feedback'])
 
     def test_fragment_edits_reject_ambiguous_matches_and_outside_paths(self):
         from graph_engineering.accepted_development import materialize_hunks

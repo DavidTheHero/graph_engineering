@@ -30,6 +30,31 @@ def clean_environment() -> dict[str, str]:
     return env
 
 
+def python_interpreter(value) -> Path | None:
+    """Validate an operator-declared Python interpreter for repository test runs (None when unset)."""
+    if value is None:
+        return None
+    path = Path(value) if isinstance(value, str) else None
+    if path is None or not path.is_absolute() or not path.name.lower().startswith("python") or not path.is_file() \
+            or not os.access(path, os.X_OK):
+        raise ValueError("python_environment must be the absolute path of an executable python interpreter")
+    return path
+
+
+def test_environment(config: dict) -> dict[str, str]:
+    """The clean environment, with a declared Python environment first on PATH (so ``python3`` resolves to it).
+
+    The interpreter is used, never modified: no installation happens here and the repository's own
+    environment variables still decide which interpreter its code launches."""
+    env = clean_environment()
+    interpreter = python_interpreter(config.get("python_environment"))
+    if interpreter is not None:
+        env["PATH"] = str(interpreter.parent) + os.pathsep + env.get("PATH", "")
+        if (interpreter.parent.parent / "pyvenv.cfg").is_file():  # Only a real virtual environment.
+            env["VIRTUAL_ENV"] = str(interpreter.parent.parent)
+    return env
+
+
 def kill_tree(process: subprocess.Popen):
     if process.poll() is not None:
         return
@@ -135,12 +160,12 @@ def discover(repo: Path) -> dict:
 
 
 def run_check(repo: Path, argv: list[str], trusted: bool = False, timeout: int = 120,
-              cancelled: Callable[[], bool] | None = None) -> dict:
+              cancelled: Callable[[], bool] | None = None, env: dict | None = None) -> dict:
     if not trusted:
         raise PermissionError("Code execution disabled. Explicit trusted_local policy or an external sandbox is required")
     if not argv:
         raise ValueError("No test command is configured for this repository; set an explicit test_command argv")
-    result = command(argv, repo, timeout, cancelled)
+    result = command(argv, repo, timeout, cancelled, env=env)
     result["passed"] = result["returncode"] == 0 and not result["timed_out"]
     # An empty test suite must not become evidence of correctness.
     result["empty_suite"] = bool(re.search(r"Ran 0 tests|# tests 0\b|no tests ran", result["output"]))

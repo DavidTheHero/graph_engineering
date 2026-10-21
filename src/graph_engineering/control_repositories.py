@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ast
 import json
+import subprocess
 import os
 from pathlib import Path
 import re
@@ -54,12 +55,41 @@ def register(tickets, path):
     return next(r for r in repositories(tickets) if r['id'] == key)
 
 
+def set_python_environment(tickets, repo_id, interpreter):
+    """Declare (or clear, with None) the Python interpreter used for this repository's test runs.
+
+    Used read-only: test commands find it first on PATH. It is typically the repository's own
+    virtual environment, which already holds its pinned packages, so nothing is downloaded."""
+    from .repository import python_interpreter
+    repo = next((r for r in repositories(tickets) if r['id'] == repo_id), None)
+    if repo is None: raise KeyError('Unknown registered repository')
+    value = str(Path(interpreter).absolute()) if interpreter else None
+    python_interpreter(value)
+    if value:  # The interpreter must actually start.
+        # Startup hooks in its site-packages (.pth, sitecustomize) are repository-controlled code: no controller
+        # secrets in the environment, isolated mode, and a neutral working directory.
+        from .repository import clean_environment
+        import tempfile
+        with tempfile.TemporaryDirectory() as neutral:
+            probe = subprocess.run([value, '-I', '-c', 'import sys; print(sys.version.split()[0])'], capture_output=True, text=True,
+                                   timeout=20, env=clean_environment(), cwd=neutral)
+        if probe.returncode: raise ValueError('python_environment interpreter failed to start')
+    path = Path(repo['config_path']); config = json.loads(path.read_text(encoding='utf-8-sig'))
+    if value: config['python_environment'] = value
+    else: config.pop('python_environment', None)
+    temp = path.with_suffix('.tmp'); temp.write_text(json.dumps(config, indent=2) + '\n', encoding='utf-8'); temp.replace(path)
+    tickets.store.event('controller', 'repository_policy', 'python_environment_set', {'repository_id': repo_id, 'python_environment': value})
+    return {'repository_id': repo_id, 'python_environment': value}
+
+
 def inspect(tickets, repo_id):
     repo = next((r for r in repositories(tickets) if r['id'] == repo_id), None)
     if repo is None: raise KeyError('Unknown registered repository')
     info = discover(Path(repo['source']))
     # Configuration evidence can include instruction text, never execute it.
-    return repo | {k:info[k] for k in ('sha','base','clean','remote','adapter','test_command','build_commands','ci_files','policy_files')}
+    config = json.loads(Path(repo['config_path']).read_text(encoding='utf-8-sig'))
+    return repo | {k:info[k] for k in ('sha','base','clean','remote','adapter','test_command','build_commands','ci_files','policy_files')} \
+        | {'python_environment': config.get('python_environment')}
 
 
 def _snapshot(tickets, source, revision):
