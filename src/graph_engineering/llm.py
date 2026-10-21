@@ -9,7 +9,7 @@ import time
 import urllib.error
 import urllib.request
 
-ROLES = ("intake", "coding", "review")
+ROLES = ("intake", "coding", "review", "explore")
 
 
 class LLMError(RuntimeError):
@@ -98,6 +98,7 @@ class Registry:
 
     def __init__(self, models: dict[str, Model], roles: dict[str, list[str]]):
         self.models, self.roles = models, roles
+        self._probes: dict[str, tuple[float, bool]] = {}
         for role, names in roles.items():
             for name in names:
                 if name not in models:
@@ -110,11 +111,27 @@ class Registry:
         roles = {role: ([names] if isinstance(names, str) else list(names)) for role, names in data.get("roles", {}).items()}
         return cls(models, roles)
 
-    def for_role(self, role: str, exclude: set[str] = frozenset()) -> Model:
-        names = [n for n in self.roles.get(role) or list(self.models) if n not in exclude]
-        if not names:
+    def for_role(self, role: str, exclude: set[str] = frozenset(), prompt_chars: int = 0) -> Model:
+        """Routing: the first model listed for the role that is reachable and whose window fits the opening prompt
+        (with room to work). ``exclude`` is a preference (decorrelating a reviewer from the coder), not a requirement."""
+        listed = self.roles.get(role) or list(self.models)
+        if not listed:
             raise LLMError(f"no model is assigned to role {role}")
-        return self.models[names[0]]
+        for names in ([n for n in listed if n not in exclude], listed):
+            for name in names:
+                model = self.models[name]
+                fits = prompt_chars / 3.0 < (model.context - model.max_output) * 0.5
+                if fits and self.reachable(model):
+                    return model
+        return self.models[listed[-1]]  # nothing fits or answers: the last resort, so the error names a real model
+
+    def reachable(self, model: Model) -> bool:
+        cached = self._probes.get(model.name)
+        if cached and time.time() - cached[0] < 60:
+            return cached[1]
+        ok = probe(model, timeout=5).get("ok", False)
+        self._probes[model.name] = (time.time(), ok)
+        return ok
 
     def describe(self) -> dict:
         return {"models": {n: {"endpoint": m.endpoint, "model_id": m.model_id, "context": m.context} for n, m in self.models.items()},

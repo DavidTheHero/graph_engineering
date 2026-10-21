@@ -117,3 +117,19 @@ class Context(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Routing(unittest.TestCase):
+    def test_first_reachable_model_that_fits_and_reviewer_decorrelation(self):
+        from graph_engineering.llm import Model, Registry
+        small = Model("small", "http://x", "s", context=16384, max_output=4096)
+        large = Model("large", "http://y", "l", context=150000, max_output=12288)
+        down = Model("down", "http://z", "d", context=150000, max_output=12288)
+        registry = Registry({"small": small, "large": large, "down": down},
+                            {"explore": ["small", "large"], "review": ["down", "large", "small"]})
+        registry.reachable = lambda model: model.name != "down"
+        self.assertEqual(registry.for_role("explore", prompt_chars=6000).name, "small")
+        self.assertEqual(registry.for_role("explore", prompt_chars=60000).name, "large")   # too big for 16K
+        self.assertEqual(registry.for_role("review", prompt_chars=1000).name, "large")     # "down" is unreachable
+        self.assertEqual(registry.for_role("review", exclude={"large"}, prompt_chars=1000).name, "small")
+        self.assertEqual(registry.for_role("review", exclude={"large"}, prompt_chars=60000).name, "large")  # nothing else fits

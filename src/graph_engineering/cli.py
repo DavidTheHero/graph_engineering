@@ -18,7 +18,7 @@ MODELS_EXAMPLE = {
         "qwen27b": {"endpoint": "http://192.168.0.60:18020/v1", "model_id": "qwen3.8-27b", "context": 150000, "max_output": 12288},
         "qwen9b": {"endpoint": "http://192.168.0.62:18035/v1", "model_id": "docker.io/local/qwen35-9b:16k", "context": 16384,
                    "max_output": 4096, "think": False}},
-    "roles": {"intake": ["qwen27b"], "coding": ["qwen27b"], "review": ["qwen27b"], "explore": ["qwen27b"]},
+    "roles": {"intake": ["qwen27b"], "coding": ["qwen27b"], "review": ["qwen27b"], "explore": ["qwen9b", "qwen27b"]},
 }
 
 

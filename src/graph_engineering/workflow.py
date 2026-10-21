@@ -54,8 +54,8 @@ def _move(ctx: Context, ticket: dict, to: str, kind: str, event: dict | None = N
 
 
 def _agent(ctx: Context, ticket: dict, role: str, workspace: Workspace, tools, finish, system, directory: Path, round_: int,
-           exclude: set = frozenset(), **options) -> tuple[Agent, str, object]:
-    model = ctx.registry.for_role(role, exclude)
+           exclude: set = frozenset(), prompt_chars: int = 0, **options) -> tuple[Agent, str, object]:
+    model = ctx.registry.for_role(role, exclude, prompt_chars)
     directory.mkdir(parents=True, exist_ok=True)
     run = ctx.store.run_start(ticket["id"], role, model.name, round_, directory)
 
@@ -75,10 +75,11 @@ def _explorer(ctx: Context, ticket: dict, workspace: Workspace, directory: Path,
 
     def explore(question: str) -> str:
         count[0] += 1
+        task = f"Question: {question}\n\n<project>\n{prompts.project_brief(workspace.root)}\n</project>"
         agent, run, _ = _agent(ctx, ticket, "explore" if "explore" in ctx.registry.roles else "coding", workspace, READ_ONLY,
                                prompts.REPORT, prompts.EXPLORE, directory / f"explore-{count[0]}", round_, max_steps=20,
-                               working_tokens=20000)
-        outcome = agent.run(f"Question: {question}\n\n<project>\n{prompts.project_brief(workspace.root)}\n</project>")
+                               working_tokens=20000, prompt_chars=len(task) + len(prompts.EXPLORE))
+        outcome = agent.run(task)
         ctx.store.run_end(run, outcome.status, outcome.usage)
         if outcome.status == "done":
             return clip(outcome.result["answer"], 4000)
@@ -188,11 +189,13 @@ def develop(ctx: Context, ticket: dict) -> dict:
     if report["passed"]:
         ctx.renew()
         reviewer_ws = Workspace(work)
-        agent, run, reviewer = _agent(ctx, ticket, "review", reviewer_ws, READ_ONLY, prompts.SUBMIT_REVIEW, prompts.REVIEW,
-                                      directory / "review", round_, exclude={coder.name}
-                                      if len(ctx.registry.roles.get("review", [])) > 1 else frozenset(), max_steps=30)
         diff_text = gates.diff(work, data["base"], report["commit"])
-        review = agent.run(prompts.review_task(spec, clip(diff_text, DIFF_CHARS), gates.summary(report), summary, brief))
+        review_text = prompts.review_task(spec, clip(diff_text, DIFF_CHARS), gates.summary(report), summary, brief)
+        # Same-model reviewers share the coder's blind spots: prefer another model when one fits the review.
+        agent, run, reviewer = _agent(ctx, ticket, "review", reviewer_ws, READ_ONLY, prompts.SUBMIT_REVIEW, prompts.REVIEW,
+                                      directory / "review", round_, exclude={coder.name},
+                                      prompt_chars=len(review_text) + len(prompts.REVIEW), max_steps=30)
+        review = agent.run(review_text)
         ctx.store.run_end(run, review.status, review.usage)
         if review.status == "cancelled":
             return ctx.store.get(ticket["id"])
