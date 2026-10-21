@@ -392,6 +392,9 @@ class DevelopmentHandoffTests(unittest.TestCase):
         from graph_engineering.accepted_development import materialize_hunks
         for edits in ([{'path':'../owned.py','old':'a','new':'b'}],[{'path':'calc.py','old':'a','new':'b'}]):
             with self.assertRaises(ValueError):materialize_hunks(self.repo,{'edits':edits},['calc.py'])
+        # GE-30D05C40: the refusal names the file, the match count and the fragment so the next proposal can correct it.
+        with self.assertRaisesRegex(ValueError,r"calc.py has 0 matches for 'return a\*b'"):
+            materialize_hunks(self.repo,{'edits':[{'path':'calc.py','old':'return a*b','new':'return a+b'}]},['calc.py'])
 
     def test_partial_dependency_directory_does_not_count_as_success(self):
         from graph_engineering.accepted_development import prepare_dependencies

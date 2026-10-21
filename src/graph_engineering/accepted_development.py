@@ -223,7 +223,11 @@ def materialize_hunks(path,patch,allowed):
         if target.is_symlink() or Path(path).resolve() not in target.resolve().parents:raise ValueError('Replacement path escapes worktree')
         content=result.get(name,target.read_text(encoding='utf-8'))
         old,new=expand_shortened_lines(content,edit['old'],edit['new'])
-        if content.count(old)!=1:raise ValueError('Replacement requires exactly one matching source fragment')
+        if content.count(old)!=1:
+            # The model can only correct what it is told: the file, the match count and the fragment (GE-30D05C40: the
+            # 27B anchored on a line the previous round had already changed and was told only "exactly one").
+            raise ValueError('Replacement requires exactly one matching source fragment: %s has %d matches for %r; the file content shown is current, anchor on it'
+                             %(name,content.count(old),edit['old'][:160]))
         guard_hidden_tail(content,old)
         result[name]=content.replace(old,new,1)
     return [{'path':name,'content':content} for name,content in result.items()]
