@@ -164,6 +164,46 @@ def install_regression(path,regression):
     target.parent.mkdir(parents=True,exist_ok=True);target.write_text(regression['content'],encoding='utf-8',newline='')
 
 
+def expand_shortened_lines(content,old,new):
+    """Resolve an edit written against a view with shortened lines (``TRUNCATED_LINE`` marker) to the real text.
+
+    An old line ending with the marker matches the unique source line starting with its visible prefix. The
+    replacement line must end with the marker too: its visible prefix is replaced and the hidden remainder is
+    kept unchanged. Without the marker the model would be guessing hidden text, so that is refused."""
+    marker=TRUNCATED_LINE
+    if marker.strip() not in old and marker.strip() not in new:return old,new
+    tails=[];lines=content.split('\n');resolved=[]
+    for line in old.split('\n'):
+        if not line.endswith(marker):resolved.append(line);continue
+        prefix=line[:-len(marker)]
+        matches=[l for l in lines if l.startswith(prefix)]
+        if len(matches)!=1:raise ValueError('A shortened old line must match exactly one source line by its visible prefix; show more of the line')
+        resolved.append(matches[0]);tails.append(matches[0][len(prefix):])
+    replaced=[];used=0
+    for line in new.split('\n'):
+        if not line.endswith(marker):replaced.append(line);continue
+        if used>=len(tails):raise ValueError('The replacement has more shortened lines than the old fragment; each marker keeps one hidden remainder')
+        replaced.append(line[:-len(marker)]+tails[used]);used+=1
+    if used!=len(tails):
+        raise ValueError('An old fragment includes a shortened line (marked "…[line truncated]"); end the corresponding replacement line with the same marker to keep its hidden remainder unchanged, never guess it')
+    if any(marker.strip() in line for line in replaced):
+        raise ValueError('The marker "…[line truncated]" may only end a replacement line that keeps a hidden remainder; it is never source text')
+    return '\n'.join(resolved),'\n'.join(replaced)
+
+
+LONG_LINE=120  # The shortest view the implementer may have seen; a longer line's tail may be hidden from it.
+
+
+def guard_hidden_tail(content,old):
+    """An old fragment that ends part-way through a long line, without the marker, was copied from a shortened
+    view: applying it would splice the hidden remainder after the replacement. Refuse it."""
+    end=content.index(old)+len(old)
+    if end<len(content) and content[end]!='\n':
+        line_start=content.rfind('\n',0,end)+1;line_end=content.find('\n',end);line_end=len(content) if line_end<0 else line_end
+        if line_end-line_start>LONG_LINE:
+            raise ValueError('An old fragment ends inside a long line whose remainder may have been shown shortened; end that old line with the "…[line truncated]" marker (and its replacement too) to keep the remainder, or anchor on complete lines')
+
+
 def materialize_hunks(path,patch,allowed):
     result={}
     for edit in patch['edits']:
@@ -172,10 +212,10 @@ def materialize_hunks(path,patch,allowed):
         target=Path(path)/name
         if target.is_symlink() or Path(path).resolve() not in target.resolve().parents:raise ValueError('Replacement path escapes worktree')
         content=result.get(name,target.read_text(encoding='utf-8'))
-        if TRUNCATED_LINE.strip() in edit['old']:
-            raise ValueError('An old fragment includes a shortened line (marked "…[line truncated]"); anchor the edit on complete neighbouring lines')
-        if content.count(edit['old'])!=1:raise ValueError('Replacement requires exactly one matching source fragment')
-        result[name]=content.replace(edit['old'],edit['new'],1)
+        old,new=expand_shortened_lines(content,edit['old'],edit['new'])
+        if content.count(old)!=1:raise ValueError('Replacement requires exactly one matching source fragment')
+        guard_hidden_tail(content,old)
+        result[name]=content.replace(old,new,1)
     return [{'path':name,'content':content} for name,content in result.items()]
 
 

@@ -204,7 +204,7 @@ def fit_planning_request(config: dict, request: dict) -> dict:
 
 
 IMPLEMENTATION_CONTEXT_RESERVE = 3500  # Task text, plan, candidate and the shortened failure tails around the planned files.
-IMPLEMENTATION_MAX_LINES = (300, 200, 120)  # Longer lines are shown shortened with a marker; edits may not touch them.
+IMPLEMENTATION_MAX_LINES = (300, 200, 120, 80)  # Longer lines are shown shortened with a marker (edits keep the hidden remainder).
 # Each step is tried in turn until the encoded prompt fits the budget (JSON escaping grows quote-heavy code).
 
 
@@ -224,6 +224,7 @@ def fit_implementation_request(config: dict, request: dict) -> dict:
         return lambda r: r | {key: (r.get(key) or "")[-keep:]}
     steps = [tail("previous_failure", 1500),
              lambda r: r | {"evidence": r["evidence"] | {"failure_output": (r["evidence"].get("failure_output") or "")[-1500:]}},
+             lambda r: r | {"evidence": r["evidence"] | {"failure_output": ""}} if r.get("previous_failure") else r,  # Same text as previous_failure.
              lambda r: r | {"additional_information": [text[:300] for text in r.get("additional_information") or []]},
              lambda r: r | {"review_feedback": {k: (v[:1500] if isinstance(v, str) else v) for k, v in (r.get("review_feedback") or {}).items()
                                                 if k in ("approved", "decision", "rationale", "findings")}},
@@ -784,12 +785,17 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             raise ValueError(f"Planned source ({sum(len(f['content']) for f in evidence['files'])} characters) exceeds the implementation model's "
                              f"complete-file context of {implementation_bundle_limit(state['config'])}; split the task into smaller changes")
         request = {"task": ("Return exact old/new source fragment replacements for planned files only. Each old fragment must occur exactly once. The frozen regression must pass after the fix. "
-                            "Lines ending in \"…[line truncated]\" are shown shortened: never include any part of such a line in an old fragment; anchor edits on complete neighbouring lines. "
+                            "Lines ending in \"…[line truncated]\" are shown shortened. To edit such a line, end BOTH its old line and its replacement line with that marker: the hidden remainder is kept unchanged. Never guess hidden text. "
                             if accepted else "Return COMPLETE replacement content for only planned source files to fix the observed bug. ")+"Preserve other behavior. No test, config, instruction, shell or policy edits.",
                    "plan": state["plan"], "candidate": state["candidate"],
                    "evidence": evidence,
                    "previous_failure": state.get("verification", {}).get("output", "")[-4000:],
                    "review_feedback": state.get("review", {}),"additional_information":troubleshooting_context(state)}
+        last = state.get("last_error") or {}
+        if accepted and isinstance(last, dict) and str(last.get("message", "")).startswith(("A shortened", "An old fragment", "The replacement", "The marker", "Replacement")):
+            request["rejected_proposal"] = "Your previous proposal was rejected: " + last["message"]  # The model can correct, not repeat.
+        if accepted and fresh_round:  # That failure and review describe edits this round no longer has.
+            request |= {"previous_failure": "", "review_feedback": {}}
         def fit():
             # Shorter long lines before giving up: the files stay complete, only their marked lines get shorter.
             for index, max_line in enumerate(IMPLEMENTATION_MAX_LINES):
