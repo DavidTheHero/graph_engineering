@@ -161,3 +161,20 @@ class Evidence(unittest.TestCase):
         self.assertIn("finish needs evidence", errors[0])
         self.assertIn("last exited 1, not 0", errors[1])
         self.assertIn("no cited command passed", errors[2])
+
+
+class FinalSteps(unittest.TestCase):
+    def test_the_agent_is_told_to_finish_three_steps_before_its_budget(self):
+        root = temp_dir(self)
+        repo = python_repo(root)
+        counter = iter(range(100))
+
+        def script(role, messages):
+            if any("3 steps left" in (m.get("content") or "") for m in messages if m["role"] == "user"):
+                return [call("finish", summary="partial", coverage=[])]
+            return [call("read_file", path="calc.py", start_line=next(counter) + 1)]
+
+        llm = FakeLLM(script)
+        self.addCleanup(llm.close)
+        outcome = Agent(llm.model(), Workspace(repo), READ_WRITE[:3], FINISH, "s", max_steps=10).run("task")
+        self.assertEqual((outcome.status, outcome.steps), ("done", 8))

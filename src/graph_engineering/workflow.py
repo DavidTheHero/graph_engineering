@@ -261,6 +261,13 @@ def develop(ctx: Context, ticket: dict) -> dict:
                                       prompt_chars=len(review_text) + len(prompts.REVIEW), max_steps=30)
         review = agent.run(review_text)
         ctx.store.run_end(run, review.status, review.usage)
+        if review.status in ("out_of_steps", "stalled", "looping"):
+            # A review that never reached a verdict says nothing about the change: try once more, fresh.
+            agent, run, reviewer = _agent(ctx, ticket, "review", reviewer_ws, READ_ONLY, prompts.SUBMIT_REVIEW, prompts.REVIEW,
+                                          directory / "review-2", round_, exclude={coder.name},
+                                          prompt_chars=len(review_text) + len(prompts.REVIEW), max_steps=30)
+            review = agent.run(review_text + "\n\nBe efficient: read only what you need to judge the criteria, then submit.")
+            ctx.store.run_end(run, review.status, review.usage)
         if review.status == "cancelled":
             return ctx.store.get(ticket["id"])
         if review.status == "error":

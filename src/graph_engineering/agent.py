@@ -224,6 +224,12 @@ class Agent:
                         break
                 if outcome.status != "out_of_steps":
                     break
+                if step == self.max_steps - 3:
+                    # Live eval: a reviewer read until its budget ran out and never gave a verdict, which cost whole rounds.
+                    messages.append({"role": "user", "content": f"You have 3 steps left. Call {self.finish['name']} now with "
+                                     "what you have found; say in it what you could not check."})
+                    self.log(messages[-1])
+                    self.emit(step, "note", "3 steps left: asked to finish")
                 if self.nudge_after and since_change == self.nudge_after:
                     messages.append({"role": "user", "content": f"You have explored for {self.nudge_after} steps without changing "
                                      "a file. Stop exploring: state your plan in a short paragraph, then make the first change."})
