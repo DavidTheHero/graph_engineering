@@ -11,7 +11,7 @@ import subprocess
 import time
 from urllib.parse import quote
 
-from .models import ModelClient, ModelError, OpenCodeWorker, load_models, model_health, validate_artifact
+from .models import ModelClient, ModelError, OpenCodeWorker, default_input_budget, load_models, model_health, tier_input_ceiling, validate_artifact
 from . import routing
 from .routing import PROFILES as ROUTING_PROFILES
 from .publication import GitHubBackend, LocalBackend, merge_gate
@@ -234,6 +234,12 @@ def adapted_test_intact(path: Path, name: str, base_sha: str) -> None:
         raise ValueError(f"Adapted test lost assertions: {name} (an adaptation changes assertions, it never removes them)")
     if len(DISABLING.findall(after)) > len(DISABLING.findall(before)):
         raise ValueError(f"Adapted test gained skip, focus or todo markers: {name}")
+
+
+def refused_tests(adapted: list[str], message: str) -> list[str]:
+    """The adapted tests a refusal message names, as whole paths (``a.test.js`` must not match ``tests/a.test.js``)."""
+    named = [name for name in adapted if re.search(r"(?<![\w./-])" + re.escape(name) + r"(?![\w./-])", message)]
+    return named or list(adapted)
 
 
 def planned_complete(candidate: dict, planned: list[str]) -> bool:
@@ -636,7 +642,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                 for f in evidence["files"][:3]], "failure_output": evidence.get("failure_output", "")[-1800:]}}
         encoded = json.dumps(redact(prompt), ensure_ascii=False, separators=(",", ":"))
         model_config = state["config"]["models"][model]
-        budget = min(model_config.get("input_budget_bytes", 40000),
+        budget = min(model_config.get("input_budget_bytes") or default_input_budget(model_config.get("context")), tier_input_ceiling(small),
                      max((model_config.get("context") or 100000) - model_config.get("output", 4096) - 2048, 0))
         if small and len(encoded.encode()) + len(json.dumps(schema).encode()) > budget:
             rejected = self.rejected_models()
@@ -905,8 +911,9 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         last = state.get("last_error") or {}
         if accepted and isinstance(last, dict) and str(last.get("message", "")).startswith(("A shortened", "A replacement", "An old fragment", "The replacement", "The marker", "Replacement", "Adapted test")):
             request["rejected_proposal"] = "Your previous proposal was rejected: " + last["message"]  # The model can correct, not repeat.
-        if accepted and fresh_round:  # That failure and review describe edits this round no longer has.
+        if accepted and fresh_round:  # That failure, review and rejection describe edits this round no longer has.
             request |= {"previous_failure": "", "review_feedback": {}}
+            request.pop("rejected_proposal", None)
         def fit():
             # Shorter long lines before giving up; a shorter view is used only while every planned file stays
             # complete in it (review of PR #11: shortening is not monotonic, so each view is checked again).
@@ -974,7 +981,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             # the overstepping edit would otherwise stay in the worktree and be refused again on every repair).
             path = Path(state["worktree"])
             adapted = (state.get("plan") or {}).get("adapted_tests") or []
-            refused = [name for name in adapted if name in str(exc)] or list(adapted)
+            refused = refused_tests(adapted, str(exc))
             for name in refused:
                 git(path, "checkout", state["base_sha"], "--", name)
             self.store.event(self.run_id, "test_execution", "adapted_test_refused", {"message": str(exc), "reverted": refused})
@@ -995,13 +1002,13 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         verification["passed"] = verification["passed"] and all(b["passed"] for b in builds)
         self.verify_files(state)  # Test processes have no authority to modify protected files.
         if not verification["passed"]:
-            return {"verification": verification, "head": "unverified", "diff": ""}, "repair", "ready"
+            return {"verification": verification, "head": "unverified", "diff": "", "last_error": {}}, "repair", "ready"
         head = Worktree(Path(state["config"]["repo"]), path, state["branch"], state["base_sha"]).commit(state["plan"]["files"]+([state['regression']['path']] if state.get('regression') else []), self.run_id)
         diff = git(path, "diff", "--no-ext-diff", "--no-color", state["base_sha"], head)
         if len(diff.encode()) > 18000:
             raise ValueError("Diff exceeds independent review budget; split task")
         verification["tested_head"] = head
-        return {"verification": verification, "head": head, "diff": diff}, "independent_review", "ready"
+        return {"verification": verification, "head": head, "diff": diff, "last_error": {}}, "independent_review", "ready"
 
     def node_independent_review(self, state):
         implementers = set(state.get("implementation_models") or []) | {state["implementation_model"]}

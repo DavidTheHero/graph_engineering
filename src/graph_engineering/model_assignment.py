@@ -28,7 +28,7 @@ import statistics
 import tempfile
 import time
 
-from .models import ModelClient, ModelEndpoint, ModelError, OpenCodeWorker, default_input_budget, load_models
+from .models import LEGACY_LARGE_BUDGET, ModelClient, ModelEndpoint, ModelError, OpenCodeWorker, default_input_budget, load_models
 from .routing import LARGE, ROLE_TIERS, SMALL
 
 # ---- role requirements -------------------------------------------------------
@@ -350,7 +350,10 @@ def entry(profile: dict, previous: dict | None = None) -> dict:
             "output": 4096 if large_context else 1024, "timeout": 120, "startup_timeout": 45,
             "input_budget_bytes": default_input_budget(context),
             "structured_output": True, "tools": False, "label": profile["model_id"]}
-    merged = base | {k: v for k, v in (previous or {}).items() if k in ModelEndpoint.__dataclass_fields__}
+    kept = {k: v for k, v in (previous or {}).items() if k in ModelEndpoint.__dataclass_fields__}
+    if large_context and kept.get("input_budget_bytes") == LEGACY_LARGE_BUDGET:
+        kept.pop("input_budget_bytes")  # The former constant, not a tuned value: a re-assessment adopts the context-based default.
+    merged = base | kept
     return merged | {"endpoint": profile["endpoint"], "model_id": profile["model_id"], "context": context}
 
 

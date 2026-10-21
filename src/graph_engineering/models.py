@@ -46,7 +46,8 @@ class WorkerStalled(ModelError):
 
 
 SMALL_INPUT_CEILING = 12000
-LARGE_INPUT_CEILING = 160000  # Bytes; a registry entry may ask for less, never more (a misconfigured context cannot flood a model).
+LARGE_INPUT_CEILING = 120000  # Bytes; a registry entry may ask for less, never more. Equal to the largest file validate_edits accepts.
+LEGACY_LARGE_BUDGET = 40000  # The former constant for every large-context entry: not an operator's choice when it is found in a registry.
 
 
 def tier_input_ceiling(small: bool) -> int:
@@ -71,7 +72,7 @@ class ModelEndpoint:
     api_key_env: str | None = None
     timeout: int = 120
     startup_timeout: int = 45
-    input_budget_bytes: int = 40000
+    input_budget_bytes: int | None = None  # Resolved from the context when absent (see default_input_budget).
     structured_output: bool = True
     tools: bool = False
     tier: str = ""
@@ -84,6 +85,10 @@ class ModelEndpoint:
         if self.tier in ("large", "small"):
             return self.tier == "small"
         return self.context is not None and self.context <= 16384
+
+    def __post_init__(self):
+        if self.input_budget_bytes is None:
+            object.__setattr__(self, "input_budget_bytes", default_input_budget(self.context))
 
     @classmethod
     def from_mapping(cls, value: dict | ModelEndpoint) -> ModelEndpoint:

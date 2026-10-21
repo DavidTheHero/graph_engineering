@@ -358,9 +358,10 @@ class DevelopmentHandoffTests(unittest.TestCase):
         self.tickets.store.db.execute("UPDATE runs SET state=json_set(state,'$.base_sha',?) WHERE id=?",(git(self.repo,'rev-parse','HEAD').strip(),self.run['id']))
         self.tickets.store.db.commit()
         class Narrowing(DevelopmentDouble):
-            def __init__(self):super().__init__();self.plans=0;self.implementations=0;self.last_planning_prompt=None
+            def __init__(self):super().__init__();self.plans=0;self.implementations=0;self.last_planning_prompt=None;self.rejections=[]
             def invoke(self,role,*args,**kwargs):
                 result=super().invoke(role,*args,**kwargs)
+                if role=='implementation':self.rejections.append('rejected_proposal' in json.loads(args[0]))
                 if role=='planning':
                     self.last_planning_prompt=args[0]
                     self.plans+=1;result['content']['files']=['calc.py','util.py'] if self.plans==1 else ['calc.py']
@@ -371,6 +372,9 @@ class DevelopmentHandoffTests(unittest.TestCase):
                         else [{'path':'calc.py','old':'return a*b','new':'return a+b'}]
                 return result
         _act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'narrow-start-1')
+        # Second review of PR #12 (F2): a refusal left in the state is fed back to the next proposal only, never replayed.
+        self.tickets.store.db.execute("UPDATE runs SET state=json_set(state,'$.last_error',json(?)) WHERE id=?",(json.dumps({'message':'Adapted test lost assertions: t.py'}),self.run['id']))
+        self.tickets.store.db.commit()
         flow=Workflow(self.home);flow.worker=Narrowing()
         try:run=flow.execute(self.run['id'])
         finally:flow.store.close()
@@ -382,6 +386,7 @@ class DevelopmentHandoffTests(unittest.TestCase):
         self.assertNotIn('unplanned_edit_reverted',[e['kind'] for e in events])
         widened=json.loads(flow.worker.last_planning_prompt)
         self.assertIn('note',widened['previous_attempt'])
+        self.assertEqual((flow.worker.rejections,run['state'].get('last_error')),([True,False],{}))
 
     def test_fragment_edits_reject_ambiguous_matches_and_outside_paths(self):
         from graph_engineering.accepted_development import materialize_hunks

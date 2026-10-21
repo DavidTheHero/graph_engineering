@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath
 import re
 
 from . import routing
-from .models import tier_input_ceiling
+from .models import default_input_budget, tier_input_ceiling
 from .adapters import CODE_SUFFIXES, DOC_SUFFIXES
 from .repository import command, discover, git, run_check, test_environment
 from .report_store import report, revision
@@ -156,7 +156,7 @@ def prompt_budget(config,role='root_investigation',schema=None):
         ordered=[]
     model=config['models'].get(ordered[0],{}) if ordered else {}
     small=bool(ordered) and routing.tier_of(config['models'],ordered[0])==routing.SMALL
-    limit=min(model.get('input_budget_bytes',40000),tier_input_ceiling(small),
+    limit=min(model.get('input_budget_bytes') or default_input_budget(model.get('context')),tier_input_ceiling(small),
               max((model.get('context') or 100000)-model.get('output',4096)-2048,0))
     return limit-len(json.dumps(PROPOSAL if schema is None else schema).encode())-256
 

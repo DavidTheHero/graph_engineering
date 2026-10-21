@@ -9,7 +9,8 @@ import unittest
 
 from graph_engineering.investigation import prompt_budget
 from graph_engineering.model_assignment import entry
-from graph_engineering.models import LARGE_INPUT_CEILING, OpenCodeWorker, ModelError, default_input_budget, default_models, tier_input_ceiling
+from graph_engineering.models import LARGE_INPUT_CEILING, ModelEndpoint, OpenCodeWorker, ModelError, default_input_budget, default_models, tier_input_ceiling
+from graph_engineering.workflow import refused_tests
 from graph_engineering.workflow import implementation_bundle_limit
 
 
@@ -22,6 +23,11 @@ class InputBudgetTests(unittest.TestCase):
         self.assertEqual([default_input_budget(c) for c in (150000, 262144, 32768, 16384, None)], [90000, 120000, 40000, 12288, 3072])
         self.assertEqual(entry({"endpoint": "http://x", "model_id": "m", "context": 150000})["input_budget_bytes"], 90000)
         self.assertEqual(entry({"endpoint": "http://x", "model_id": "m", "context": 150000}, {"input_budget_bytes": 50000})["input_budget_bytes"], 50000)  # Operator-tuned stays.
+        # Second review F1: a deployed registry holds the former 40 000 constant for every large entry; that is not a tuned value.
+        self.assertEqual(entry({"endpoint": "http://x", "model_id": "m", "context": 150000}, {"input_budget_bytes": 40000})["input_budget_bytes"], 90000)
+        self.assertEqual(entry({"endpoint": "http://x", "model_id": "m", "context": 8192}, {"input_budget_bytes": 40000})["input_budget_bytes"], 40000)  # Small context: kept as given.
+        self.assertEqual(ModelEndpoint("http://x", "m", 150000).input_budget_bytes, 90000)  # An entry without the key resolves from its context.
+        self.assertEqual(ModelEndpoint.from_mapping({"endpoint": "http://x", "context": 16384}).input_budget_bytes, 12288)
 
     def test_prompt_budget_honours_a_large_entry_above_the_old_cap(self):
         self.assertGreater(prompt_budget(config(), "implementation"), 80000)
@@ -29,6 +35,13 @@ class InputBudgetTests(unittest.TestCase):
         self.assertLess(prompt_budget(config(input_budget_bytes=10**7), "implementation"), LARGE_INPUT_CEILING)  # Never above the ceiling.
         self.assertLess(prompt_budget(config(input_budget_bytes=10**7, context=30000), "implementation"), 30000)  # Never above the context.
         self.assertEqual((tier_input_ceiling(True), tier_input_ceiling(False)), (12000, LARGE_INPUT_CEILING))  # The small tier keeps its own ceiling.
+
+    def test_refusal_names_whole_paths_only(self):
+        """Second review F3: a.test.js must not claim a refusal of tests/a.test.js."""
+        both = ["a.test.js", "tests/a.test.js"]
+        self.assertEqual(refused_tests(both, "Adapted test lost assertions: tests/a.test.js (an adaptation changes assertions)"), ["tests/a.test.js"])
+        self.assertEqual(refused_tests(both, "Adapted test modified outside the applied edits: a.test.js"), ["a.test.js"])
+        self.assertEqual(refused_tests(both, "Adapted test gained skip, focus or todo markers: other.js"), both)  # Unnamed: all of them.
 
     def test_worker_accepts_a_prompt_the_registry_allows(self):
         with tempfile.TemporaryDirectory() as folder:

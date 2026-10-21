@@ -57,7 +57,7 @@ B receives selective source snippets and failure-output slices, with at most a
 bytes for prompt plus schema. Byte count is a conservative bound, not an exact
 tokenizer measurement. Essential large review input routes explicitly to A rather
 than silently dropping part of the diff. A's configured input budget comes from the registry
-(three fifths of its context by default, at most 160000 bytes; 40000 was too small for a
+(three fifths of its context by default, at most 120000 bytes; 40000 was too small for a
 three-file change).
 The server-advertised context is retained; no unsupported maximum-output capability
 is invented. Deadline and cancellation apply to each OpenCode child process.
