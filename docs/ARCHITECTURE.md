@@ -155,9 +155,11 @@ ended with a person pressing Retry. The repository autonomy policy now owns reco
   "Needs you".
 * **The reviewer is told the facts.** The independent review prompt states the controller's own test
   run as facts (`verification`: full suite and regression passed or not) and labels the pre-change
-  output as such. A rejection with blocking findings while the suite passed is re-asked once with
-  the contradiction pointed out (`review_reconsidered`); both answers are kept and the second
-  decision stands, whichever way it goes.
+  output as such. A rejection whose blocking findings cite a test failing, while the suite passed,
+  is re-asked once with the contradiction pointed out (`review_reconsidered`; if that second ask
+  cannot be made the first answer stands, `review_reconsideration_failed`); both answers are kept
+  (`prior_review`, omitted from the planner prompt and the published review) and the second
+  decision stands, whichever way it goes. Rejections for other defects are never re-asked.
 * **Repairs widen, never narrow.** A repair re-plans from the latest failure, but keeps the previous
   plan's files and adapted tests (`plan_widened` event): their edits stay in the worktree, so one
   failure can never undo the half of the change it is not about. Only a fresh round after escalation

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
+import copy
 import json
 import os
 from pathlib import Path
@@ -234,6 +235,14 @@ def adapted_test_intact(path: Path, name: str, base_sha: str) -> None:
         raise ValueError(f"Adapted test lost assertions: {name} (an adaptation changes assertions, it never removes them)")
     if len(DISABLING.findall(after)) > len(DISABLING.findall(before)):
         raise ValueError(f"Adapted test gained skip, focus or todo markers: {name}")
+
+
+TEST_FAILURE_CLAIM = re.compile(r"\b(test|tests|suite|assert\w*)\b[^.]{0,120}\b(fail\w*|undefined|actual|expected|not passing)\b|\bbaseline\b|output_before_change", re.I)
+
+
+def contradicts_test_run(review: dict) -> bool:
+    """Whether a rejection rests on a test failing: its blocking findings cite a test, assertion or the pre-change output."""
+    return any(f.get("severity") in ("critical", "required") and TEST_FAILURE_CLAIM.search(str(f.get("message", ""))) for f in review.get("findings", []))
 
 
 def refused_tests(adapted: list[str], message: str) -> list[str]:
@@ -842,7 +851,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                 review = state.get("review") or {}
                 request["previous_attempt"] = {"files": state["plan"].get("files", []),
                                                "failure_output": state["verification"].get("output", "")[-3000:],
-                                               **({"review_findings": review} if review and not review.get("approved") else {})}
+                                               **({"review_findings": {k: v for k, v in review.items() if k != "prior_review"}} if review and not review.get("approved") else {})}
                 if state.get("worktree_round", 0) == state.get("development_round", 0):
                     previous = state["plan"]
                     request["previous_attempt"]["note"] = ("These files stay planned and keep their current edits; add any file the "
@@ -1055,16 +1064,22 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                                                   + state["baseline"]["output"][-2500:]}
         review = self.ask(state, "review", prompt, REVIEW_SCHEMA, routing.SMALL, excluded)
         review_model = self.last_model
-        if review["decision"] != "approve" and facts["full_suite_passed"] and any(f["severity"] in ("critical", "required") for f in review["findings"]):
-            # A rejection while the controller's own run passed is re-asked once with the contradiction pointed out;
-            # both answers are recorded, the reviewer's second decision stands either way.
+        if review["decision"] != "approve" and facts["full_suite_passed"] and contradicts_test_run(review):
+            # A rejection whose blocking findings say a test fails, while the controller's own run passed, is re-asked
+            # once with the contradiction pointed out; both answers are recorded, the second decision stands either way.
             first = review
-            review = self.ask(state, "review", prompt | {"prior_review": first, "reconsider":
-                "The full test suite PASSED on this diff (verification). Re-examine each prior finding: keep it only if it names a concrete defect in the diff itself; drop any finding that relies on a test failing or on output_before_change. Then decide again."},
-                REVIEW_SCHEMA, routing.SMALL, excluded)
-            review_model = self.last_model
-            self.store.event(self.run_id, "independent_review", "review_reconsidered", {"first": first, "second_decision": review["decision"]})
-            review["prior_review"] = first
+            try:
+                review = self.ask(state, "review", prompt | {"prior_review": first, "reconsider":
+                    "The full test suite PASSED on this diff (verification). Re-examine each prior finding: keep it only if it names a concrete defect in the diff itself; drop any finding that relies on a test failing or on output_before_change. Then decide again: if a concrete defect remains, request_changes again is the correct answer."},
+                    REVIEW_SCHEMA, routing.SMALL, excluded)
+            except ModelError as exc:
+                if exc.transient:
+                    raise
+                self.store.event(self.run_id, "independent_review", "review_reconsideration_failed", {"error": str(exc)[:500]})
+            else:
+                review_model = self.last_model
+                self.store.event(self.run_id, "independent_review", "review_reconsidered", {"first": first, "second_decision": review["decision"]})
+                review["prior_review"] = copy.deepcopy(first)
         if review["decision"] == "approve" and any(f["severity"] in ("critical", "required") for f in review["findings"]):
             self.store.event(self.run_id, "independent_review", "contradictory_review", review)
             # Never discard blocking findings or reinterpret them as success.
@@ -1101,7 +1116,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         backend = self.backend(state)
         pr = self.store.effect(self.run_id, "pr", lambda: backend.ensure_pr(state["fingerprint"], state["candidate"]["title"], body, state["branch"], state["head"]),
                                on_uncertain=lambda: backend.reconcile_pr(state["fingerprint"], state["branch"], state["head"]))
-        review_body = "Independent diff review (model proposal, not a repository approval):\n" + json.dumps(state["review"], indent=2)
+        review_body = "Independent diff review (model proposal, not a repository approval):\n" + json.dumps({k: v for k, v in state["review"].items() if k != "prior_review"}, indent=2)
         self.store.effect(self.run_id, "review_comment", lambda: backend.publish_review(pr["number"], review_body),
                           on_uncertain=lambda: backend.reconcile_review(pr["number"], review_body))
         status = lambda: backend.record_check(pr["number"], state["head"], state["verification"]["passed"]) or {"recorded": True}

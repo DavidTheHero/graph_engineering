@@ -1,4 +1,5 @@
 """Accepted-ticket execution uses real Git/tests and labelled inference doubles."""
+import copy
 import json
 from pathlib import Path
 import tempfile
@@ -416,6 +417,48 @@ class DevelopmentHandoffTests(unittest.TestCase):
         self.assertEqual(second['prior_review']['decision'],'request_changes')
         self.assertEqual(run['state']['review']['prior_review']['findings'][0]['severity'],'critical')  # Kept for audit.
         self.assertEqual([e['data']['second_decision'] for e in self.tickets.store.events(self.run['id']) if e['kind']=='review_reconsidered'],['approve'])
+
+    def test_rejection_for_a_real_defect_is_not_reconsidered_and_a_renewed_rejection_stands(self):
+        """Review of PR #14: only findings that cite a test failing trigger the re-ask; a renewed rejection goes to
+        repair with the superseded findings kept off the planner prompt; a failed second ask leaves the first standing."""
+        from graph_engineering.models import ModelError
+        from graph_engineering.report_commands import act as _act
+        from graph_engineering.workflow import contradicts_test_run
+        self.assertFalse(contradicts_test_run({'findings':[{'severity':'critical','message':'Division by zero when b is 0'}]}))
+        self.assertTrue(contradicts_test_run({'findings':[{'severity':'required','message':'The regression test fails: actual undefined'}]}))
+        self.assertFalse(contradicts_test_run({'findings':[{'severity':'minor','message':'the test fails'}]}))  # Not blocking.
+        worktree=self.home/'worktrees'/self.run['id']/'implementation'
+        class Reviewer(DevelopmentDouble):
+            def __init__(self,answers):super().__init__();self.answers=list(answers);self.prompts=[]
+            def invoke(self,role,*args,**kwargs):
+                if role=='planning':self.prompts.append(('planning',json.loads(args[0])))
+                if role=='implementation':
+                    result=super().invoke(role,*args,**kwargs)
+                    if 'return a+b' in (worktree/'calc.py').read_text():result['content']['edits']=[{'path':'calc.py','old':'def add','new':'def add'}]  # Already fixed this round.
+                    return result
+                if role!='review':return super().invoke(role,*args,**kwargs)
+                prompt=json.loads(args[0]);self.prompts.append(('review',prompt));answer=copy.deepcopy(self.answers.pop(0))
+                if isinstance(answer,Exception):raise answer
+                metric={'role':role,'success':True,'model_key':'b','model_id':'reviewer','latency_seconds':0}
+                self.metrics.append(metric);return {'content':answer,'metrics':metric,'raw_path':'reviewer'}
+        reject_test={'decision':'request_changes','findings':[{'severity':'critical','file':'calc.py','line':1,'message':'The test still fails: actual undefined'}],'rationale':'r'}
+        reject_logic={'decision':'request_changes','findings':[{'severity':'critical','file':'calc.py','line':1,'message':'Overflow for large inputs'}],'rationale':'r'}
+        approve={'decision':'approve','findings':[],'rationale':'ok'}
+        _act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'renewed-start-1')
+        # 1st review: cites a test -> re-asked, rejected again (stands) -> repair; 2nd review: logic defect -> no re-ask -> repair;
+        # 3rd review: cites a test -> second ask fails non-transiently -> first stands -> escalation (max_repairs 2).
+        worker=Reviewer([reject_test,reject_test,reject_logic,reject_test,ModelError('Input exceeds selective-retrieval byte budget')])
+        flow=Workflow(self.home);flow.worker=worker
+        try:run=flow.execute(self.run['id'])
+        finally:flow.store.close()
+        self.assertEqual(run['status'],'escalated',run['state'].get('error'))
+        reviews=[p for kind,p in worker.prompts if kind=='review'];plans=[p for kind,p in worker.prompts if kind=='planning']
+        self.assertEqual([('reconsider' in p) for p in reviews],[False,True,False,False,True])
+        self.assertIn('request_changes again is the correct answer',reviews[1]['reconsider'])
+        self.assertNotIn('prior_review',plans[1]['previous_attempt']['review_findings'])  # The superseded finding never reaches the planner.
+        kinds=[e['kind'] for e in self.tickets.store.events(self.run['id'])]
+        self.assertEqual((kinds.count('review_reconsidered'),kinds.count('review_reconsideration_failed')),(1,1))
+        self.assertEqual(run['state']['review']['findings'][0]['message'],'The test still fails: actual undefined')  # The first answer stood.
 
     def test_fragment_edits_reject_ambiguous_matches_and_outside_paths(self):
         from graph_engineering.accepted_development import materialize_hunks
