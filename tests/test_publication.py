@@ -139,6 +139,35 @@ class GitHubBackendTests(unittest.TestCase):
             result = backend.ensure_issue("task", "title", "body")
         self.assertEqual(3, result["number"])
 
+    def test_tested_branch_is_published_under_the_repository_convention_name(self):
+        """General_AI_Agent's PR policy (2026-10-21) requires feat/<issue>-slug branches: the tested local branch
+        graph/<run> is pushed under that name and the PR head is that name; matching and reconciliation use it."""
+        backend = self.backend()
+        head = "a" * 40
+        calls = []
+        def git(repo, *argv):
+            calls.append(argv)
+            if argv[0] == "rev-parse": return head
+            if argv[0] == "remote": return "https://github.com/owner/repo.git"
+            return ""
+        created = dict(number=18, html_url="https://github.com/owner/repo/pull/18", head=dict(sha=head, ref="feat/17-model-name"), base=dict(ref="main"), body="")
+        with patch("graph_engineering.publication._git", side_effect=git), patch.object(backend, "_list", return_value=[]), \
+             patch("graph_engineering.publication.subprocess.run", return_value=type("R", (), {"returncode": 1, "stdout": ""})()), \
+             patch.object(backend, "_api", return_value=created) as api:
+            pr = backend.ensure_pr("task", "Title", "Closes #17", "graph/run1", head, remote_branch="feat/17-model-name")
+        self.assertEqual(pr["number"], 18)
+        push = next(c for c in calls if "push" in c)
+        self.assertEqual(push[-1], "refs/heads/graph/run1:refs/heads/feat/17-model-name")
+        self.assertEqual(api.call_args.args[2]["head"], "feat/17-model-name")
+        self.assertIn("check-ref-format", [c[0] for c in calls])
+        # An existing PR under the convention name is recognised; one under another head is refused.
+        existing = created | {"body": "<!-- graph-engineering:task -->"}
+        with patch("graph_engineering.publication._git", side_effect=git), patch.object(backend, "_list", return_value=[existing]):
+            self.assertEqual(backend.ensure_pr("task", "Title", "b", "graph/run1", head, remote_branch="feat/17-model-name")["number"], 18)
+            self.assertEqual(backend.reconcile_pr("task", "graph/run1", head, remote_branch="feat/17-model-name")["number"], 18)
+            with self.assertRaises(PublicationError):
+                backend.reconcile_pr("task", "graph/run1", head)  # Without the convention name the head ref does not match.
+
     def test_policy_read_error_fails_closed(self):
         backend = self.backend()
         with patch.object(backend, "_api", side_effect=PublicationError("unreadable")):

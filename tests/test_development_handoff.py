@@ -460,6 +460,20 @@ class DevelopmentHandoffTests(unittest.TestCase):
         self.assertEqual((kinds.count('review_reconsidered'),kinds.count('review_reconsideration_failed')),(1,1))
         self.assertEqual(run['state']['review']['findings'][0]['message'],'The test still fails: actual undefined')  # The first answer stood.
 
+    def test_github_publication_follows_the_repository_pr_convention(self):
+        """Branch <type>/<issue>-<slug>, body with Closes #N and Change / Validation / Review sections (General_AI_Agent's PR policy)."""
+        from graph_engineering.workflow import publication_branch,publication_body
+        state={'triage':{'category':'feature'},'candidate':{'title':'Feature Request: Display & Select Current AI Model in Chat Interface!'},
+               'patch':{'summary':'Expose the model name.'},'plan':{'files':['backend/agent.js','backend/llm.js'],'adapted_tests':['backend/tests/agent.test.js']},
+               'head':'f'*40,'base_sha':'0'*40,'regression':{'path':'backend/tests/graph_x.test.js'},
+               'verification':{'passed':True},'review':{'decision':'approve','rationale':'Correct.','model':'b'}}
+        self.assertEqual(publication_branch(state,17),'feat/17-feature-request-display-select-current-ai-model')
+        self.assertEqual(publication_branch(state|{'triage':{'category':'bug'},'candidate':{'title':'!!!'}},3),'fix/3-change')
+        body=publication_body(state,17)
+        for needle in ('Closes #17','## Change','## Validation','## Review','backend/tests/agent.test.js','passes at the tested head','approve'):
+            self.assertIn(needle,body)
+        self.assertLess(body.index('## Change'),body.index('## Validation'))
+
     def test_fragment_edits_reject_ambiguous_matches_and_outside_paths(self):
         from graph_engineering.accepted_development import materialize_hunks
         for edits in ([{'path':'../owned.py','old':'a','new':'b'}],[{'path':'calc.py','old':'a','new':'b'}]):

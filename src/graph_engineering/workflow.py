@@ -245,6 +245,33 @@ def contradicts_test_run(review: dict) -> bool:
     return any(f.get("severity") in ("critical", "required") and TEST_FAILURE_CLAIM.search(str(f.get("message", ""))) for f in review.get("findings", []))
 
 
+def publication_branch(state: dict, issue: int) -> str:
+    """``<type>/<issue>-<slug>``: feat for a feature, fix otherwise; the slug is the ticket title in lower-case words."""
+    kind = "feat" if (state.get("triage") or {}).get("category") == "feature" else "fix"
+    words = re.findall(r"[a-z0-9]+", str(state.get("candidate", {}).get("title", "")).lower())
+    slug = "-".join(words)[:48].rstrip("-") or "change"
+    return f"{kind}/{int(issue)}-{slug}"
+
+
+def publication_body(state: dict, issue: int) -> str:
+    """A PR body with a closing reference and Change, Validation and Review sections, from recorded evidence only."""
+    adapted = (state.get("plan") or {}).get("adapted_tests") or []
+    review = state.get("review") or {}
+    verification = state.get("verification") or {}
+    files = "\n".join(f"- {name}" for name in (state.get("plan") or {}).get("files", []))
+    regression = (state.get("regression") or {}).get("path")
+    validation = [f"- Full test suite run by the graph_engineering controller on the tested head {state['head']}: "
+                  + ("passed" if verification.get("passed") else "FAILED") + "."]
+    if regression:
+        validation.append(f"- Frozen regression test {regression}: fails at {state['base_sha']}, passes at the tested head.")
+    if adapted:
+        validation.append("- Existing tests adapted to the accepted change: " + ", ".join(adapted) + " (assertions changed, none removed).")
+    review_lines = [f"- Independent model review ({review.get('model', 'unknown model')}): {review.get('decision', 'none')}.",
+                    "- " + str(review.get("rationale", "")).strip()[:1500]]
+    return (f"Closes #{int(issue)}\n\n## Change\n{state['patch']['summary']}\n\nFiles:\n{files}\n\n## Validation\n" + "\n".join(validation)
+            + "\n\n## Review\n" + "\n".join(review_lines) + "\n\nPublished by graph_engineering after human approval of the tested change.")
+
+
 def refused_tests(adapted: list[str], message: str) -> list[str]:
     """The adapted tests a refusal message names, as whole paths (``a.test.js`` must not match ``tests/a.test.js``)."""
     named = [name for name in adapted if re.search(r"(?<![\w./-])" + re.escape(name) + r"(?![\w./-])", message)]
@@ -1112,10 +1139,20 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         return {"outcome": "escalated", "error": "Repair budget exhausted; supervisor intervention required"}, "completion", "ready"
 
     def node_pull_request_creation(self, state):
-        body = f"Fixes #{state['issue']['number']}\n\n" + state["patch"]["summary"] + f"\n\nVerified head: {state['head']}\nRegression failed at {state['base_sha']}, passes at head.\nReview: {state['review']['rationale']}"
         backend = self.backend(state)
-        pr = self.store.effect(self.run_id, "pr", lambda: backend.ensure_pr(state["fingerprint"], state["candidate"]["title"], body, state["branch"], state["head"]),
-                               on_uncertain=lambda: backend.reconcile_pr(state["fingerprint"], state["branch"], state["head"]))
+        issue = state['issue']['number']
+        if getattr(backend, "kind", "local") == "github":
+            # Repository conventions (General_AI_Agent's PR policy, 2026-10-21): a task branch named after the
+            # issue, a closing reference and Change / Validation / Review sections. Generic enough for any host.
+            remote_branch = publication_branch(state, issue)
+            body = publication_body(state, issue)
+            publish = lambda: backend.ensure_pr(state["fingerprint"], state["candidate"]["title"], body, state["branch"], state["head"], remote_branch)
+            reconcile = lambda: backend.reconcile_pr(state["fingerprint"], state["branch"], state["head"], remote_branch)
+        else:
+            body = f"Fixes #{issue}\n\n" + state["patch"]["summary"] + f"\n\nVerified head: {state['head']}\nRegression failed at {state['base_sha']}, passes at head.\nReview: {state['review']['rationale']}"
+            publish = lambda: backend.ensure_pr(state["fingerprint"], state["candidate"]["title"], body, state["branch"], state["head"])
+            reconcile = lambda: backend.reconcile_pr(state["fingerprint"], state["branch"], state["head"])
+        pr = self.store.effect(self.run_id, "pr", publish, on_uncertain=reconcile)
         review_body = "Independent diff review (model proposal, not a repository approval):\n" + json.dumps({k: v for k, v in state["review"].items() if k != "prior_review"}, indent=2)
         self.store.effect(self.run_id, "review_comment", lambda: backend.publish_review(pr["number"], review_body),
                           on_uncertain=lambda: backend.reconcile_review(pr["number"], review_body))
