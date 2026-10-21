@@ -125,7 +125,7 @@ OPTIONAL_INPUTS = {"regression_authoring":{"development_information":ARRAY}, "ta
                    "isolated_implementation": {"verification": DICT, "review": DICT,"development_information":ARRAY},
                    "completion": {"outcome": STR, "postmerge": DICT, "issue": DICT}}
 OPTIONAL_OUTPUTS = {"evidence_collection": {"outcome": STR},
-                    "isolated_implementation": {"implementation_model": STR, "implementation_models": ARRAY},
+                    "isolated_implementation": {"implementation_model": STR, "implementation_models": ARRAY, "worktree_round": {"type": "integer"}},
                     'regression_validation':{k:STR if k=='fingerprint' else DICT for k in ('regression_baseline','baseline','validation','candidate','fingerprint','frozen','bundle')},
                     "deduplication": {"duplicate_of": STR, "outcome": STR},
                     "ticket_finalisation": {"self_resolution": DICT, "search_round": {"type": "integer"}},
@@ -203,6 +203,18 @@ def fit_planning_request(config: dict, request: dict) -> dict:
     return request | ({"shortened_for_budget": shortened} if shortened else {})
 
 
+IMPLEMENTATION_CONTEXT_RESERVE = 3500  # Task text, plan, candidate and the shortened failure tails around the planned files.
+IMPLEMENTATION_MAX_LINES = (300, 200, 120)  # Longer lines are shown shortened with a marker; edits may not touch them.
+# Each step is tried in turn until the encoded prompt fits the budget (JSON escaping grows quote-heavy code).
+
+
+def implementation_bundle_limit(config: dict) -> int:
+    """Characters of planned files the implementation model can see complete: its real input budget minus the
+    reserve, never below the historical 30000 (GE-30D05C40: agent.js + llm.js + the regression are 30.9 KB)."""
+    from .investigation import prompt_budget
+    return max(30000, prompt_budget(config, "implementation", HUNK_SCHEMA) - IMPLEMENTATION_CONTEXT_RESERVE)
+
+
 def fit_implementation_request(config: dict, request: dict) -> dict:
     """Fit an accepted-development implementation prompt: shorten output tails and context, never the
     planned files (edits must match their exact complete text). Too large planned files fail clearly."""
@@ -217,7 +229,8 @@ def fit_implementation_request(config: dict, request: dict) -> dict:
                                                 if k in ("approved", "decision", "rationale", "findings")}},
              lambda r: r | {"candidate": r["candidate"] | {"actual": (r["candidate"].get("actual") or "")[-1000:]}},
              tail("previous_failure", 600),
-             lambda r: r | {"evidence": r["evidence"] | {"failure_output": (r["evidence"].get("failure_output") or "")[-600:]}}]
+             lambda r: r | {"evidence": r["evidence"] | {"failure_output": (r["evidence"].get("failure_output") or "")[-600:]}},
+             lambda r: r | {"candidate": r["candidate"] | {"actual": (r["candidate"].get("actual") or "")[-300:]}}]
     for step in steps:
         if _size(request) <= budget:
             return request
@@ -746,25 +759,47 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         wt = Worktree(Path(state["config"]["repo"]), path, branch, state["base_sha"])
         wt.ensure()
         accepted=state['config'].get('run_mode')=='accepted_development'
+        outputs={}
         if accepted:
             install_regression(path,state['regression'])
+            # A new development round (a recovery after escalation) plans from scratch: it starts from the accepted
+            # commit, not from the failed round's edits. Within a round, repairs build on each other.
+            fresh_round=state.get('development_round',0)!=state.get('worktree_round',0)
+            outputs['worktree_round']=state.get('development_round',0)
             # A re-plan may drop a file an earlier round edited: restore it to the accepted commit, so the diff
             # only ever contains planned files (and the frozen regression).
             for name in git(path,"diff","--no-ext-diff","--name-only",state["base_sha"]).splitlines():
-                if name in state['plan']['files'] or name==state['regression']['path']:continue
+                if not fresh_round and (name in state['plan']['files'] or name==state['regression']['path']):continue
+                if name==state['regression']['path']:continue
                 if command(['git','cat-file','-e',f"{state['base_sha']}:{name}"],path,timeout=20)['returncode']==0:
                     git(path,'checkout',state['base_sha'],'--',name)
                 else:git(path,'rm','-q','-f','--',name)
-                self.store.event(self.run_id,'isolated_implementation','unplanned_edit_reverted',{'file':name})
-        evidence=source_bundle(path,state['plan']['files']+([state['regression']['path']] if accepted else state['repository']['test_files']),state['validation']['output'] if accepted else state['baseline']['output'],30000 if accepted else 14000)
-        if accepted and any(not f['complete'] for f in evidence['files'] if f['path'] in state['plan']['files']):raise ValueError('Planned source exceeds complete implementation context; split the task')
-        request = {"task": ("Return exact old/new source fragment replacements for planned files only. Each old fragment must occur exactly once. The frozen regression must pass after the fix. " if accepted else "Return COMPLETE replacement content for only planned source files to fix the observed bug. ")+"Preserve other behavior. No test, config, instruction, shell or policy edits.",
+                self.store.event(self.run_id,'isolated_implementation','development_round_reset' if fresh_round else 'unplanned_edit_reverted',{'file':name})
+        def bundle(max_line):
+            return source_bundle(path,state['plan']['files']+([state['regression']['path']] if accepted else state['repository']['test_files']),
+                                 state['validation']['output'] if accepted else state['baseline']['output'],
+                                 implementation_bundle_limit(state['config']) if accepted else 14000,max_line=max_line)
+        evidence=bundle(IMPLEMENTATION_MAX_LINES[0] if accepted else None)
+        if accepted and any(not f['complete'] for f in evidence['files'] if f['path'] in state['plan']['files']):
+            raise ValueError(f"Planned source ({sum(len(f['content']) for f in evidence['files'])} characters) exceeds the implementation model's "
+                             f"complete-file context of {implementation_bundle_limit(state['config'])}; split the task into smaller changes")
+        request = {"task": ("Return exact old/new source fragment replacements for planned files only. Each old fragment must occur exactly once. The frozen regression must pass after the fix. "
+                            "Lines ending in \"…[line truncated]\" are shown shortened: never include any part of such a line in an old fragment; anchor edits on complete neighbouring lines. "
+                            if accepted else "Return COMPLETE replacement content for only planned source files to fix the observed bug. ")+"Preserve other behavior. No test, config, instruction, shell or policy edits.",
                    "plan": state["plan"], "candidate": state["candidate"],
                    "evidence": evidence,
                    "previous_failure": state.get("verification", {}).get("output", "")[-4000:],
                    "review_feedback": state.get("review", {}),"additional_information":troubleshooting_context(state)}
+        def fit():
+            # Shorter long lines before giving up: the files stay complete, only their marked lines get shorter.
+            for index, max_line in enumerate(IMPLEMENTATION_MAX_LINES):
+                try:
+                    return fit_implementation_request(state["config"], request | {"evidence": evidence if index == 0 else bundle(max_line)})
+                except ValueError:
+                    if index == len(IMPLEMENTATION_MAX_LINES) - 1:
+                        raise
         def propose():
-            fitted = fit_implementation_request(state["config"], request) if accepted else request
+            fitted = fit() if accepted else request
             patch = self.ask(state, "implementation", fitted, HUNK_SCHEMA if accepted else PATCH_SCHEMA, routing.LARGE)
             edits = validate_edits(path, materialize_hunks(path,patch,state['plan']['files']) if accepted else patch["files"], state["plan"]["files"])
             # The model that actually wrote the patch (routing may have fallen back since model_selection).
@@ -782,7 +817,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         actual = proposal.get("model") or state["implementation_model"]
         # Repairs build on earlier rounds, so every model that wrote part of the diff is an implementer.
         implementers = sorted(set(state.get("implementation_models", [])) | {actual})
-        return {"worktree": str(path), "branch": branch, "patch": patch, "implementation_model": actual,
+        return outputs|{"worktree": str(path), "branch": branch, "patch": patch, "implementation_model": actual,
                 "implementation_models": implementers}, "test_execution", "ready"
 
     def verify_files(self, state):

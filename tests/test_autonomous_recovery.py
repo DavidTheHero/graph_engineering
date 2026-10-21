@@ -18,20 +18,26 @@ from tests.test_intake import InvestigationDouble
 
 
 class AlwaysWrong(DevelopmentDouble):
-    """Every implementation edits the previous one and is still wrong: the run escalates."""
-    wrong = ['return a-b', 'return a*b', 'return a//b', 'return a%b', 'return a**b', 'return a<<b', 'return a>>b',
+    """Every implementation edits whatever the checkout holds now and is still wrong: the run escalates.
+
+    It reads the current line because a new development round starts from the accepted commit again."""
+    wrong = ['return a*b', 'return a//b', 'return a%b', 'return a**b', 'return a<<b', 'return a>>b',
              'return a|b', 'return a&b', 'return a^b', 'return -a', 'return b', 'return a']
 
-    def __init__(self):
+    def __init__(self, worktree):
         super().__init__()
+        self.worktree = worktree
         self.implementations = 0
+        self.seen = []
 
     def invoke(self, role, *args, **kwargs):
         result = super().invoke(role, *args, **kwargs)
         if role == 'implementation':
-            old, new = self.wrong[self.implementations], self.wrong[self.implementations + 1]
+            current = next(l.split(': ', 1)[1] for l in (self.worktree / 'calc.py').read_text().splitlines() if 'return' in l)
+            self.seen.append(current)
+            new = self.wrong[self.implementations % len(self.wrong)]
             self.implementations += 1
-            result['content']['edits'] = [{'path': 'calc.py', 'old': old, 'new': new}]
+            result['content']['edits'] = [{'path': 'calc.py', 'old': current, 'new': new}]
         return result
 
 
@@ -53,9 +59,10 @@ class AutonomousRecoveryTests(unittest.TestCase):
 
     def test_escalated_development_recovers_itself_for_the_policy_rounds_then_asks(self):
         act(self.tickets, self.base | {'action': 'start_development', 'trust_execution': True}, 'recover-start-1')
-        worker = AlwaysWrong()
+        worker = AlwaysWrong(self.home / 'worktrees' / self.run['id'] / 'implementation')
         run = self.run_development(worker)
         self.assertEqual((run['node'], run['status']), ('done', 'escalated'))
+        self.assertEqual(worker.seen[0], 'return a-b')
         self.tickets.db.execute('UPDATE tickets SET max_retries=1 WHERE id=?', (self.ticket['ticket_id'],))
         self.tickets.db.commit()
         self.set_policy('recover-policy-1', recovery_rounds=2)
@@ -67,6 +74,7 @@ class AutonomousRecoveryTests(unittest.TestCase):
         self.tickets.db.commit()
         run = self.run_development(worker)
         self.assertEqual(run['status'], 'escalated', (run['node'], run['state'].get('error')))
+        self.assertEqual(worker.seen[3], 'return a-b')  # Round 2 started from the accepted commit, not from round 1's edits.
         ticket = self.tickets.get(self.ticket['ticket_id'])
         self.assertEqual((ticket['retries'], ticket['max_retries']), (1, 1))  # Exhausted: the round extends it by one.
         dispatch(self.tickets)

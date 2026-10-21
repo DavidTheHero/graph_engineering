@@ -16,7 +16,7 @@ BUDGETS={'recovery_rounds':(0,6),'max_repairs':(1,4),'max_node_attempts':(1,4)}
 # Failures a retry cannot change: the requirement, the policy or the repository must change first.
 UNRECOVERABLE=('Accepted revision and explicit execution approval required','Regression review rejected twice',
                'Development setup requires a nonempty','Accepted report has no validated source component',
-               'Implementation prompt (','Planned source files exceed','Regression path escapes','Regression changed outside',
+               'Implementation prompt (','Planned source files exceed','Planned source (','Regression path escapes','Regression changed outside',
                'Dependency setup is restricted')
 
 def policy(tickets,repo_id):return DEFAULT|tickets.setting('autonomy:'+repo_id,{})

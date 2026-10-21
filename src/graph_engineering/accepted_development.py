@@ -9,7 +9,7 @@ import shutil
 
 from . import routing
 from .investigation import obj
-from .repository import discover,git,run_check,source_bundle,command,test_environment
+from .repository import TRUNCATED_LINE,discover,git,run_check,source_bundle,command,test_environment
 from .runtime import digest
 
 REGRESSION_SCHEMA=obj({'content':{'type':'string','minLength':20,'maxLength':6000},
@@ -172,6 +172,8 @@ def materialize_hunks(path,patch,allowed):
         target=Path(path)/name
         if target.is_symlink() or Path(path).resolve() not in target.resolve().parents:raise ValueError('Replacement path escapes worktree')
         content=result.get(name,target.read_text(encoding='utf-8'))
+        if TRUNCATED_LINE.strip() in edit['old']:
+            raise ValueError('An old fragment includes a shortened line (marked "…[line truncated]"); anchor the edit on complete neighbouring lines')
         if content.count(edit['old'])!=1:raise ValueError('Replacement requires exactly one matching source fragment')
         result[name]=content.replace(edit['old'],edit['new'],1)
     return [{'path':name,'content':content} for name,content in result.items()]
@@ -211,7 +213,7 @@ class AcceptedDevelopmentNodes:
         names=list(dict.fromkeys(names))
         if not names:raise ValueError('Accepted report has no validated source component to implement')
         cited=names;names=development_files(state,working['repository']['source_files'],cited)
-        evidence['bundle']=source_bundle(Path(evidence['baseline_path']),names,evidence['baseline']['output'][-2000:],30000,first=cited)
+        evidence['bundle']=source_bundle(Path(evidence['baseline_path']),names,evidence['baseline']['output'][-2000:],30000,first=cited,max_line=300)
         return evidence|{'config':config,'repository':working['repository'],'development':state['development']|{'setup_complete':True}},'regression_authoring','ready'
 
     def node_regression_authoring(self,state):
