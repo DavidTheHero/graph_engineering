@@ -15,7 +15,7 @@ from .models import ModelClient, ModelError, OpenCodeWorker, load_models, model_
 from . import routing
 from .routing import PROFILES as ROUTING_PROFILES
 from .publication import GitHubBackend, LocalBackend, merge_gate
-from .repository import Cancelled, Worktree, discover, git, run_check, source_bundle, tracked, validate_edits, python_interpreter, test_environment
+from .repository import command, Cancelled, Worktree, discover, git, run_check, source_bundle, tracked, validate_edits, python_interpreter, test_environment
 from .runtime import BusyError, RepoLock, Store, digest, redact, NODE_DEADLINE
 from .scheduling_policy import retry_delay
 from .investigation import InvestigationNodes, INVESTIGATION_CONTRACTS
@@ -657,9 +657,11 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         request = {"task": task, "candidate": state["candidate"], "evidence": state["bundle"], "additional_information": troubleshooting_context(state)}
         if accepted:
             request["regression_test"] = {"path": state["regression"]["path"], "content": state["regression"]["content"]}
-            if state.get("repairs") and state.get("verification"):
-                request["previous_attempt"] = {"files": (state.get("plan") or {}).get("files", []),
-                                               "failure_output": state["verification"].get("output", "")[-3000:]}
+            if state.get("plan") and state.get("verification"):  # A repair, or a retry after escalation.
+                review = state.get("review") or {}
+                request["previous_attempt"] = {"files": state["plan"].get("files", []),
+                                               "failure_output": state["verification"].get("output", "")[-3000:],
+                                               **({"review_findings": review} if review and not review.get("approved") else {})}
         plan = self.ask(state, "planning", request, PLAN_SCHEMA, routing.LARGE)
         complete = {f["path"] for f in state["bundle"]["files"] if f["complete"] or state['config'].get('run_mode')=='accepted_development'}
         if not set(plan["files"]) <= (set(state["repository"]["source_files"]) & complete) - set(state["frozen"]):
@@ -680,7 +682,16 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         wt = Worktree(Path(state["config"]["repo"]), path, branch, state["base_sha"])
         wt.ensure()
         accepted=state['config'].get('run_mode')=='accepted_development'
-        if accepted:install_regression(path,state['regression'])
+        if accepted:
+            install_regression(path,state['regression'])
+            # A re-plan may drop a file an earlier round edited: restore it to the accepted commit, so the diff
+            # only ever contains planned files (and the frozen regression).
+            for name in git(path,"diff","--no-ext-diff","--name-only",state["base_sha"]).splitlines():
+                if name in state['plan']['files'] or name==state['regression']['path']:continue
+                if command(['git','cat-file','-e',f"{state['base_sha']}:{name}"],path,timeout=20)['returncode']==0:
+                    git(path,'checkout',state['base_sha'],'--',name)
+                else:git(path,'rm','-q','-f','--',name)
+                self.store.event(self.run_id,'isolated_implementation','unplanned_edit_reverted',{'file':name})
         evidence=source_bundle(path,state['plan']['files']+([state['regression']['path']] if accepted else state['repository']['test_files']),state['validation']['output'] if accepted else state['baseline']['output'],30000 if accepted else 14000)
         if accepted and any(not f['complete'] for f in evidence['files'] if f['path'] in state['plan']['files']):raise ValueError('Planned source exceeds complete implementation context; split the task')
         def propose():
@@ -694,7 +705,10 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             return {"patch":patch,"edits":edits,"edits_hash":digest(edits),"model":self.last_model}
         # Persist validated complete contents before writing so a resumed fragment
         # proposal never tries to match its old source a second time.
-        proposal=self.store.effect(self.run_id,"accepted_source_proposal-"+str(state["repairs"]),propose,on_uncertain=propose) if accepted else propose()
+        # The development round (incremented by an operator retry after escalation) keeps a retried budget's
+        # proposals distinct from the escalated ones; otherwise the durable effect would replay them.
+        round_suffix=f"-r{state['development_round']}" if state.get('development_round') else ''
+        proposal=self.store.effect(self.run_id,"accepted_source_proposal-"+str(state["repairs"])+round_suffix,propose,on_uncertain=propose) if accepted else propose()
         if digest(proposal['edits'])!=proposal['edits_hash']:raise ValueError('Persisted source proposal changed, including by secrets redaction; refusing to apply')
         patch=proposal["patch"];edits=validate_edits(path,proposal["edits"],state["plan"]["files"])
         # A killed controller may leave its prior proposal applied. Reapplying complete files is idempotent.

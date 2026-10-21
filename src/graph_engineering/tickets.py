@@ -202,7 +202,7 @@ class Tickets:
                 elif retry_node=='done' and ticket['status']=='escalated' and state['config'].get('run_mode')=='accepted_development' and state.get('regression_baseline'):
                     # An exhausted repair budget is retried by planning again from the validated regression, with a fresh budget.
                     retry_node='task_planning'
-                    state.update(repairs=0)
+                    state.update(repairs=0,development_round=state.get('development_round',0)+1)
                     state.pop('outcome',None)
                     state['attempts']={key:0 if key.split(':')[0] in ('task_planning','model_selection','isolated_implementation','test_execution','repair','independent_review') else count
                                        for key,count in state['attempts'].items()}

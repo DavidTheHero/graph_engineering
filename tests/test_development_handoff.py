@@ -330,6 +330,49 @@ class DevelopmentHandoffTests(unittest.TestCase):
         state=self.tickets.store.get(self.run['id'])
         self.assertEqual((state['node'],state['status'],state['state']['repairs']),('task_planning','ready',0))
         self.assertNotIn('outcome',state['state'])
+        # The retried budget must ask for new proposals, not replay the escalated ones (review of PR #6).
+        class FixesFromLastAttempt(DevelopmentDouble):
+            def __init__(self):super().__init__();self.plans=[]
+            def invoke(self,role,prompt,*args,**kwargs):
+                if role=='planning':self.plans.append(json.loads(prompt))
+                result=super().invoke(role,prompt,*args,**kwargs)
+                if role=='implementation':  # Fix whatever the escalated attempts left in the checkout.
+                    current=next(l.split(': ',1)[1] for l in (home/'worktrees'/run_id/'implementation'/'calc.py').read_text().splitlines() if 'return' in l)
+                    result['content']['edits']=[{'path':'calc.py','old':current,'new':'return a+b'}]
+                return result
+        home,run_id=self.home,self.run['id']
+        self.tickets.db.execute('UPDATE tickets SET not_before=0 WHERE id=?',(self.ticket['ticket_id'],));self.tickets.db.commit()
+        flow=Workflow(self.home);worker=FixesFromLastAttempt();flow.worker=worker
+        try:run=flow.execute(self.run['id'])
+        finally:flow.store.close()
+        self.assertEqual(run['status'],'ready_for_delivery',run['state'].get('error'))
+        self.assertIn('previous_attempt',worker.plans[0])  # The retry plans from the escalated failure.
+
+    def test_replan_that_drops_an_edited_file_reverts_it_instead_of_blocking(self):
+        (self.repo/'util.py').write_text("from calc import add\ndef double(x): return add(x,x)\n")
+        git(self.repo,'add','.');git(self.repo,'commit','-m','util')
+        from graph_engineering.report_commands import act as _act
+        self.tickets.store.db.execute("UPDATE runs SET state=json_set(state,'$.base_sha',?) WHERE id=?",(git(self.repo,'rev-parse','HEAD').strip(),self.run['id']))
+        self.tickets.store.db.commit()
+        class Narrowing(DevelopmentDouble):
+            def __init__(self):super().__init__();self.plans=0;self.implementations=0
+            def invoke(self,role,*args,**kwargs):
+                result=super().invoke(role,*args,**kwargs)
+                if role=='planning':
+                    self.plans+=1;result['content']['files']=['calc.py','util.py'] if self.plans==1 else ['calc.py']
+                if role=='implementation':
+                    self.implementations+=1
+                    result['content']['edits']=[{'path':'calc.py','old':'return a-b','new':'return a*b'},
+                                                {'path':'util.py','old':'add(x,x)','new':'add(x,x) # touched'}] if self.implementations==1 \
+                        else [{'path':'calc.py','old':'return a*b','new':'return a+b'}]
+                return result
+        _act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'narrow-start-1')
+        flow=Workflow(self.home);flow.worker=Narrowing()
+        try:run=flow.execute(self.run['id'])
+        finally:flow.store.close()
+        self.assertEqual(run['status'],'ready_for_delivery',run['state'].get('error'))
+        self.assertNotIn('util.py',run['state']['diff'])
+        self.assertIn('unplanned_edit_reverted',[e['kind'] for e in self.tickets.store.events(self.run['id'])])
 
     def test_fragment_edits_reject_ambiguous_matches_and_outside_paths(self):
         from graph_engineering.accepted_development import materialize_hunks
