@@ -111,6 +111,26 @@ flowchart LR
 `graph-engineer graph` and the MCP `workflow_graph` tool export the exact set of
 transitions that the engine enforces.
 
+## Autonomous investigation (2026-10-21)
+
+Intake investigation establishes repository facts itself instead of asking the requester:
+
+* the large model sees the committed source file listing and may name up to six `read_files`
+  for the next search round (only paths in the filtered listing; requested files are read first,
+  whole when short, and lines over 300 characters are truncated so one line cannot hide a file);
+* the prompt forbids questions the repository can answer; product choices with a safe default
+  are recorded as `Assumption:` limitations;
+* before a ticket waits for a person, `ticket_finalisation` sends the model's own questions back
+  for `SELF_RESOLUTION_ROUNDS` (1) additional search-and-investigate round per operator generation,
+  with its own reference-correction retry, recorded as a `self_resolution` event;
+* a grounded ticket (all references verified, at least one finding) proceeds to review with any
+  remaining questions visible; only an ungrounded ticket waits in Needs Information.
+
+Measured on a copy of GE-30D05C40 (Qwen 3.8 27B): the two repository questions it previously asked
+were answered from `backend/llm.js:84` and `frontend/src/App.jsx`, and the ticket reached review with
+four verified references and no questions. Review, development authorisation and merge approval
+remain human gates unless a repository's autonomy policy says otherwise.
+
 ## Directory structure
 
 ```text

@@ -26,7 +26,7 @@ class InvestigationDouble:
                 'root_cause_hypothesis':'The subtraction operator may explain the reported total.','reproduction_steps':['Run the registered regression suite'],
                 'proposed_solution':'Replace subtraction after reproduction and approval.','acceptance_criteria':['add(2,3) returns 5'],
                 'validation_plan':['Run frozen addition regression'],'limitations':['Runtime causality remains unverified'],
-                'questions':['Provide observed input and output'] if self.clarify else [],'search_terms':[],
+                'questions':['Provide observed input and output'] if self.clarify else [],'search_terms':[],'read_files':[],
                 'next_action':'clarification' if self.clarify else 'enhance','confidence':.8}
         metric={'model_key':model_key,'model_id':'explicit-inference-double','success':True,'latency_seconds':0}
         self.metrics.append(metric);return {'content':content,'metrics':metric,'raw_path':'explicit-inference-double'}
@@ -81,10 +81,12 @@ class IntakeTests(unittest.TestCase):
         ticket,run=self.investigate(InvestigationDouble(invalid=True))
         self.assertEqual(run['status'],'needs_information',run['state'].get('error'))
         self.assertFalse(run['state']['finding_validation']['source_references_valid'])
-        self.assertEqual(run['state']['validation_round'],2)
+        # A validation retry, one bounded self-resolution round with its own retry, then a person is asked.
+        self.assertEqual(run['state']['validation_round'],4)
         stages=[e['node'] for e in self.tickets.store.events(run['id']) if e['kind']=='started']
-        self.assertEqual(stages.count('problem_investigation'),2)
-        self.assertEqual(len(report(self.tickets.db,ticket['ticket_id'])['revisions']),2)
+        self.assertEqual(stages.count('problem_investigation'),4)
+        self.assertEqual([e['data']['round'] for e in self.tickets.store.events(run['id']) if e['kind']=='self_resolution'],[1])
+        self.assertEqual(len(report(self.tickets.db,ticket['ticket_id'])['revisions']),4)
 
     def test_ambiguous_report_remains_unconfirmed_and_waits_for_clarification(self):
         ticket,run=self.investigate(InvestigationDouble(clarify=True))
