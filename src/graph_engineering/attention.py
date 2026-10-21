@@ -30,6 +30,16 @@ def _action(action_id, label, endpoint, payload, *, input=None, primary=False, h
             "primary": primary, "help": help, "confirm": confirm}
 
 
+def coverage_lines(state):
+    """Which acceptance criteria this delivery covers; the rest continue in a follow-up ticket (never silently)."""
+    from .accepted_development import coverage_summary
+    summary = coverage_summary(state)
+    if not summary["total"] or not summary["remaining"]:
+        return []
+    return [f"Delivers acceptance criteria {', '.join(map(str, summary['covered'])) or 'none'} of {summary['total']}; remaining: "
+            + "; ".join(f"{n}. {t}" for n, t, _ in summary["remaining"]) + " (a follow-up ticket is created after delivery)"]
+
+
 def item(ticket, *, approved_head=None, original=None, automatic_development=False, automatic_recovery=False, automatic_acceptance=False):
     """The attention item for one ticket row (``Tickets.list()`` shape), or None if nothing is needed."""
     state, status, node = ticket["state"], ticket["status"], ticket["node"]
@@ -149,6 +159,7 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
                        "headline": "Approve publication of the tested change" if github else "Approve the local PR preview",
                        "context": [f"Tested head: {state.get('head', '')[:12]}",
                                    f"Independent review: {state.get('review', {}).get('decision', 'unknown')}",
+                                   *coverage_lines(state),
                                    "Publishes to GitHub; merge approval stays separate." if github
                                    else "Local simulation only; nothing is published to GitHub."],
                        "actions": [intake_action("publish_development", "Approve publication", input="actor", primary=True)
@@ -163,6 +174,7 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
                                    f"Changed files: {', '.join(state.get('plan', {}).get('files', [])[:4])}",
                                    *([f"Existing tests adapted to the accepted change: {', '.join(state['plan']['adapted_tests'])}"]
                                      if state.get('plan', {}).get('adapted_tests') else []),
+                                   *coverage_lines(state),
                                    "Checks and repository policy are re-verified before the merge."],
                        "actions": [_action("approve", "Approve commit", TICKET,
                                            {"ticket_id": ticket["id"], "action": "approve", "head": state.get("head")},

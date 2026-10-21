@@ -132,7 +132,7 @@ OPTIONAL_OUTPUTS = {"evidence_collection": {"outcome": STR},
                     "deduplication": {"duplicate_of": STR, "outcome": STR},
                     "ticket_finalisation": {"self_resolution": DICT, "search_round": {"type": "integer"}},
                     "test_execution": {"last_error": DICT, "adapted_digests": DICT},
-                    "escalation": {"error": STR}, "approval_gate": {"policy_snapshot": DICT},
+                    "escalation": {"error": STR}, "approval_gate": {"policy_snapshot": DICT}, "completion": {"follow_up": DICT},
                     # Clarification mode resets the intake investigation like an operator clarification.
                     "question_answering": {"clarifications": ARRAY, "intake": DICT, "search_round": {"type": "integer"},
                                            "validation_round": {"type": "integer"}, "finding_validation": DICT,
@@ -266,6 +266,11 @@ def publication_body(state: dict, issue: int) -> str:
         validation.append(f"- Frozen regression test {regression}: fails at {state['base_sha']}, passes at the tested head.")
     if adapted:
         validation.append("- Existing tests adapted to the accepted change: " + ", ".join(adapted) + " (assertions changed, none removed).")
+    from .accepted_development import coverage_summary
+    summary = coverage_summary(state)
+    if summary["total"]:
+        validation.append(f"- Acceptance criteria covered by the regression: {', '.join(map(str, summary['covered'])) or 'none'} of {summary['total']}."
+                          + (" Remaining: " + "; ".join(f"{n}. {t}" for n, t, _ in summary["remaining"]) + " (continued in a follow-up ticket after delivery)." if summary["remaining"] else ""))
     review_lines = [f"- Independent model review ({review.get('model', 'unknown model')}): {review.get('decision', 'none')}.",
                     "- " + str(review.get("rationale", "")).strip()[:1500]]
     return (f"Closes #{int(issue)}\n\n## Change\n{state['patch']['summary']}\n\nFiles:\n{files}\n\n## Validation\n" + "\n".join(validation)
@@ -1248,7 +1253,38 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         if "postmerge" in state:
             close = lambda: self.backend(state).update_issue(state["issue"]["number"], state="closed")
             self.store.effect(self.run_id, "close_issue", close, on_uncertain=close)
+        updates = {}
+        if state["config"].get("run_mode") == "accepted_development" and outcome == "completed" and (state.get("regression") or {}).get("uncovered"):
+            # The delivered change covers only part of the accepted requirement: the rest continues as its own
+            # ticket, created once (GE-30D05C40 was "done" with three of four criteria never attempted).
+            create = lambda: self.follow_up_ticket(state)
+            updates["follow_up"] = self.store.effect(self.run_id, "follow_up_ticket", create, on_uncertain=create)
+            self.store.event(self.run_id, "completion", "follow_up_created", updates["follow_up"])
         report = self.store.artifact(self.run_id, "report.json", {"run_id": self.run_id, "outcome": outcome,
-                  "repo": state["config"]["repo"], "backend": state["config"]["backend"], "state": state,
+                  "repo": state["config"]["repo"], "backend": state["config"]["backend"], "state": state | updates,
                   "events": self.store.events(self.run_id)})
-        return {"outcome": outcome, "report": report}, "done", outcome
+        return {"outcome": outcome, "report": report} | updates, "done", outcome
+
+    def follow_up_ticket(self, state):
+        """A new ticket for the acceptance criteria the delivered regression left uncovered; idempotent per run."""
+        from .accepted_development import coverage_summary
+        from .report_store import create
+        from .tickets import Tickets
+        summary = coverage_summary(state)
+        title = state.get("enhanced", {}).get("title") or state["candidate"]["title"]
+        parent = state["intake"].get("ticket_id") or self.run_id
+        tickets = Tickets(self.root)
+        lines = [f"Continuation of {parent}: {title}.",
+                 f"That ticket delivered acceptance criteria {', '.join(map(str, summary['covered'])) or 'none'} of {summary['total']} "
+                 f"(regression {state['regression']['path']}); its change is on the base branch now.",
+                 "Remaining acceptance criteria to deliver:"]
+        lines += [f"- {number}. {text}" + (f" (left uncovered before: {reason})" if reason else "") for number, text, reason in summary["remaining"]]
+        solution = state.get("enhanced", {}).get("proposed_solution")
+        if solution:
+            lines += ["", "Proposed solution recorded on the original ticket:", str(solution)[:1500]]
+        try:
+            created = create(tickets, {"repository_id": state["intake"]["repository_id"], "description": "\n".join(lines)[:6000],
+                                       "priority": state.get("priority") or "P2", "related_ticket": parent}, f"follow-up-{self.run_id}")
+        finally:
+            tickets.store.close()
+        return {"ticket_id": created["ticket_id"], "run_id": created["run_id"], "remaining": [n for n, _, _ in summary["remaining"]]}

@@ -24,7 +24,9 @@ class DevelopmentDouble(WorkerDouble):
                 'status':'answered_from_operator','basis':['Troubleshooting note: Use real input values 9 and 6.']}],
                 'summary':'One question was answered from recorded operator information.'}
         elif role=='regression_test':
-            content={'content':'import unittest\nfrom calc import add\nclass Regression(unittest.TestCase):\n def test_accepted_requirement(self): self.assertEqual(add(9,6),15)\n','rationale':'Direct accepted addition criterion'}
+            numbered=json.loads(args[0]).get('acceptance_criteria_numbered',[])  # Cover every criterion unless a test overrides.
+            content={'content':'import unittest\nfrom calc import add\nclass Regression(unittest.TestCase):\n def test_accepted_requirement(self): self.assertEqual(add(9,6),15)\n','rationale':'Direct accepted addition criterion',
+                     'runner':'unittest','covers':list(range(1,len(numbered)+1)),'uncovered':[]}
         elif role=='implementation':
             content={'summary':'Restore addition','edits':[{'path':'calc.py','old':'return a-b','new':'return a+b'}]}
         else:return super().invoke(role,*args,**kwargs)
