@@ -167,7 +167,7 @@ class AutonomousRecoveryTests(unittest.TestCase):
             def invoke(self, role, *args, **kwargs):
                 result = super().invoke(role, *args, **kwargs)
                 if role == 'regression_test':
-                    result['content']['content'] = 'import unittest\nfrom calc import add\nclass R(unittest.TestCase):\n def test_x(self): self.assertEqual(add(9,6),3)\n'
+                    result['content']['tests'][0]['content'] = 'import unittest\nfrom calc import add\nclass R(unittest.TestCase):\n def test_x(self): self.assertEqual(add(9,6),3)\n'
                 return result
         self.set_policy('whole-run-policy-1', max_node_attempts=3)
         dispatch(self.tickets)

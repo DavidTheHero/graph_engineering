@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-19T00:11:08.360Z",
+  "at": "2026-10-21T20:16:09.780Z",
   "checks": [
     {
       "name": "Observed public run, 20-step graph and real PR link",
@@ -88,6 +88,6 @@
     "dashboard-768.png",
     "dashboard-320.png"
   ],
-  "browser": "155.0.4283.62",
+  "browser": "150.0.4078.83",
   "passed": true
 }
