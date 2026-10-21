@@ -157,7 +157,9 @@ ended with a person pressing Retry. The repository autonomy policy now owns reco
   `graph/<run>` is pushed under `<feat|fix>/<issue>-<slug>` and the PR body carries `Closes #N`
   and Change / Validation / Review sections built from recorded evidence only
   (`publication_branch`, `publication_body`), so a PR policy such as General_AI_Agent's passes.
-  The local simulation backend keeps `graph/<run>`.
+  The published name is chosen once as a durable effect; a branch of that name with other history
+  on GitHub is never pushed over, the run publishes under `<name>-<run prefix>` instead, and the
+  PR record carries the published name. The local simulation backend keeps `graph/<run>`.
 * **The reviewer is told the facts.** The independent review prompt states the controller's own test
   run as facts (`verification`: full suite and regression passed or not) and labels the pre-change
   output as such. A rejection whose blocking findings cite a test failing, while the suite passed,

@@ -344,7 +344,20 @@ class GitHubBackend:
             result["key"] = key
         if "head" in item:
             result["head"] = item["head"]["sha"]
+            if item["head"].get("ref"):
+                result["branch"] = item["head"]["ref"]  # The name the change is published under.
         return result
+
+    def remote_branch_head(self, name):
+        """The commit a branch of that name points to on GitHub, or None when no such branch exists."""
+        _git(self.repo, "check-ref-format", f"refs/heads/{name}")
+        listed = _git(self.repo, "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential",
+                      "ls-remote", "--heads", f"https://github.com/{self.slug}.git", f"refs/heads/{name}")
+        for line in listed.splitlines():
+            sha, _, ref = line.partition("\t")
+            if ref.strip() == f"refs/heads/{name}":
+                return _head(sha.strip())
+        return None
 
     def _matches(self, collection, key, branch=None):
         marker = _marker(key)
@@ -427,7 +440,7 @@ class GitHubBackend:
         _git(self.repo, "check-ref-format", "--branch", branch)
         published = remote_branch or branch
         if published != branch:
-            _git(self.repo, "check-ref-format", "--branch", published)
+            _git(self.repo, "check-ref-format", f"refs/heads/{published}")  # A full ref name: no shorthand expansion.
         matches = self._matches("pulls", key, published)
         if matches:
             item = matches[0]
@@ -445,6 +458,11 @@ class GitHubBackend:
                                   r"^url\..*\.(insteadof|pushinsteadof)$"], capture_output=True, text=True, timeout=10,**background_options())
         if rewrites.returncode not in (0, 1) or rewrites.stdout.strip():
             raise PublicationError("Git URL rewrite configuration requires manual publication")
+        if published != branch:
+            existing = self.remote_branch_head(published)
+            if existing not in (None, head):  # A person's branch of the same name: never pushed over, named clearly.
+                raise PublicationError(f"remote branch {published} already exists with other history ({existing[:12]}); "
+                                       "it is not touched, choose another published name")
         _git(self.repo, "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential",
              "push", "--porcelain", f"https://github.com/{self.slug}.git", f"refs/heads/{branch}:refs/heads/{published}")
         try:

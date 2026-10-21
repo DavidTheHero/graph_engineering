@@ -155,11 +155,23 @@ class GitHubBackendTests(unittest.TestCase):
              patch("graph_engineering.publication.subprocess.run", return_value=type("R", (), {"returncode": 1, "stdout": ""})()), \
              patch.object(backend, "_api", return_value=created) as api:
             pr = backend.ensure_pr("task", "Title", "Closes #17", "graph/run1", head, remote_branch="feat/17-model-name")
-        self.assertEqual(pr["number"], 18)
+        self.assertEqual((pr["number"], pr["branch"]), (18, "feat/17-model-name"))
         push = next(c for c in calls if "push" in c)
         self.assertEqual(push[-1], "refs/heads/graph/run1:refs/heads/feat/17-model-name")
         self.assertEqual(api.call_args.args[2]["head"], "feat/17-model-name")
-        self.assertIn("check-ref-format", [c[0] for c in calls])
+        self.assertIn(("check-ref-format", "refs/heads/feat/17-model-name"), calls)  # The published name, as a full ref.
+        self.assertTrue(any("ls-remote" in c and c[-1] == "refs/heads/feat/17-model-name" for c in calls))  # Checked before the push.
+        # Review of PR #15: a person's branch of the same name with other history is never pushed over.
+        def git_taken(repo, *argv):
+            if "ls-remote" in argv: return "b" * 40 + "\trefs/heads/feat/17-model-name"
+            return git(repo, *argv)
+        with patch("graph_engineering.publication._git", side_effect=git_taken), patch.object(backend, "_list", return_value=[]), \
+             patch("graph_engineering.publication.subprocess.run", return_value=type("R", (), {"returncode": 1, "stdout": ""})()):
+            with self.assertRaisesRegex(PublicationError, "already exists with other history"):
+                backend.ensure_pr("task", "Title", "b", "graph/run1", head, remote_branch="feat/17-model-name")
+            self.assertEqual(backend.remote_branch_head("feat/17-model-name"), "b" * 40)
+        with patch("graph_engineering.publication._git", side_effect=git):
+            self.assertIsNone(backend.remote_branch_head("feat/17-model-name"))
         # An existing PR under the convention name is recognised; one under another head is refused.
         existing = created | {"body": "<!-- graph-engineering:task -->"}
         with patch("graph_engineering.publication._git", side_effect=git), patch.object(backend, "_list", return_value=[existing]):

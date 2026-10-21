@@ -1142,9 +1142,14 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         backend = self.backend(state)
         issue = state['issue']['number']
         if getattr(backend, "kind", "local") == "github":
-            # Repository conventions (General_AI_Agent's PR policy, 2026-10-21): a task branch named after the
-            # issue, a closing reference and Change / Validation / Review sections. Generic enough for any host.
-            remote_branch = publication_branch(state, issue)
+            # A conventional task branch named after the issue, a closing reference and Change / Validation /
+            # Review sections: what PR policies commonly require. The published name is chosen once, durably: a
+            # person's branch of the same name is never pushed over, the run takes a suffixed name instead.
+            def choose():
+                name = publication_branch(state, issue)
+                taken = backend.remote_branch_head(name)
+                return {"name": name if taken in (None, state["head"]) else f"{name}-{self.run_id[:6]}", "taken": taken}
+            remote_branch = self.store.effect(self.run_id, "remote_branch", choose, on_uncertain=choose)["name"]
             body = publication_body(state, issue)
             publish = lambda: backend.ensure_pr(state["fingerprint"], state["candidate"]["title"], body, state["branch"], state["head"], remote_branch)
             reconcile = lambda: backend.reconcile_pr(state["fingerprint"], state["branch"], state["head"], remote_branch)
