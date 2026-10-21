@@ -192,6 +192,11 @@ class AdaptExistingTestsTests(unittest.TestCase):
             flow.store.close()
         self.assertEqual((node, status, updates['verification']['passed']), ('repair', 'ready', False))
         self.assertIn('Adapted test refused before any test ran', updates['verification']['output'])
+        # Review of PR #12 (F1): the refused test is back at the accepted commit, its digest dropped, and the
+        # implementer gets the refusal as rejected-proposal feedback; a repair keeps the file planned.
+        self.assertEqual(path.read_text(), original)
+        self.assertEqual((updates['adapted_digests'], updates['last_error']['message'][:13]), ({}, 'Adapted test '))
+        self.assertEqual([e['data']['reverted'] for e in self.tickets.store.events(self.run['id']) if e['kind'] == 'adapted_test_refused'], [['test_shape.py']])
 
 
 if __name__ == '__main__':

@@ -45,6 +45,24 @@ class WorkerStalled(ModelError):
     """OpenCode emitted nothing within its startup window; the model was never asked."""
 
 
+SMALL_INPUT_CEILING = 12000
+LARGE_INPUT_CEILING = 120000  # Bytes; a registry entry may ask for less, never more. Equal to the largest file validate_edits accepts.
+LEGACY_LARGE_BUDGET = 40000  # The former constant for every large-context entry: not an operator's choice when it is found in a registry.
+
+
+def tier_input_ceiling(small: bool) -> int:
+    return SMALL_INPUT_CEILING if small else LARGE_INPUT_CEILING
+
+
+def default_input_budget(context: int | None) -> int:
+    """Input bytes a newly registered model gets: three fifths of its context (bytes over-count Qwen tokens), within
+    40 000–120 000 for a large-context model, three quarters of a small context otherwise. GE-30D05C40: a 150 000-token
+    model capped at 40 000 bytes could not see three ordinary files of one change at once."""
+    if (context or 0) >= 32768:
+        return max(40000, min(120000, int(context * 0.6)))
+    return max(2000, int((context or 4096) * 0.75))
+
+
 @dataclass(frozen=True)
 class ModelEndpoint:
     endpoint: str
@@ -54,7 +72,7 @@ class ModelEndpoint:
     api_key_env: str | None = None
     timeout: int = 120
     startup_timeout: int = 45
-    input_budget_bytes: int = 40000
+    input_budget_bytes: int | None = None  # Resolved from the context when absent (see default_input_budget).
     structured_output: bool = True
     tools: bool = False
     tier: str = ""
@@ -67,6 +85,10 @@ class ModelEndpoint:
         if self.tier in ("large", "small"):
             return self.tier == "small"
         return self.context is not None and self.context <= 16384
+
+    def __post_init__(self):
+        if self.input_budget_bytes is None:
+            object.__setattr__(self, "input_budget_bytes", default_input_budget(self.context))
 
     @classmethod
     def from_mapping(cls, value: dict | ModelEndpoint) -> ModelEndpoint:
@@ -87,7 +109,7 @@ def default_models() -> dict[str, dict]:
     """
     return {
         "a": asdict(ModelEndpoint("http://192.168.0.60:18020/v1", "qwen3.8-27b", 150000,
-                                  tier="large", label="Qwen 3.8 27B")),
+                                  input_budget_bytes=default_input_budget(150000), tier="large", label="Qwen 3.8 27B")),
         "b": asdict(ModelEndpoint("http://192.168.0.62:18035/v1", "docker.io/local/qwen35-9b:16k", 16384, timeout=240,
                                   input_budget_bytes=12000, output=2048, tier="small", label="Qwen 3.5 9B (16K)")),
     }
@@ -503,7 +525,7 @@ class OpenCodeWorker:
         prompt = redact(prompt)
         if not model.model_id:
             raise ModelError("Selected model has no discovered model identifier; explicit fallback required")
-        budget = min(model.input_budget_bytes, 12000 if model.small else 40000)
+        budget = min(model.input_budget_bytes, tier_input_ceiling(model.small))
         if model.context is not None:
             # Byte count is a conservative token upper bound for byte-tokenized
             # Qwen text. Reserve native OpenCode system framing and all output.

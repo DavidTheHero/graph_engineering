@@ -11,7 +11,7 @@ import subprocess
 import time
 from urllib.parse import quote
 
-from .models import ModelClient, ModelError, OpenCodeWorker, load_models, model_health, validate_artifact
+from .models import ModelClient, ModelError, OpenCodeWorker, default_input_budget, load_models, model_health, tier_input_ceiling, validate_artifact
 from . import routing
 from .routing import PROFILES as ROUTING_PROFILES
 from .publication import GitHubBackend, LocalBackend, merge_gate
@@ -130,6 +130,7 @@ OPTIONAL_OUTPUTS = {"evidence_collection": {"outcome": STR},
                     'regression_validation':{k:STR if k=='fingerprint' else DICT for k in ('regression_baseline','baseline','validation','candidate','fingerprint','frozen','bundle')},
                     "deduplication": {"duplicate_of": STR, "outcome": STR},
                     "ticket_finalisation": {"self_resolution": DICT, "search_round": {"type": "integer"}},
+                    "test_execution": {"last_error": DICT, "adapted_digests": DICT},
                     "escalation": {"error": STR}, "approval_gate": {"policy_snapshot": DICT},
                     # Clarification mode resets the intake investigation like an operator clarification.
                     "question_answering": {"clarifications": ARRAY, "intake": DICT, "search_round": {"type": "integer"},
@@ -233,6 +234,12 @@ def adapted_test_intact(path: Path, name: str, base_sha: str) -> None:
         raise ValueError(f"Adapted test lost assertions: {name} (an adaptation changes assertions, it never removes them)")
     if len(DISABLING.findall(after)) > len(DISABLING.findall(before)):
         raise ValueError(f"Adapted test gained skip, focus or todo markers: {name}")
+
+
+def refused_tests(adapted: list[str], message: str) -> list[str]:
+    """The adapted tests a refusal message names, as whole paths (``a.test.js`` must not match ``tests/a.test.js``)."""
+    named = [name for name in adapted if re.search(r"(?<![\w./-])" + re.escape(name) + r"(?![\w./-])", message)]
+    return named or list(adapted)
 
 
 def planned_complete(candidate: dict, planned: list[str]) -> bool:
@@ -635,7 +642,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                 for f in evidence["files"][:3]], "failure_output": evidence.get("failure_output", "")[-1800:]}}
         encoded = json.dumps(redact(prompt), ensure_ascii=False, separators=(",", ":"))
         model_config = state["config"]["models"][model]
-        budget = min(model_config.get("input_budget_bytes", 40000),
+        budget = min(model_config.get("input_budget_bytes") or default_input_budget(model_config.get("context")), tier_input_ceiling(small),
                      max((model_config.get("context") or 100000) - model_config.get("output", 4096) - 2048, 0))
         if small and len(encoded.encode()) + len(json.dumps(schema).encode()) > budget:
             rejected = self.rejected_models()
@@ -814,6 +821,11 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                 "Preserve all tests and policy." if accepted else
                 "Plan a minimal source-only fix to the validated test failure. Preserve all tests and policy. Select only complete source files from the supplied bundle.")
         request = {"task": task, "candidate": state["candidate"], "evidence": state["bundle"], "additional_information": troubleshooting_context(state)}
+        # A repair within the round keeps the previous plan: its edits stay in the worktree, so dropping a file
+        # would revert the half of the change the latest failure is not about (GE-30D05C40 oscillated between
+        # {llm.js, agent.js} and {agent.js, agent.test.js}, each re-plan undoing the other). A fresh round after
+        # escalation starts from the accepted commit and may plan differently.
+        previous = {}
         if accepted:
             request["regression_test"] = {"path": state["regression"]["path"], "content": state["regression"]["content"]}
             if state.get("plan") and state.get("verification"):  # A repair, or a retry after escalation.
@@ -821,16 +833,24 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                 request["previous_attempt"] = {"files": state["plan"].get("files", []),
                                                "failure_output": state["verification"].get("output", "")[-3000:],
                                                **({"review_findings": review} if review and not review.get("approved") else {})}
+                if state.get("worktree_round", 0) == state.get("development_round", 0):
+                    previous = state["plan"]
+                    request["previous_attempt"]["note"] = ("These files stay planned and keep their current edits; add any file the "
+                                                           + ("review findings" if state["verification"].get("passed") else "failure") + " shows is missing.")
         if accepted:
             request = fit_planning_request(state["config"], request)
             if request.get("shortened_for_budget"):
                 self.store.event(self.run_id, "task_planning", "prompt_fitted", {"shortened": request["shortened_for_budget"]})
-        adaptable = adaptable_tests(self, state) if accepted else []
+        adaptable = sorted(set(adaptable_tests(self, state)) | set(previous.get("adapted_tests") or [])) if accepted else []
         if adaptable:
             request["adaptable_existing_tests"] = adaptable
-            request["task"] += (" The frozen regression now passes but these EXISTING tests fail because they pin the behaviour the accepted "
-                                "requirement changes; you may include them in files ONLY to adapt those assertions: " + ", ".join(adaptable) + ".")
+            request["task"] += (" The frozen regression now passes but these EXISTING tests fail, or were adapted this round, because they pin the "
+                                "behaviour the accepted requirement changes; you may include them in files ONLY to adapt those assertions: " + ", ".join(adaptable) + ".")
         plan = self.ask(state, "planning", request, PLAN_SCHEMA, routing.LARGE)
+        kept = [f for f in previous.get("files", []) if f not in plan["files"]]
+        if kept:
+            plan["files"] = plan["files"] + kept
+            self.store.event(self.run_id, "task_planning", "plan_widened", {"kept": kept, "reason": "a repair keeps the previous plan's files and their edits"})
         complete = {f["path"] for f in state["bundle"]["files"] if f["complete"] or state['config'].get('run_mode')=='accepted_development'}
         adapted = sorted(set(plan["files"]) & set(adaptable))
         if not set(plan["files"]) - set(adapted) <= (set(state["repository"]["source_files"]) & complete) - set(state["frozen"]):
@@ -891,8 +911,9 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         last = state.get("last_error") or {}
         if accepted and isinstance(last, dict) and str(last.get("message", "")).startswith(("A shortened", "A replacement", "An old fragment", "The replacement", "The marker", "Replacement", "Adapted test")):
             request["rejected_proposal"] = "Your previous proposal was rejected: " + last["message"]  # The model can correct, not repeat.
-        if accepted and fresh_round:  # That failure and review describe edits this round no longer has.
+        if accepted and fresh_round:  # That failure, review and rejection describe edits this round no longer has.
             request |= {"previous_failure": "", "review_feedback": {}}
+            request.pop("rejected_proposal", None)
         def fit():
             # Shorter long lines before giving up; a shorter view is used only while every planned file stays
             # complete in it (review of PR #11: shortening is not monotonic, so each view is checked again).
@@ -956,10 +977,18 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             if not str(exc).startswith("Adapted test"):
                 raise
             # The edit overstepped the adaptation bounds: tell the implementer and repair, instead of burning this step.
-            self.store.event(self.run_id, "test_execution", "adapted_test_refused", {"message": str(exc)})
+            # The refused test goes back to the accepted commit (review of PR #12: a repair keeps planned files, so
+            # the overstepping edit would otherwise stay in the worktree and be refused again on every repair).
+            path = Path(state["worktree"])
+            adapted = (state.get("plan") or {}).get("adapted_tests") or []
+            refused = refused_tests(adapted, str(exc))
+            for name in refused:
+                git(path, "checkout", state["base_sha"], "--", name)
+            self.store.event(self.run_id, "test_execution", "adapted_test_refused", {"message": str(exc), "reverted": refused})
             return {"verification": {"passed": False, "returncode": None, "timed_out": False, "empty_suite": False,
                                      "output": "Adapted test refused before any test ran: " + str(exc)},
-                    "head": state.get("head", ""), "diff": state.get("diff", "")}, "repair", "ready"
+                    "head": state.get("head", ""), "diff": state.get("diff", ""), "last_error": {"message": str(exc)},
+                    "adapted_digests": {k: v for k, v in (state.get("adapted_digests") or {}).items() if k not in refused}}, "repair", "ready"
         path = Path(state["worktree"])
         if state['config'].get('parallel_quality') and state['config']['build_commands']:
             from .quality import parallel_checks
@@ -973,13 +1002,13 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         verification["passed"] = verification["passed"] and all(b["passed"] for b in builds)
         self.verify_files(state)  # Test processes have no authority to modify protected files.
         if not verification["passed"]:
-            return {"verification": verification, "head": "unverified", "diff": ""}, "repair", "ready"
+            return {"verification": verification, "head": "unverified", "diff": "", "last_error": {}}, "repair", "ready"
         head = Worktree(Path(state["config"]["repo"]), path, state["branch"], state["base_sha"]).commit(state["plan"]["files"]+([state['regression']['path']] if state.get('regression') else []), self.run_id)
         diff = git(path, "diff", "--no-ext-diff", "--no-color", state["base_sha"], head)
         if len(diff.encode()) > 18000:
             raise ValueError("Diff exceeds independent review budget; split task")
         verification["tested_head"] = head
-        return {"verification": verification, "head": head, "diff": diff}, "independent_review", "ready"
+        return {"verification": verification, "head": head, "diff": diff, "last_error": {}}, "independent_review", "ready"
 
     def node_independent_review(self, state):
         implementers = set(state.get("implementation_models") or []) | {state["implementation_model"]}

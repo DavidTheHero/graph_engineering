@@ -5,7 +5,7 @@ from graph_engineering.investigation import _size, prompt_budget
 from graph_engineering.models import default_models
 from graph_engineering.workflow import HUNK_SCHEMA, PLAN_SCHEMA, fit_implementation_request, fit_planning_request
 
-CONFIG = {"models": default_models(), "routing": "baseline"}
+CONFIG = {"models": default_models() | {"a": default_models()["a"] | {"input_budget_bytes": 40000}}, "routing": "baseline"}  # Fixtures sized for a 40 KB budget.
 
 
 def planning(big):
@@ -52,7 +52,7 @@ class PromptFittingTests(unittest.TestCase):
 
     def test_budget_follows_the_model_that_is_routed_first_not_the_strictest_fallback(self):
         """Review of PR #7: a stricter fallback model must not shrink prompts the preferred model accepts."""
-        models = default_models() | {"c": default_models()["a"] | {"context": 32000, "label": "small-context large"}}
+        models = CONFIG["models"] | {"c": CONFIG["models"]["a"] | {"context": 32000, "label": "small-context large"}}
         config = {"models": models, "routing": "assigned", "role_routes": {"implementation": ["a", "c"], "planning": ["a", "c"]}}
         self.assertEqual(prompt_budget(config, "implementation", HUNK_SCHEMA), prompt_budget(CONFIG, "implementation", HUNK_SCHEMA))
         reversed_routes = config | {"role_routes": {"implementation": ["c", "a"]}}

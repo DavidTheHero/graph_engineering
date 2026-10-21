@@ -103,7 +103,7 @@ class BudgetAndEvidenceTests(unittest.TestCase):
     def test_oversized_investigation_prompt_is_fitted_and_records_what_was_cut(self):
         from graph_engineering.investigation import _size, fit_prompt, prompt_budget
         from graph_engineering.models import default_models
-        config = {"models": default_models(), "routing": "baseline"}
+        config = {"models": default_models() | {"a": default_models()["a"] | {"input_budget_bytes": 40000}}, "routing": "baseline"}
         excerpt = lambda i: {"file": f"mod{i}.js", "start_line": 1, "end_line": 160,
                              "numbered_source": "\n".join(f"{n}: const v{n} = \"x\";" for n in range(1, 160))}
         prompt = {"task": "t" * 2500, "repository_files": [f"src/module_{i}.js" for i in range(300)],

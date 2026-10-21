@@ -6,7 +6,7 @@
     "output": 4096,
     "api_key_env": null,
     "timeout": 120,
-    "input_budget_bytes": 40000,
+    "input_budget_bytes": 90000,
     "structured_output": true,
     "tools": false,
     "tier": "large",
