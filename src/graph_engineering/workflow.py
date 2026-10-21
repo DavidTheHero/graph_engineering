@@ -235,6 +235,20 @@ def adapted_test_intact(path: Path, name: str, base_sha: str) -> None:
         raise ValueError(f"Adapted test gained skip, focus or todo markers: {name}")
 
 
+def complete_view(bundle, planned: list[str], levels, limit: int):
+    """The first view (longest lines first) at which every planned file is complete, as (bundle, level index).
+
+    Shorter views only trim marked lines, so a file complete at one level stays complete at the next; only when
+    the planned files are incomplete even at the shortest view is the task too large for the model."""
+    candidate = None
+    for index, max_line in enumerate(levels):
+        candidate = bundle(max_line)
+        if max_line is None or all(f["complete"] for f in candidate["files"] if f["path"] in planned):
+            return candidate, index
+    raise ValueError(f"Planned source ({sum(len(f['content']) for f in candidate['files'])} characters at the shortest view) exceeds the "
+                     f"implementation model's complete-file context of {limit}; split the task into smaller changes")
+
+
 def fit_planning_request(config: dict, request: dict) -> dict:
     """Fit an accepted-development planning prompt to the model budget instead of failing.
 
@@ -851,10 +865,12 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             return source_bundle(path,state['plan']['files']+([state['regression']['path']] if accepted else state['repository']['test_files']),
                                  state['validation']['output'] if accepted else state['baseline']['output'],
                                  implementation_bundle_limit(state['config']) if accepted else 14000,max_line=max_line)
-        evidence=bundle(IMPLEMENTATION_MAX_LINES[0] if accepted else None)
-        if accepted and any(not f['complete'] for f in evidence['files'] if f['path'] in state['plan']['files']):
-            raise ValueError(f"Planned source ({sum(len(f['content']) for f in evidence['files'])} characters) exceeds the implementation model's "
-                             f"complete-file context of {implementation_bundle_limit(state['config'])}; split the task into smaller changes")
+        # The first view (longest lines first) at which every planned file is complete; shorter views only trim
+        # marked lines, so a file complete at one level stays complete at the next.
+        levels = IMPLEMENTATION_MAX_LINES if accepted else (None,)
+        evidence, start = complete_view(bundle, state['plan']['files'], levels, implementation_bundle_limit(state['config']))
+        if start:
+            self.store.event(self.run_id, "isolated_implementation", "view_shortened", {"max_line": levels[start]})
         adapted = (state["plan"].get("adapted_tests") or []) if accepted else []
         request = {"task": ("Return exact old/new source fragment replacements for planned files only. Each old fragment must occur exactly once. The frozen regression must pass after the fix. "
                             + (("The existing tests " + ", ".join(adapted) + " are planned ONLY so their assertions that pin the old behaviour can be adapted to the accepted requirement: never delete, skip or weaken any other assertion or test. ") if adapted else "")
@@ -871,9 +887,9 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             request |= {"previous_failure": "", "review_feedback": {}}
         def fit():
             # Shorter long lines before giving up: the files stay complete, only their marked lines get shorter.
-            for index, max_line in enumerate(IMPLEMENTATION_MAX_LINES):
+            for index, max_line in enumerate(IMPLEMENTATION_MAX_LINES[start:], start):
                 try:
-                    return fit_implementation_request(state["config"], request | {"evidence": evidence if index == 0 else bundle(max_line)})
+                    return fit_implementation_request(state["config"], request | {"evidence": evidence if index == start else bundle(max_line)})
                 except ValueError:
                     if index == len(IMPLEMENTATION_MAX_LINES) - 1:
                         raise

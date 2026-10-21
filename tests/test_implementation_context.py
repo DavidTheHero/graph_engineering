@@ -10,7 +10,7 @@ import unittest
 from graph_engineering.accepted_development import materialize_hunks
 from graph_engineering.models import default_models
 from graph_engineering.repository import TRUNCATED_LINE, source_bundle
-from graph_engineering.workflow import implementation_bundle_limit
+from graph_engineering.workflow import complete_view, implementation_bundle_limit
 
 CONFIG = {"models": default_models(), "routing": "baseline"}
 
@@ -86,6 +86,20 @@ class ImplementationContextTests(unittest.TestCase):
             out = materialize_hunks(repo, {"edits": reordered_properly}, ["a.js"])[0]["content"]
             self.assertIn("import { zz, " + imports[9:], out)  # The import keeps its own remainder...
             self.assertIn(template, out)                       # ...and the template keeps its own.
+
+    def test_the_first_view_where_every_planned_file_is_complete_is_used(self):
+        """GE-30D05C40 (third stop): agent.js + agent.test.js + the regression were incomplete at 300 but complete at 120."""
+        with tempfile.TemporaryDirectory() as folder:
+            repo = Path(folder)
+            (repo / "a.js").write_text("\n".join("const a%d = '%s';" % (i, "x" * 250) for i in range(60)) + "\n")  # 15.5 KB, 60 long lines
+            (repo / "b.js").write_text("\n".join("const b%d = '%s';" % (i, "x" * 250) for i in range(60)) + "\n")
+            bundle = lambda max_line: source_bundle(repo, ["a.js", "b.js"], "", 20000, max_line=max_line)
+            evidence, start = complete_view(bundle, ["a.js", "b.js"], (300, 200, 120), 20000)
+            self.assertEqual(start, 2)  # Incomplete at 300 and 200 (31 KB), complete at 120 (about 17 KB).
+            self.assertTrue(all(f["complete"] for f in evidence["files"]))
+            with self.assertRaisesRegex(ValueError, "at the shortest view"):
+                complete_view(bundle, ["a.js", "b.js"], (300, 200), 20000)
+            self.assertEqual(complete_view(bundle, ["a.js"], (None,), 20000)[1], 0)  # Whole-file mode: no views.
 
 
 if __name__ == "__main__":
