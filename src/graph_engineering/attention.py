@@ -161,6 +161,8 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
                                    f"Tests: {'passed' if verification.get('passed') else 'not passed'}; "
                                    f"review: {state.get('review', {}).get('decision', 'unknown')}",
                                    f"Changed files: {', '.join(state.get('plan', {}).get('files', [])[:4])}",
+                                   *([f"Existing tests adapted to the accepted change: {', '.join(state['plan']['adapted_tests'])}"]
+                                     if state.get('plan', {}).get('adapted_tests') else []),
                                    "Checks and repository policy are re-verified before the merge."],
                        "actions": [_action("approve", "Approve commit", TICKET,
                                            {"ticket_id": ticket["id"], "action": "approve", "head": state.get("head")},

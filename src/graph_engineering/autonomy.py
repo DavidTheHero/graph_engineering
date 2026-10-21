@@ -10,7 +10,7 @@ import json
 import re
 from .runtime import digest,now
 
-DEFAULT={'development':False,'publish':False,'prepare_dependencies':False,'auto_accept':False,
+DEFAULT={'development':False,'publish':False,'prepare_dependencies':False,'auto_accept':False,'adapt_existing_tests':False,
          'recovery_rounds':0,'max_repairs':2,'max_node_attempts':2,'actor':None}
 BUDGETS={'recovery_rounds':(0,6),'max_repairs':(1,4),'max_node_attempts':(1,4)}
 # Failures a retry cannot change: the requirement, the policy or the repository must change first.
@@ -26,9 +26,9 @@ def configure(tickets,data,key):
     repo=data.get('repository_id');actor=data.get('actor')
     if not tickets.db.execute('SELECT 1 FROM registered_repositories WHERE id=?',(repo,)).fetchone():raise ValueError('Unknown repository')
     if not isinstance(actor,str) or not actor.strip() or len(actor)>120:raise ValueError('Named policy operator required')
-    flags={k:data.get(k,False) for k in ('development','publish','prepare_dependencies','auto_accept')}
+    flags={k:data.get(k,False) for k in ('development','publish','prepare_dependencies','auto_accept','adapt_existing_tests')}
     if any(type(v) is not bool for v in flags.values()):raise ValueError('Autonomy settings must be boolean')
-    if (flags['publish'] or flags['prepare_dependencies']) and not flags['development']:raise ValueError('Execution policy must be enabled first')
+    if (flags['publish'] or flags['prepare_dependencies'] or flags['adapt_existing_tests']) and not flags['development']:raise ValueError('Execution policy must be enabled first')
     for name,(low,high) in BUDGETS.items():
         value=data.get(name,DEFAULT[name])
         if type(value) is not int or not low<=value<=high:raise ValueError(f'{name} must be an integer from {low} to {high}')
