@@ -194,23 +194,53 @@ class AutonomousRecoveryTests(unittest.TestCase):
     def test_sweep_skips_new_tickets_and_survives_a_failing_one(self):
         """GE-FDD2275A: a freshly filed ticket has no revision; reading it raised KeyError and killed the worker service."""
         from unittest.mock import patch
+        import graph_engineering.autonomy as autonomy
         self.set_policy('sweep-policy-1', auto_accept=True, recovery_rounds=2)
         fresh = create(self.tickets, {'repository_id': self.registration['id'], 'description': 'A brand new report not investigated yet'}, 'sweep-create-1')
         dispatch(self.tickets)  # Must not raise; the accepted ticket from setUp is still started.
         self.assertEqual(self.tickets.get(self.ticket['ticket_id'])['node'], 'development_setup')
         self.assertEqual(self.tickets.get(fresh['ticket_id'])['node'], 'manual_intake')
-        # Any unexpected error for one ticket is recorded on it and the sweep goes on.
-        with patch('graph_engineering.autonomy.acceptable', side_effect=RuntimeError('boom')):
-            dispatch(self.tickets)
-        self.assertIn('RuntimeError: boom', self.tickets.get(self.ticket['ticket_id'])['last_reason'])
+        # Review of PR #17: an unexpected error for one ticket is recorded once, never as its block reason, and the
+        # sweep still reaches the tickets after it; the connection is left without an open transaction.
+        before = self.tickets.get(self.ticket['ticket_id'])['last_reason']
+        real = autonomy.acceptable
+        seen = []
+        def flaky(ticket):
+            seen.append(ticket['id'])
+            if ticket['id'] == self.ticket['ticket_id']: raise RuntimeError('boom')
+            return real(ticket)
+        with patch('graph_engineering.autonomy.acceptable', side_effect=flaky), \
+             patch.object(self.tickets, 'list', return_value=[self.tickets.get(self.ticket['ticket_id']), self.tickets.get(self.ticket['ticket_id']) | {'id': 'GE-OTHER'}]):
+            dispatch(self.tickets); dispatch(self.tickets)
+        self.assertEqual(seen.count('GE-OTHER'), 2)  # The ticket after the failing one is still considered.
+        self.assertEqual(self.tickets.get(self.ticket['ticket_id'])['last_reason'], before)
+        errors = [e['data']['error'] for e in self.tickets.store.events(self.run['id']) if e['kind'] == 'autonomy_sweep_error']
+        self.assertEqual(errors, ['RuntimeError: boom'])  # Once per distinct error.
+        self.assertFalse(self.tickets.db.in_transaction)
+
+    def test_failed_recovery_retry_gives_the_round_back(self):
+        from unittest.mock import patch
+        from graph_engineering.autonomy import recover
+        act(self.tickets, self.base | {'action': 'start_development', 'trust_execution': True}, 'revert-start-1')
+        self.tickets.store.db.execute("UPDATE runs SET status='blocked',state=json_set(state,'$.error','stalled') WHERE id=?", (self.run['id'],))
+        self.tickets.db.execute('UPDATE tickets SET max_retries=0 WHERE id=?', (self.ticket['ticket_id'],)); self.tickets.db.commit()
+        ticket = self.tickets.get(self.ticket['ticket_id'])
+        setting = policy(self.tickets, self.registration['id']) | {'recovery_rounds': 2, 'actor': 'x'}
+        with patch.object(self.tickets, 'command', side_effect=ValueError('lease raced')):
+            with self.assertRaises(ValueError):
+                recover(self.tickets, ticket, setting)
+        after = self.tickets.get(self.ticket['ticket_id'])
+        self.assertEqual((after['max_retries'], after['state'].get('autonomy_recoveries', 0)), (0, 0))
+        self.assertIn('autonomy_recovery_reverted', [e['kind'] for e in self.tickets.store.events(self.run['id'])])
 
     def test_scheduler_keeps_claiming_when_the_sweep_fails(self):
         from unittest.mock import patch
         from graph_engineering.scheduler import serve_scheduler
         with patch('graph_engineering.autonomy.dispatch', side_effect=KeyError('revision')), \
-             patch('graph_engineering.scheduler.claim', return_value=None) as claim:
+             patch('graph_engineering.scheduler.claim', return_value=None) as claim, patch('traceback.print_exc') as printed:
             serve_scheduler(self.home, workers=1, once=True)
-        self.assertTrue(claim.called)
+        self.assertTrue(claim.called and printed.called)
+        self.assertEqual(self.tickets.setting('autonomy_sweep_error')['error'], "KeyError('revision')")
 
     def test_policy_validation(self):
         with self.assertRaisesRegex(ValueError, 'recovery_rounds'):
