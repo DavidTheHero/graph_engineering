@@ -173,7 +173,9 @@ def run_check(repo: Path, argv: list[str], trusted: bool = False, timeout: int =
     return result
 
 
-def validate_edits(repo: Path, edits: list[dict], allowed: list[str], max_files: int = 8) -> list[dict]:
+def validate_edits(repo: Path, edits: list[dict], allowed: list[str], max_files: int = 8, adapted=()) -> list[dict]:
+    """``adapted``: existing test files a plan may change under the repository policy (see ``adaptable_tests``);
+    every other test path stays out of scope."""
     if not isinstance(edits, list) or not 1 <= len(edits) <= max_files:
         raise ValueError("Expected a bounded nonempty file edit list")
     seen = set()
@@ -191,7 +193,7 @@ def validate_edits(repo: Path, edits: list[dict], allowed: list[str], max_files:
             raise ValueError("Protected or escaping path")
         if repo.resolve() not in target.parents or any((repo.joinpath(*parts[:i])).is_symlink() for i in range(1, len(parts)+1)):
             raise ValueError("Symlink/escaping path")
-        if name not in allowed or is_test(name) or name in seen:
+        if name not in allowed or (is_test(name) and name not in adapted) or name in seen:
             raise ValueError("Path outside approved implementation scope")
         if PurePosixPath(name).suffix not in CODE_SUFFIXES:
             raise ValueError("Only approved source code may be edited")
@@ -200,6 +202,9 @@ def validate_edits(repo: Path, edits: list[dict], allowed: list[str], max_files:
 
 
 TRUNCATED_LINE = " …[line truncated]"
+# Views shown to the implementer: longer lines are shortened with the marker. Each level is tried in turn
+# until the encoded prompt fits the model budget, so the shortest is what an edit may have been written against.
+IMPLEMENTATION_MAX_LINES = (300, 200, 120, 80)
 
 
 def source_bundle(repo: Path, files: list[str], log: str, limit: int = 12000, first=(), max_line: int | None = None) -> dict:

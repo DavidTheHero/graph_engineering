@@ -150,6 +150,21 @@ ended with a person pressing Retry. The repository autonomy policy now owns reco
 * **Human gates that remain.** Clarification when evidence is missing, acceptance when questions
   remain, publication under the existing `publish` flag, and **merge approval, always**.
 
+## Adapting existing tests (2026-10-21)
+
+Every existing test file is frozen during development so an agent can never weaken tests to go green.
+A feature that changes a contract (GE-30D05C40 adds a `model` key to the chat response; `agent.test.js`
+asserts the exact old key list) legitimately needs the pinning test updated. Under the repository policy
+flag `adapt_existing_tests` the controller allows that, bounded at five points:
+
+1. a plan may include an existing test only once the frozen regression passes and only if that test
+   fails in the latest verification (`adaptable_tests`; recorded as `existing_tests_planned`);
+2. the implementer is told to adapt only the assertions that pin the old behaviour;
+3. `validate_edits` accepts only those test paths; all other test files stay out of scope;
+4. `adapted_test_intact`: the file must keep every test definition and gain no skip markers;
+5. the independent review must report a required finding if any assertion was removed or weakened,
+   and the merge-approval card lists the adapted tests.
+
 ## Directory structure
 
 ```text
