@@ -9,7 +9,7 @@ import shutil
 
 from . import routing
 from .investigation import obj
-from .repository import TRUNCATED_LINE,discover,git,run_check,source_bundle,command,test_environment
+from .repository import IMPLEMENTATION_MAX_LINES,TRUNCATED_LINE,discover,git,run_check,source_bundle,command,test_environment
 from .runtime import digest
 
 REGRESSION_SCHEMA=obj({'content':{'type':'string','minLength':20,'maxLength':6000},
@@ -178,12 +178,22 @@ def expand_shortened_lines(content,old,new):
         prefix=line[:-len(marker)]
         matches=[l for l in lines if l.startswith(prefix)]
         if len(matches)!=1:raise ValueError('A shortened old line must match exactly one source line by its visible prefix; show more of the line')
-        resolved.append(matches[0]);tails.append(matches[0][len(prefix):])
-    replaced=[];used=0
+        resolved.append(matches[0]);tails.append((prefix,matches[0][len(prefix):]))
+    def common(a,b):
+        n=0
+        while n<min(len(a),len(b)) and a[n]==b[n]:n+=1
+        return n
+    replaced=[];used=0;taken=set()
     for line in new.split('\n'):
         if not line.endswith(marker):replaced.append(line);continue
         if used>=len(tails):raise ValueError('The replacement has more shortened lines than the old fragment; each marker keeps one hidden remainder')
-        replaced.append(line[:-len(marker)]+tails[used]);used+=1
+        visible=line[:-len(marker)]
+        # The remainder belongs to the old line this replacement continues: the one sharing its start, never "the next one".
+        scored=sorted(((common(visible,p),i) for i,(p,_) in enumerate(tails) if i not in taken),reverse=True)
+        if not scored or scored[0][0]<8 or (len(scored)>1 and scored[1][0]==scored[0][0]):
+            raise ValueError('A replacement line ending with the marker must begin like the shortened old line it replaces (at least 8 identical characters), so the right hidden remainder is kept')
+        index=scored[0][1];taken.add(index)
+        replaced.append(visible+tails[index][1]);used+=1
     if used!=len(tails):
         raise ValueError('An old fragment includes a shortened line (marked "…[line truncated]"); end the corresponding replacement line with the same marker to keep its hidden remainder unchanged, never guess it')
     if any(marker.strip() in line for line in replaced):
@@ -191,7 +201,7 @@ def expand_shortened_lines(content,old,new):
     return '\n'.join(resolved),'\n'.join(replaced)
 
 
-LONG_LINE=120  # The shortest view the implementer may have seen; a longer line's tail may be hidden from it.
+LONG_LINE=min(IMPLEMENTATION_MAX_LINES)  # The shortest view the implementer may have seen; a longer line's tail may be hidden from it.
 
 
 def guard_hidden_tail(content,old):

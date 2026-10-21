@@ -202,6 +202,9 @@ def validate_edits(repo: Path, edits: list[dict], allowed: list[str], max_files:
 
 
 TRUNCATED_LINE = " …[line truncated]"
+# Views shown to the implementer: longer lines are shortened with the marker. Each level is tried in turn
+# until the encoded prompt fits the model budget, so the shortest is what an edit may have been written against.
+IMPLEMENTATION_MAX_LINES = (300, 200, 120, 80)
 
 
 def source_bundle(repo: Path, files: list[str], log: str, limit: int = 12000, first=(), max_line: int | None = None) -> dict:

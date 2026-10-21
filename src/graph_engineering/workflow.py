@@ -125,7 +125,8 @@ OPTIONAL_INPUTS = {"regression_authoring":{"development_information":ARRAY}, "ta
                    "isolated_implementation": {"verification": DICT, "review": DICT,"development_information":ARRAY},
                    "completion": {"outcome": STR, "postmerge": DICT, "issue": DICT}}
 OPTIONAL_OUTPUTS = {"evidence_collection": {"outcome": STR},
-                    "isolated_implementation": {"implementation_model": STR, "implementation_models": ARRAY, "worktree_round": {"type": "integer"}},
+                    "isolated_implementation": {"implementation_model": STR, "implementation_models": ARRAY, "worktree_round": {"type": "integer"},
+                                                "adapted_digests": DICT},
                     'regression_validation':{k:STR if k=='fingerprint' else DICT for k in ('regression_baseline','baseline','validation','candidate','fingerprint','frozen','bundle')},
                     "deduplication": {"duplicate_of": STR, "outcome": STR},
                     "ticket_finalisation": {"self_resolution": DICT, "search_round": {"type": "integer"}},
@@ -179,16 +180,39 @@ def adaptable_tests(flow, state: dict) -> list[str]:
     key list. Deleting or weakening tests is still refused later (``adapted_test_intact``)."""
     from .autonomy import current
     verification = state.get("verification") or {}
-    if not current(flow, state).get("adapt_existing_tests") or not verification or verification.get("passed"):
+    if not current(flow, state).get("adapt_existing_tests") or not verification:
         return []
+    if state.get("worktree_round", 0) != state.get("development_round", 0):
+        return []  # A fresh round: that verification describes code the reset discarded.
+    if verification.get("passed"):
+        # A review-requested repair: this round's adapted tests stay adaptable, nothing new is offered.
+        return sorted((state.get("plan") or {}).get("adapted_tests") or [])
     if not (verification.get("regression") or {}).get("passed"):
         return []  # The requirement itself is not met yet: fix the source, not the tests.
-    output = verification.get("output", "")
     regression = (state.get("regression") or {}).get("path")
-    return sorted(name for name in state["repository"]["test_files"] if name != regression and name in output)
+    return sorted(set(failing_test_files(verification.get("output", ""), state["repository"]["test_files"])) - {regression})
 
 
-TEST_DEFINITION = re.compile(r"\b(?:test|it)\s*\(|^\s*def\s+test_|@Test\b|\bfunc\s+Test[A-Z]|#\[test\]|^\s*fn\s+test_", re.M)
+FAILURE_LINE = re.compile(r"FAIL|✖|not ok|Error|Traceback|FAILED|^\s*test at |^\s+at |File \"", re.M)
+
+
+def failing_test_files(output: str, test_files: list[str]) -> list[str]:
+    """Test files named on failure-shaped output lines, matched at path boundaries: a passing file listed by a
+    verbose runner (``PASS tests/a.test.js``, ``tests/test_a.py ....``) is never offered for adaptation."""
+    found = []
+    for line in output.splitlines():
+        if not FAILURE_LINE.search(line):
+            continue
+        for name in test_files:
+            if name not in found and re.search(r"(^|[\s\"'/(])" + re.escape(name) + r"($|[\s\"':)])", line):
+                found.append(name)
+    return sorted(found)
+
+
+TEST_DEFINITION = re.compile(r"^\s*(?:test|it)\s*\(|^\s*def\s+test_|^\s*@Test\b|^\s*func\s+Test[A-Z]|^\s*#\[test\]|^\s*fn\s+test_", re.M)
+ASSERTION = re.compile(r"\bassert\w*\b|\bexpect\s*\(|\.should\b|\bshould\s*\(|\bt\.(?:Error|Fatal)\w*\(")
+DISABLING = re.compile(r"\.skip\b|\.only\b|\.todo\b|\bf(?:it|describe)\s*\(|\bx(?:it|describe)\s*\(|\{\s*(?:skip|todo|only)\s*:|@unittest\.skip|@pytest\.mark\.skip|"
+                       r"\bskipTest\b|\bSkipTest\b|\bpytest\.skip\s*\(|\bskipIf\b|\bt\.Skip\w*\(|#\[ignore\]|@Disabled\b|@Ignore\b", re.I)
 
 
 def adapted_test_intact(path: Path, name: str, base_sha: str) -> None:
@@ -203,9 +227,10 @@ def adapted_test_intact(path: Path, name: str, base_sha: str) -> None:
         raise ValueError(f"Adapted test emptied: {name}")
     if len(TEST_DEFINITION.findall(after)) < len(TEST_DEFINITION.findall(before)):
         raise ValueError(f"Adapted test lost test definitions: {name}")
-    skip = re.compile(r"\.skip\b|\btodo\b|@unittest\.skip|@pytest\.mark\.skip|\bxit\(|\bxdescribe\(|\bskipIf\b|\bt\.Skip\(", re.I)
-    if len(skip.findall(after)) > len(skip.findall(before)):
-        raise ValueError(f"Adapted test gained skip markers: {name}")
+    if len(ASSERTION.findall(after)) < len(ASSERTION.findall(before)):
+        raise ValueError(f"Adapted test lost assertions: {name} (an adaptation changes assertions, it never removes them)")
+    if len(DISABLING.findall(after)) > len(DISABLING.findall(before)):
+        raise ValueError(f"Adapted test gained skip, focus or todo markers: {name}")
 
 
 def fit_planning_request(config: dict, request: dict) -> dict:
@@ -241,8 +266,7 @@ def fit_planning_request(config: dict, request: dict) -> dict:
 
 
 IMPLEMENTATION_CONTEXT_RESERVE = 3500  # Task text, plan, candidate and the shortened failure tails around the planned files.
-IMPLEMENTATION_MAX_LINES = (300, 200, 120, 80)  # Longer lines are shown shortened with a marker (edits keep the hidden remainder).
-# Each step is tried in turn until the encoded prompt fits the budget (JSON escaping grows quote-heavy code).
+from .repository import IMPLEMENTATION_MAX_LINES  # Longer lines are shown shortened with a marker (edits keep the hidden remainder).
 
 
 def implementation_bundle_limit(config: dict) -> int:
@@ -867,6 +891,8 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         patch=proposal["patch"];edits=validate_edits(path,proposal["edits"],state["plan"]["files"],adapted=adapted)
         # A killed controller may leave its prior proposal applied. Reapplying complete files is idempotent.
         wt.apply(edits)
+        if adapted:
+            outputs["adapted_digests"] = {name: digest((path / name).read_bytes().hex()) for name in adapted if (path / name).is_file()}
         actual = proposal.get("model") or state["implementation_model"]
         # Repairs build on earlier rounds, so every model that wrote part of the diff is an implementer.
         implementers = sorted(set(state.get("implementation_models", [])) | {actual})
@@ -876,9 +902,12 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
     def verify_files(self, state):
         path = Path(state["worktree"])
         adapted = set((state.get("plan") or {}).get("adapted_tests") or [])
+        applied = state.get("adapted_digests") or {}
         for name, expected in state["frozen"].items():
             if name in adapted:
-                adapted_test_intact(path, name, state["base_sha"])  # Changed on purpose, within bounds.
+                adapted_test_intact(path, name, state["base_sha"])  # Changed on purpose, within bounds...
+                if name in applied and digest((path / name).read_bytes().hex()) != applied[name]:
+                    raise ValueError("Adapted test modified outside the applied edits: " + name)  # ...by the edits only.
                 continue
             if not (path / name).is_file() or digest((path / name).read_bytes().hex()) != expected:
                 raise ValueError("Frozen regression/policy modified: " + name)

@@ -61,6 +61,28 @@ class ImplementationContextTests(unittest.TestCase):
             fine = materialize_hunks(repo, {"edits": [{"path": "a.js", "old": "b = 2", "new": "b = 3"}]}, ["a.js"])
             self.assertIn("const b = 3;", fine[0]["content"])
 
+    def test_guard_covers_the_shortest_view_and_tails_follow_their_own_line(self):
+        """Second review of PR #9/#10: F1 (80-character view) and F2 (swapped marker lines)."""
+        with tempfile.TemporaryDirectory() as folder:
+            repo = Path(folder)
+            keys = "const KEYS = [" + ", ".join(f"'k{i}'" for i in range(12)) + "];"  # 88 characters: shortened at the 80 level.
+            template = "const TEMPLATE = `" + "t" * 300 + "`;"
+            imports = "import { " + ", ".join(f"a{i}" for i in range(40)) + " } from './a';"
+            (repo / "a.js").write_text("x\n" + keys + "\n" + imports + "\n" + template + "\n")
+            with self.assertRaisesRegex(ValueError, "ends inside a long line"):  # The 80-character prefix without the marker.
+                materialize_hunks(repo, {"edits": [{"path": "a.js", "old": "x\n" + keys[:80], "new": "x\nconst KEYS = ['model'"}]}, ["a.js"])
+            swapped = [{"path": "a.js", "old": imports[:80] + TRUNCATED_LINE + "\n" + template[:80] + TRUNCATED_LINE,
+                        "new": template[:80] + TRUNCATED_LINE + "\n" + imports[:80] + TRUNCATED_LINE}]
+            out = materialize_hunks(repo, {"edits": swapped}, ["a.js"])[0]["content"]
+            self.assertIn(template + "\n" + imports, out)  # A reorder keeps each line's own remainder, never swaps them.
+            with self.assertRaisesRegex(ValueError, "begin like the shortened old line"):  # An unrelated line cannot claim a remainder.
+                materialize_hunks(repo, {"edits": [{"path": "a.js", "old": imports[:80] + TRUNCATED_LINE, "new": "const OTHER = 1; " + TRUNCATED_LINE}]}, ["a.js"])
+            reordered_properly = [{"path": "a.js", "old": imports[:80] + TRUNCATED_LINE + "\n" + template[:80] + TRUNCATED_LINE,
+                                   "new": "import { zz, " + imports[9:80] + TRUNCATED_LINE + "\n" + template[:80] + TRUNCATED_LINE}]
+            out = materialize_hunks(repo, {"edits": reordered_properly}, ["a.js"])[0]["content"]
+            self.assertIn("import { zz, " + imports[9:], out)  # The import keeps its own remainder...
+            self.assertIn(template, out)                       # ...and the template keeps its own.
+
 
 if __name__ == "__main__":
     unittest.main()
