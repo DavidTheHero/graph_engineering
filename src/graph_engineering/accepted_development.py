@@ -64,10 +64,10 @@ def regression_runners(state,run_id):
         py=[p for p in tests if p.endswith('.py')];folder=PurePosixPath(py[0]).parent if py else PurePosixPath('tests')
         name=(folder/f'test_graph_{run_id}.py').as_posix()
         return [{'name':'unittest','path':name,'argv':[sys.executable,'-m','unittest','discover','-s',str(folder),'-p',PurePosixPath(name).name,'-v'],
-                 'scope':'Python modules, with unittest','example':py[0] if py else None}]
+                 'scope':'Python modules, with unittest','example':relevant_example(state,py)}]
     js=[p for p in tests if p.endswith('.js')];folder=PurePosixPath(js[0]).parent if js else PurePosixPath('test')
     name=(folder/f'graph_{run_id}.test.js').as_posix()
-    runners=[{'name':'node','path':name,'argv':['node','--test',name],'scope':'Node modules (server side), with node:test','example':js[0] if js else None}]
+    runners=[{'name':'node','path':name,'argv':['node','--test',name],'scope':'Node modules (server side), with node:test','example':relevant_example(state,js)}]
     manifest=Path(state.get('baseline_path') or state['config']['repo'])/'package.json'
     try:scripts=json.loads(manifest.read_text(encoding='utf-8-sig')).get('scripts',{}) if manifest.is_file() else {}
     except (ValueError,OSError):scripts={}
@@ -84,8 +84,27 @@ def regression_runners(state,run_id):
         # (a Windows .cmd that subprocess without a shell cannot launch).
         if not any(part.startswith('-') for part in (config or '',path)) and '$' not in (config or ''):
             runners.append({'name':'vitest','path':path,'argv':[shutil.which('node') or 'node','node_modules/vitest/vitest.mjs','run',*(['--config',config] if config else []),path],
-                            'scope':'UI components and browser-side modules, with vitest','example':ui[0] if ui else None})
+                            'scope':'UI components and browser-side modules, with vitest','example':relevant_example(state,ui)})
     return runners
+
+
+def relevant_example(state,candidates):
+    """The existing test most like the regression to write: one that imports the files under change and mentions the
+    requirement's terms (GE-FDD2275A was shown agent-loop.test.js, alphabetically first, and wrote app.inject for an
+    Express app; api.test.js shows createApp with supertest)."""
+    if not candidates:return None
+    base=Path(state.get('baseline_path') or state['config']['repo'])
+    files=[f['path'] for f in (state.get('bundle') or {}).get('files',[])]
+    stems={PurePosixPath(f).stem for f in files}
+    draft=state.get('enhanced') or {}
+    text=' '.join(draft.get('acceptance_criteria') or [])+' '+str(draft.get('proposed_solution') or '')
+    terms={t.lower() for t in re.findall(r'[A-Za-z_/][A-Za-z0-9_/]{3,}',text)}-STOP_TERMS
+    def score(name):
+        content=example_test(base,name) or ''
+        imports=sum(1 for stem in stems if re.search(r'''(from|require\(|import)\s*\(?['"][^'"]*\b'''+re.escape(stem)+r'''(\.[a-z]+)?['"]''',content))
+        mentions=sum(1 for term in terms if term in content.lower())
+        return (imports,mentions)
+    return max(candidates,key=lambda name:(score(name),-candidates.index(name)))
 
 
 def example_test(base,name):
