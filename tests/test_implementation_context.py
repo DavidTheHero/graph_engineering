@@ -10,7 +10,7 @@ import unittest
 from graph_engineering.accepted_development import materialize_hunks
 from graph_engineering.models import default_models
 from graph_engineering.repository import TRUNCATED_LINE, source_bundle
-from graph_engineering.workflow import implementation_bundle_limit
+from graph_engineering.workflow import complete_view, implementation_bundle_limit, planned_complete
 
 CONFIG = {"models": default_models(), "routing": "baseline"}
 
@@ -86,6 +86,43 @@ class ImplementationContextTests(unittest.TestCase):
             out = materialize_hunks(repo, {"edits": reordered_properly}, ["a.js"])[0]["content"]
             self.assertIn("import { zz, " + imports[9:], out)  # The import keeps its own remainder...
             self.assertIn(template, out)                       # ...and the template keeps its own.
+
+    def test_the_first_view_where_every_planned_file_is_complete_is_used(self):
+        """GE-30D05C40 (third stop): agent.js + agent.test.js + the regression were incomplete at 300 but complete at 120."""
+        with tempfile.TemporaryDirectory() as folder:
+            repo = Path(folder)
+            (repo / "a.js").write_text("\n".join("const a%d = '%s';" % (i, "x" * 250) for i in range(60)) + "\n")  # 15.5 KB, 60 long lines
+            (repo / "b.js").write_text("\n".join("const b%d = '%s';" % (i, "x" * 250) for i in range(60)) + "\n")
+            bundle = lambda max_line: source_bundle(repo, ["a.js", "b.js"], "", 20000, max_line=max_line)
+            evidence, start = complete_view(bundle, ["a.js", "b.js"], (300, 200, 120), 20000)
+            self.assertEqual(start, 2)  # Incomplete at 300 and 200 (31 KB), complete at 120 (about 17 KB).
+            self.assertTrue(all(f["complete"] for f in evidence["files"]))
+            with self.assertRaisesRegex(ValueError, "at the shortest view"):
+                complete_view(bundle, ["a.js", "b.js"], (300, 200), 20000)
+            self.assertEqual(complete_view(bundle, ["a.js"], (None,), 20000)[1], 0)  # Whole-file mode: no views.
+
+    def test_a_planned_file_dropped_for_lack_of_room_is_incomplete(self):
+        """Review of PR #11: a bundle with no room left omits the file entirely, which must not count as complete."""
+        with tempfile.TemporaryDirectory() as folder:
+            repo = Path(folder)
+            (repo / "a.js").write_text("\n".join("const a%d = '%s';" % (i, "x" * 250) for i in range(60)) + "\n")
+            (repo / "b.js").write_text("const b = 1;\n")
+            bundle = lambda max_line: source_bundle(repo, ["a.js", "b.js"], "", 16300, max_line=max_line)
+            dropped = bundle(300)
+            self.assertEqual([f["path"] for f in dropped["files"]], ["a.js"])  # No room for b.js after a.js.
+            self.assertFalse(planned_complete(dropped, ["a.js", "b.js"]))
+            self.assertTrue(planned_complete(dropped, ["a.js"]))
+            evidence, start = complete_view(bundle, ["a.js", "b.js"], (300, 200, 120), 16300)
+            self.assertEqual((start, [f["path"] for f in evidence["files"]]), (1, ["a.js", "b.js"]))
+
+    def test_each_view_is_checked_because_shortening_can_grow_a_line(self):
+        """Review of PR #11: a line just over the limit grows by the marker, so completeness is not monotonic."""
+        with tempfile.TemporaryDirectory() as folder:
+            repo = Path(folder)
+            (repo / "a.js").write_text("\n".join("const a%d = '%s';" % (i, "x" * 108) for i in range(60)) + "\n")  # 124-character lines
+            bundle = lambda max_line: source_bundle(repo, ["a.js"], "", 7600, max_line=max_line)
+            self.assertEqual([planned_complete(bundle(m), ["a.js"]) for m in (300, 200, 120, 80)], [True, True, False, True])
+            self.assertEqual(complete_view(bundle, ["a.js"], (120, 80), 7600)[1], 1)
 
 
 if __name__ == "__main__":
