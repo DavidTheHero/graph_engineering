@@ -25,8 +25,8 @@ class DevelopmentDouble(WorkerDouble):
                 'summary':'One question was answered from recorded operator information.'}
         elif role=='regression_test':
             numbered=json.loads(args[0]).get('acceptance_criteria_numbered',[])  # Cover every criterion unless a test overrides.
-            content={'content':'import unittest\nfrom calc import add\nclass Regression(unittest.TestCase):\n def test_accepted_requirement(self): self.assertEqual(add(9,6),15)\n','rationale':'Direct accepted addition criterion',
-                     'runner':'unittest','covers':list(range(1,len(numbered)+1)),'uncovered':[]}
+            content={'tests':[{'runner':'unittest','content':'import unittest\nfrom calc import add\nclass Regression(unittest.TestCase):\n def test_accepted_requirement(self): self.assertEqual(add(9,6),15)\n',
+                               'covers':list(range(1,len(numbered)+1))}],'uncovered':[],'rationale':'Direct accepted addition criterion'}
         elif role=='implementation':
             content={'summary':'Restore addition','edits':[{'path':'calc.py','old':'return a-b','new':'return a+b'}]}
         else:return super().invoke(role,*args,**kwargs)
@@ -272,7 +272,7 @@ class DevelopmentHandoffTests(unittest.TestCase):
         class PassingRegression(DevelopmentDouble):
             def invoke(self,role,*args,**kwargs):
                 result=super().invoke(role,*args,**kwargs)
-                if role=='regression_test':result['content']['content']='import unittest\nfrom calc import add\nclass Regression(unittest.TestCase):\n def test_observation(self): self.assertEqual(add(9,6),3)\n'
+                if role=='regression_test':result['content']['tests'][0]['content']='import unittest\nfrom calc import add\nclass Regression(unittest.TestCase):\n def test_observation(self): self.assertEqual(add(9,6),3)\n'
                 return result
         act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'passing-start-1')
         flow=Workflow(self.home);flow.worker=PassingRegression()
@@ -684,7 +684,7 @@ class DevelopmentHandoffTests(unittest.TestCase):
                 result=super().invoke(role,*args,**kwargs)
                 if role=='regression_test':
                     self.calls+=1
-                    if self.calls==1:result['content']['content']='import unittest # I should write a real test later\n'
+                    if self.calls==1:result['content']['tests'][0]['content']='import unittest # I should write a real test later\n'
                 return result
         act(self.tickets,self.base|{'action':'start_development','trust_execution':True},'meta-start-1')
         flow=Workflow(self.home);worker=MetaDouble();flow.worker=worker

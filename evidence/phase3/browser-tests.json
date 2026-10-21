@@ -1,6 +1,6 @@
 {
   "kind": "browser-acceptance-with-scripted-inference",
-  "at": "2026-10-19T22:37:42.855Z",
+  "at": "2026-10-21T20:15:49.465Z",
   "checks": [
     {
       "name": "Plain-English form returns a durable ticket before inference; exact original preserved",
@@ -27,7 +27,7 @@
       "passed": true
     },
     {
-      "name": "Blocked development uses Qwen 4B through the real graph action while preserving acceptance and both retry limits",
+      "name": "Blocked development uses the question-answering model through the real graph action while preserving acceptance and both retry limits",
       "passed": true
     },
     {
@@ -66,6 +66,6 @@
     }
   ],
   "errors": [],
-  "browser": "155.0.4283.62",
+  "browser": "150.0.4078.83",
   "passed": true
 }

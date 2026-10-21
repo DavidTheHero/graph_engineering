@@ -166,6 +166,16 @@ ended with a person pressing Retry. The repository autonomy policy now owns reco
   related to the parent, with the parent's priority), so a ticket is never "done" with criteria
   silently dropped. GE-30D05C40
   was completed after one of four criteria.
+* **One regression file per runner.** A feature spanning server and UI gets a test file for each
+  runner it needs (`regression.parts`, at most one per runner): server behaviour is asserted against
+  the real app, and a UI test may stub the network only for behaviour a server test asserts. Every
+  part is frozen, must fail with an assertion on the original source, and must pass at the end.
+  Criteria left for a follow-up are named to the implementer and the reviewer as out of scope
+  (`uncovered_note`); the reviewer also reports reads of properties nothing sets. GE-FDD2275A
+  shipped a UI test that stubbed `/api/model` while its endpoint returned `{}`.
+* **A tested change can be rejected at publication.** "Reject publication" (`reject_delivery`)
+  records the reason and the tested head, publishes nothing, and returns the ticket to review for
+  a new acceptance cycle; the reason reaches the next development as context.
 * **GitHub publication follows the repository's PR convention.** The tested local branch
   `graph/<run>` is pushed under `<feat|fix>/<issue>-<slug>` and the PR body carries `Closes #N`
   and Change / Validation / Review sections built from recorded evidence only

@@ -27,7 +27,7 @@ def act(tickets,data,key):
         if type(data.get('revision')) is not int or data['revision']!=current:raise ValueError('Ticket revision changed; reload before acting')
         action=data.get('action');actor=data.get('actor','')
         if ticket.get('cancel') or ticket['status']=='cancelled':raise ValueError('Ticket is cancelled. Use Retry with backoff explicitly before another action.')
-        if state['config'].get('run_mode')=='accepted_development' and action not in ('publish_development','development_information','answer_questions','revise_requirement'):raise ValueError('Development has started with a frozen accepted revision; add troubleshooting information, ask the question-answering model, revise the requirement once stopped, or use pause, cancel or retry to control execution.')
+        if state['config'].get('run_mode')=='accepted_development' and action not in ('publish_development','reject_delivery','development_information','answer_questions','revise_requirement'):raise ValueError('Development has started with a frozen accepted revision; add troubleshooting information, ask the question-answering model, revise the requirement once stopped, or use pause, cancel or retry to control execution.')
         if not isinstance(actor,str) or not actor.strip() or len(actor)>120:raise ValueError('A named operator is required')
         actor=actor.strip()
         node=ticket['node'];status=ticket['status']
@@ -54,8 +54,17 @@ def act(tickets,data,key):
             if not isinstance(text,str) or not text.strip() or len(text)>4000:raise ValueError('Provide troubleshooting information in 1–4000 characters')
             if len(notes)>=5:raise ValueError('Five troubleshooting notes already recorded; create a scoped follow-up for further changes')
             state['development_information']=[*notes,{'text':text,'actor':actor,'at':now()}]
-        elif action=='revise_requirement':
-            if state['config'].get('run_mode')!='accepted_development' or status not in ('blocked','escalated','failed'):raise ValueError('Revising the requirement requires a stopped development ticket')
+        elif action in ('revise_requirement','reject_delivery'):
+            if action=='reject_delivery':
+                # A person rejects the tested change at publication: nothing is published, the reason is kept for the
+                # next development, and the ticket returns to review for a new acceptance cycle (GE-FDD2275A).
+                reason=str(data.get('reason') or '').strip()
+                if state['config'].get('run_mode')!='accepted_development' or status!='ready_for_delivery':raise ValueError('Rejecting a delivery requires a tested change awaiting publication')
+                if not 1<=len(reason)<=2000:raise ValueError('Give the reason for rejecting this change (1-2000 characters)')
+                rejection={'actor':actor,'at':now(),'reason':reason,'head':state.get('head'),'acceptance_cycle':state.get('acceptance_cycle',0)}
+                state['delivery_rejections']=[*state.get('delivery_rejections',[]),rejection]
+                state['development_information']=[*state.get('development_information',[]),{'actor':actor,'at':rejection['at'],'text':'Publication rejected: '+reason}]
+            elif state['config'].get('run_mode')!='accepted_development' or status not in ('blocked','escalated','failed'):raise ValueError('Revising the requirement requires a stopped development ticket')
             # Troubleshooting answers become clarifications of the requirement under review. Nothing runs until the
             # operator accepts a revision and authorises development again, which then starts from setup.
             state['clarifications']=[*state.get('clarifications',[]),*({'actor':n['actor'],'at':n['at'],'text':n['text']} for n in state.get('development_information',[]))]

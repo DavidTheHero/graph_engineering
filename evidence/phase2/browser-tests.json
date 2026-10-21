@@ -1,9 +1,9 @@
 {
-  "at": "2026-10-19T10:26:27.486Z",
+  "at": "2026-10-21T20:15:30.015Z",
   "kind": "browser-integration-with-labelled-inference-double",
   "checks": [
     {
-      "name": "Nine authoritative board columns and three persistent tickets",
+      "name": "Ten authoritative board columns including cancellation and three persistent tickets",
       "passed": true
     },
     {
@@ -24,6 +24,10 @@
     },
     {
       "name": "Search, triage and browser refresh share persistent backend state",
+      "passed": true
+    },
+    {
+      "name": "Needs you shows the exact-commit approval, refuses an unnamed approver and clears once the server records approval",
       "passed": true
     },
     {
@@ -49,7 +53,15 @@
       "violations": []
     },
     {
+      "view": "inbox-dark",
+      "violations": []
+    },
+    {
       "view": "board-light",
+      "violations": []
+    },
+    {
+      "view": "inbox-light",
       "violations": []
     },
     {
@@ -58,6 +70,6 @@
     }
   ],
   "errors": [],
-  "browser": "155.0.4283.62",
+  "browser": "150.0.4078.83",
   "passed": true
 }

@@ -60,16 +60,21 @@ class RunnerDetectionTests(unittest.TestCase):
 
     def test_coverage_feedback_requires_every_criterion_exactly_once(self):
         runners = [{"name": "node"}, {"name": "vitest"}]
-        criteria = ["endpoint", "chat bar", "selector"]
-        ok = {"runner": "node", "covers": [1], "uncovered": [{"criterion": 2, "reason": "needs vitest"}, {"criterion": 3, "reason": "needs vitest"}]}
-        self.assertEqual(coverage_feedback(ok, criteria, runners), "")
-        self.assertIn("exactly once", coverage_feedback({"runner": "node", "covers": [1], "uncovered": []}, criteria, runners))
-        self.assertIn("exactly once", coverage_feedback({"runner": "node", "covers": [1, 2], "uncovered": [{"criterion": 2, "reason": "x"}, {"criterion": 3, "reason": "x"}]}, criteria, runners))
-        self.assertIn("at least one", coverage_feedback({"runner": "node", "covers": [], "uncovered": [{"criterion": n, "reason": "x"} for n in (1, 2, 3)]}, criteria, runners))
-        self.assertIn("Choose runner", coverage_feedback({"runner": "jest", "covers": [1, 2, 3], "uncovered": []}, criteria, runners))
-        self.assertEqual(coverage_feedback({"runner": "node", "covers": [], "uncovered": []}, [], runners), "")  # No criteria recorded: nothing to check.
-        summary = coverage_summary({"regression": ok, "enhanced": {"acceptance_criteria": criteria}})
-        self.assertEqual((summary["covered"], summary["total"], summary["remaining"]), ([1], 3, [(2, "chat bar", "needs vitest"), (3, "selector", "needs vitest")]))
+        criteria = ["1. endpoint", "chat bar", "selector"]
+        both = {"tests": [{"runner": "node", "covers": [1]}, {"runner": "vitest", "covers": [2, 3]}], "uncovered": []}
+        self.assertEqual(coverage_feedback(both, criteria, runners), "")  # A server test and a UI test cover everything.
+        partial = {"tests": [{"runner": "node", "covers": [1]}], "uncovered": [{"criterion": 2, "reason": "x"}, {"criterion": 3, "reason": "x"}]}
+        self.assertEqual(coverage_feedback(partial, criteria, runners), "")
+        self.assertIn("exactly once", coverage_feedback({"tests": [{"runner": "node", "covers": [1]}], "uncovered": []}, criteria, runners))
+        self.assertIn("exactly once", coverage_feedback({"tests": [{"runner": "node", "covers": [1, 2]}], "uncovered": [{"criterion": 2, "reason": "x"}, {"criterion": 3, "reason": "x"}]}, criteria, runners))
+        self.assertIn("at least one", coverage_feedback({"tests": [{"runner": "node", "covers": [1, 2, 3]}, {"runner": "vitest", "covers": []}], "uncovered": []}, criteria, runners))
+        self.assertIn("one test file per runner", coverage_feedback({"tests": [{"runner": "node", "covers": [1]}, {"runner": "node", "covers": [2, 3]}], "uncovered": []}, criteria, runners))
+        self.assertIn("runner from", coverage_feedback({"tests": [{"runner": "jest", "covers": [1, 2, 3]}], "uncovered": []}, criteria, runners))
+        self.assertEqual(coverage_feedback({"tests": [{"runner": "node", "covers": []}], "uncovered": []}, [], runners), "")  # No criteria recorded.
+        summary = coverage_summary({"regression": {"parts": [{"path": "a", "covers": [1]}], "uncovered": partial["uncovered"]}, "enhanced": {"acceptance_criteria": criteria}})
+        self.assertEqual((summary["covered"], summary["total"], summary["remaining"]), ([1], 3, [(2, "chat bar", "x"), (3, "selector", "x")]))
+        from graph_engineering.accepted_development import numbered_criteria
+        self.assertEqual(numbered_criteria(criteria), ["1. endpoint", "2. chat bar", "3. selector"])  # Never "1. 1. endpoint".
 
 
 class PartialDeliveryTests(unittest.TestCase):
@@ -84,7 +89,8 @@ class PartialDeliveryTests(unittest.TestCase):
                 if role == "regression_test":
                     self.proposals += 1; self.prompts.append(json.loads(args[0]))
                     # First proposal forgets criterion 2 entirely; the second hands it to a follow-up.
-                    result["content"] |= {"covers": [1], "uncovered": [] if self.proposals == 1 else [{"criterion": 2, "reason": "needs the UI runner"}]}
+                    result["content"]["tests"][0]["covers"] = [1]
+                    result["content"]["uncovered"] = [] if self.proposals == 1 else [{"criterion": 2, "reason": "needs the UI runner"}]
                 return result
         self.tickets.store.db.execute("UPDATE runs SET state=json_set(state,'$.enhanced.acceptance_criteria',json(?)) WHERE id=?",
                                       (json.dumps(["add(9,6) returns 15", "the result is shown in the chat bar"]), self.run["id"]))
@@ -130,6 +136,114 @@ class PartialDeliveryTests(unittest.TestCase):
         finally:
             flow.store.close()
         self.assertEqual(sum(1 for e in self.tickets.store.events(self.run["id"]) if e["kind"] == "follow_up_created"), 2)  # Event per completion, ticket once.
+
+
+class RegressionPerRunnerTests(unittest.TestCase):
+    """GE-FDD2275A: one runner per ticket let a UI test stub the server while untested, broken server code shipped.
+    A ticket now carries one regression file per runner; every one must fail first and pass at the end."""
+    setUp = handoff.DevelopmentHandoffTests.setUp
+    tearDown = handoff.DevelopmentHandoffTests.tearDown
+
+    def two_runners(self, state, run_id):
+        import sys
+        folder = "tests"
+        return [{"name": name, "path": f"{folder}/test_graph_{run_id}_{name}.py", "scope": name,
+                 "argv": [sys.executable, "-m", "unittest", "discover", "-s", folder, "-p", f"test_graph_{run_id}_{name}.py", "-v"], "example": None}
+                for name in ("server", "ui")]
+
+    def author(self, second_passes_on_original=False):
+        test = "import unittest\nfrom calc import add\nclass R(unittest.TestCase):\n def test_{0}(self): self.assertEqual(add(9,6),15)\n"
+        passing = "import unittest\nclass R(unittest.TestCase):\n def test_ui(self): self.assertTrue(True)\n"
+        class TwoFiles(DevelopmentDouble):
+            def __init__(self): super().__init__(); self.prompts = []
+            def invoke(self, role, *args, **kwargs):
+                result = super().invoke(role, *args, **kwargs)
+                if role in ("implementation", "review"): self.prompts.append((role, json.loads(args[0])))
+                if role == "regression_test":
+                    second = passing if second_passes_on_original and not self.prompts else test.format("ui")
+                    self.prompts.append((role, json.loads(args[0])))
+                    result["content"] = {"tests": [{"runner": "server", "content": test.format("server"), "covers": [1]},
+                                                   {"runner": "ui", "content": second, "covers": [2]}], "uncovered": [], "rationale": "r"}
+                return result
+        return TwoFiles()
+
+    def criteria(self, *items):
+        self.tickets.store.db.execute("UPDATE runs SET state=json_set(state,'$.enhanced.acceptance_criteria',json(?)) WHERE id=?",
+                                      (json.dumps(list(items)), self.run["id"]))
+        self.tickets.store.db.commit()
+
+    def test_both_runner_files_are_frozen_required_and_delivered(self):
+        from unittest.mock import patch
+        self.criteria("add(9,6) returns 15 on the server", "the UI shows 15")
+        act(self.tickets, self.base | {"action": "start_development", "trust_execution": True}, "parts-start-1")
+        flow = Workflow(self.home); worker = self.author(); flow.worker = worker
+        try:
+            with patch("graph_engineering.accepted_development.regression_runners", side_effect=self.two_runners):
+                run = flow.execute(self.run["id"])
+        finally:
+            flow.store.close()
+        self.assertEqual(run["status"], "ready_for_delivery", run["state"].get("error"))
+        paths = [p["path"] for p in run["state"]["regression"]["parts"]]
+        self.assertEqual(len(paths), 2)
+        for path in paths:
+            self.assertIn(path, run["state"]["frozen"])
+            self.assertIn(path, run["state"]["diff"])
+        self.assertEqual([p["path"] for p in run["state"]["verification"]["regression"]["parts"]], paths)  # Both run at the end.
+        self.assertEqual(run["state"]["regression"]["covers"], [1, 2])
+        planning = [p for role, p in worker.prompts if role == "regression_test"][0]
+        self.assertIn("never a stub of it", planning["task"])
+
+    def test_every_runner_file_must_fail_on_the_original_source(self):
+        from unittest.mock import patch
+        self.criteria("add(9,6) returns 15 on the server", "the UI shows 15")
+        act(self.tickets, self.base | {"action": "start_development", "trust_execution": True}, "parts-start-2")
+        flow = Workflow(self.home); flow.worker = self.author(second_passes_on_original=True)
+        try:
+            with patch("graph_engineering.accepted_development.regression_runners", side_effect=self.two_runners):
+                run = flow.execute(self.run["id"], until="task_planning")
+        finally:
+            flow.store.close()
+        events = self.tickets.store.events(self.run["id"])
+        feedback = [e for e in events if e["node"] == "regression_validation" and e["kind"] == "completed" and e["data"]["next"] == "regression_authoring"]
+        self.assertTrue(feedback)
+        self.assertIn("_ui.py: It PASSED on the original source", feedback[0]["data"]["updates"]["regression_feedback"])
+        self.assertEqual(run["node"], "task_planning")  # Re-authored, then both failed first.
+
+    def test_criteria_left_for_later_are_named_to_the_implementer_and_reviewer(self):
+        from graph_engineering.workflow import uncovered_note
+        state = {"enhanced": {"acceptance_criteria": ["1. endpoint", "2. chat bar"]}, "regression": {"parts": [{"path": "a", "covers": [2]}], "uncovered": [{"criterion": 1, "reason": "x"}]}}
+        note = uncovered_note(state)
+        self.assertIn("NOT part of this change", note); self.assertIn("1. endpoint", note); self.assertNotIn("1. 1.", note)
+        self.assertEqual(uncovered_note({"enhanced": {"acceptance_criteria": ["a"]}, "regression": {"parts": [{"path": "a", "covers": [1]}], "uncovered": []}}), "")
+
+
+class RejectDeliveryTests(unittest.TestCase):
+    setUp = handoff.DevelopmentHandoffTests.setUp
+    tearDown = handoff.DevelopmentHandoffTests.tearDown
+
+    def test_a_tested_change_can_be_rejected_at_publication_with_a_reason_that_reaches_the_next_development(self):
+        from graph_engineering.accepted_development import troubleshooting_context
+        from graph_engineering.attention import items
+        act(self.tickets, self.base | {"action": "start_development", "trust_execution": True}, "reject-start-1")
+        flow = Workflow(self.home); flow.worker = DevelopmentDouble()
+        try:
+            run = flow.execute(self.run["id"])
+        finally:
+            flow.store.close()
+        self.assertEqual(run["status"], "ready_for_delivery")
+        [card] = [i for i in items(self.tickets) if i["ticket_id"] == self.ticket["ticket_id"]]
+        self.assertIn("reject_delivery", [a["id"] for a in card["actions"]])
+        with self.assertRaisesRegex(ValueError, "Give the reason"):
+            act(self.tickets, self.base | {"action": "reject_delivery", "reason": " "}, "reject-empty-1")
+        act(self.tickets, self.base | {"action": "reject_delivery", "reason": "GET /api/model returns nothing"}, "reject-1")
+        ticket = self.tickets.get(self.ticket["ticket_id"])
+        self.assertEqual((ticket["status"], ticket["state"]["acceptance_cycle"]), ("ready_for_review", 1))
+        [rejection] = ticket["state"]["delivery_rejections"]
+        self.assertEqual((rejection["reason"], rejection["head"]), ("GET /api/model returns nothing", run["state"]["head"]))
+        self.assertTrue(any("rejected at publication" in c for c in troubleshooting_context(ticket["state"])))
+        self.assertTrue(any("Publication rejected: GET /api/model" in c["text"] for c in ticket["state"]["clarifications"]))
+        with self.assertRaisesRegex(ValueError, "awaiting publication"):  # Only a change awaiting publication can be rejected.
+            act(self.tickets, self.base | {"action": "reject_delivery", "reason": "again"}, "reject-2")
 
 
 if __name__ == "__main__":
