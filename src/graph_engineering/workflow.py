@@ -165,7 +165,7 @@ CONDITIONAL_EDGES = {
     "issue_validation": ["deduplication", "issue_detection (correctable candidate; bounded re-query)", "blocked (unconfirmed/low confidence)"],
     "deduplication": ["ticket_creation", "completion (already claimed)"],
     "test_execution": ["independent_review", "repair"],
-    "repair": ["isolated_implementation (budget remains)", "escalation"],
+    "repair": ["isolated_implementation (budget remains)", "task_planning (accepted development: re-plan with the failure)", "escalation"],
     "approval_gate": ["merge", "approval_gate (waiting_approval)", "ci_policy_verification (blocked checks)"],
     "merge": ["post_merge_verification", "blocked"],
 }
@@ -647,8 +647,20 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
         return {"priority": {"high": "P1", "medium": "P2", "low": "P3"}[state["candidate"]["severity"]]}, "task_planning", "ready"
 
     def node_task_planning(self, state):
-        plan = self.ask(state, "planning", {"task": "Plan a minimal source-only fix to the validated test failure. Preserve all tests and policy. Select only complete source files from the supplied bundle.",
-                        "candidate": state["candidate"], "evidence": state["bundle"],"additional_information":troubleshooting_context(state)}, PLAN_SCHEMA, routing.LARGE)
+        accepted = state['config'].get('run_mode') == 'accepted_development'
+        task = ("Plan the source changes that make the frozen regression_test pass while every existing test keeps passing. "
+                "Select EVERY source file from the supplied bundle that must change: follow the regression test's imports and "
+                "calls (for example a response assembled in one module from a value created in another needs both). "
+                "If previous_attempt is supplied, its failure shows what the last plan missed; widen the file list accordingly. "
+                "Preserve all tests and policy." if accepted else
+                "Plan a minimal source-only fix to the validated test failure. Preserve all tests and policy. Select only complete source files from the supplied bundle.")
+        request = {"task": task, "candidate": state["candidate"], "evidence": state["bundle"], "additional_information": troubleshooting_context(state)}
+        if accepted:
+            request["regression_test"] = {"path": state["regression"]["path"], "content": state["regression"]["content"]}
+            if state.get("repairs") and state.get("verification"):
+                request["previous_attempt"] = {"files": (state.get("plan") or {}).get("files", []),
+                                               "failure_output": state["verification"].get("output", "")[-3000:]}
+        plan = self.ask(state, "planning", request, PLAN_SCHEMA, routing.LARGE)
         complete = {f["path"] for f in state["bundle"]["files"] if f["complete"] or state['config'].get('run_mode')=='accepted_development'}
         if not set(plan["files"]) <= (set(state["repository"]["source_files"]) & complete) - set(state["frozen"]):
             raise ValueError("Plan requests unapproved or incomplete source files")
@@ -767,7 +779,11 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
 
     def node_repair(self, state):
         count = state["repairs"] + 1
-        return {"repairs": count}, "isolated_implementation" if count <= state["config"]["max_repairs"] else "escalation", "ready"
+        if count > state["config"]["max_repairs"]:
+            return {"repairs": count}, "escalation", "ready"
+        # Accepted development re-plans with the failure: the last plan may have selected too few files,
+        # and implementation can only edit planned files (GE-30D05C40 planned llm.js; agent.js had to change).
+        return {"repairs": count}, "task_planning" if state['config'].get('run_mode') == 'accepted_development' else "isolated_implementation", "ready"
 
     def node_escalation(self, state):
         return {"outcome": "escalated", "error": "Repair budget exhausted; supervisor intervention required"}, "completion", "ready"
