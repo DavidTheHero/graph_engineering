@@ -74,6 +74,50 @@ def registered_timeout(flow,state):
 REGRESSION_VALIDATION_ROUNDS = 2  # Proposals run against the original source before the step blocks (node attempt limit).
 
 
+def development_files(state,source_files,cited,limit=10):
+    """Source files the test author and implementer see, at the commit under development:
+
+    1. every validated finding file (never limited);
+    2. the import chain above them (files that import a cited module, then files importing those): where an
+       entry point such as the API app or a UI component wires the cited code in;
+    3. source files matching at least two acceptance-criteria terms.
+    ``limit`` bounds only the files added by 2 and 3.
+
+    GE-30D05C40: only backend/llm.js was cited, so the author never saw the API app or the chat bar its
+    acceptance criteria describe and kept testing behaviour that already existed."""
+    repo=Path(state['config']['source_repo']);sha=state['base_sha'];allowed=set(source_files)
+    def grep(*argv):
+        # No pathspec (no argument-length limit, no pathspec magic); results are filtered to committed sources.
+        found=command(['git','-c','core.quotePath=false','grep','-l','-I','-i',*argv,sha],repo,timeout=20)
+        names={line.split(':',1)[1] for line in found['output'].splitlines() if ':' in line} if found['returncode']==0 else set()
+        return names&allowed
+    def importers(name):
+        stem=re.escape(PurePosixPath(name).stem)
+        # An import/require of the module itself, not any substring: JS/TS module paths and Python module names.
+        # POSIX ERE (git grep -E): no \s or \b.
+        javascript=r"(from|require\(|import\()[[:space:]]*['\"]([^'\"]*/)?"+stem+r"(\.[a-z]+)?['\"]"
+        python=r"^[[:space:]]*(from|import)[[:space:]]+([A-Za-z0-9_]+\.)*"+stem+r"([^A-Za-z0-9_]|$)"
+        return grep('-E','-e',javascript,'-e',python)-{name}
+    extra=[];frontier=list(cited)
+    for _ in range(2):  # Two hops up the import chain.
+        found=[f for name in frontier for f in sorted(importers(name)) if f not in cited and f not in extra]
+        frontier=list(dict.fromkeys(found))[:3]
+        extra+=frontier
+    draft=state['enhanced']
+    criteria=' '.join(draft.get('acceptance_criteria') or [])+' '+str(draft.get('proposed_solution') or '')
+    terms=[t for t in dict.fromkeys(w.lower() for w in re.findall(r'[A-Za-z_][A-Za-z0-9_]{3,}',criteria)) if t not in STOP_TERMS][:10]
+    score={}
+    for term in terms:
+        for name in grep('-F','-e',term):score[name]=score.get(name,0)+1
+    ranked=sorted((f for f in score if f not in cited and f not in extra),key=lambda f:(-score[f],f not in (draft.get('read_files') or []),f))
+    extra+=[f for f in ranked if score[f]>=2]
+    return list(dict.fromkeys(cited))+list(dict.fromkeys(extra))[:max(0,limit-len(set(cited)))]
+
+
+STOP_TERMS={'that','this','with','from','when','then','should','returns','return','current','same','side','left','right',
+            'which','where','into','updates','update','subsequent','requests','displays','display','button','location'}
+
+
 def current_environment(config,registration):
     """The registration's current python_environment wins, including a cleared one (a stale frozen
     interpreter must not be kept); without a registration the run's own value stays."""
@@ -162,7 +206,8 @@ class AcceptedDevelopmentNodes:
         names=[f['file'] for f in state['enhanced']['findings'] if f['file'] in working['repository']['source_files']]
         names=list(dict.fromkeys(names))
         if not names:raise ValueError('Accepted report has no validated source component to implement')
-        evidence['bundle']=source_bundle(Path(evidence['baseline_path']),names,evidence['baseline']['output'][-2000:],30000)
+        cited=names;names=development_files(state,working['repository']['source_files'],cited)
+        evidence['bundle']=source_bundle(Path(evidence['baseline_path']),names,evidence['baseline']['output'][-2000:],30000,first=cited)
         return evidence|{'config':config,'repository':working['repository'],'development':state['development']|{'setup_complete':True}},'regression_authoring','ready'
 
     def node_regression_authoring(self,state):

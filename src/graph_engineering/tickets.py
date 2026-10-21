@@ -199,12 +199,21 @@ class Tickets:
                     retry_node='regression_authoring'
                     state['regression_review_round']=0
                     state['attempts'][f"{retry_node}:{state.get('repairs',0)}"] = 0
-                elif retry_node=='regression_validation' and previous_message.startswith('Regression repair budget exhausted'):
-                    # Re-running a rejected test cannot succeed: write a new one, keeping the rejection feedback.
-                    retry_node='regression_authoring'
+                elif retry_node=='done' and ticket['status']=='escalated' and state['config'].get('run_mode')=='accepted_development' and state.get('regression_baseline'):
+                    # An exhausted repair budget is retried by planning again from the validated regression, with a fresh budget.
+                    retry_node='task_planning'
+                    state.update(repairs=0,development_round=state.get('development_round',0)+1)
+                    state.pop('outcome',None)
+                    state['attempts']={key:0 if key.split(':')[0] in ('task_planning','model_selection','isolated_implementation','test_execution','repair','independent_review') else count
+                                       for key,count in state['attempts'].items()}
+                elif retry_node=='regression_validation':
+                    # Re-running a rejected test cannot succeed. Start again from a pristine snapshot (development_setup
+                    # discards the old checkout, including an installed or leftover proposal, and rebuilds the evidence);
+                    # the rejection feedback is kept for the next author.
+                    retry_node='development_setup'
                     state.update(regression_review_round=0,regression_validation_round=0)
                     state.pop('regression',None);state.pop('regression_review',None)
-                    state['attempts']={key:0 if key.split(':')[0] in ('regression_authoring','regression_review','regression_validation') else count
+                    state['attempts']={key:0 if key.split(':')[0] in ('development_setup','regression_authoring','regression_review','regression_validation') else count
                                        for key,count in state['attempts'].items()}
                 self.db.execute('UPDATE runs SET node=?,status=?,cancel=0,state=? WHERE id=?',
                                 (retry_node,'ready',json.dumps(state),run_id))

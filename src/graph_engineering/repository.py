@@ -199,9 +199,11 @@ def validate_edits(repo: Path, edits: list[dict], allowed: list[str], max_files:
     return edits
 
 
-def source_bundle(repo: Path, files: list[str], log: str, limit: int = 12000) -> dict:
-    # Never follow repository symlinks. Use file names mentioned in failures first.
-    ordered = sorted(files, key=lambda f: (PurePosixPath(f).name not in log, f))
+def source_bundle(repo: Path, files: list[str], log: str, limit: int = 12000, first=()) -> dict:
+    # Never follow repository symlinks. ``first`` files keep their order and come before everything else
+    # (e.g. the validated findings a change must edit); then file names mentioned in failures.
+    first = [f for f in dict.fromkeys(first) if f in files]
+    ordered = first + sorted((f for f in files if f not in first), key=lambda f: (PurePosixPath(f).name not in log, f))
     snippets, used = [], 0
     for name in ordered:
         path = repo / name
