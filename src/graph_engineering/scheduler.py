@@ -189,12 +189,28 @@ def serve_scheduler(home, workers=2, once=False, poll=.5):
         try:
             tickets.set_setting('workers',workers)
             last_health = 0
+            sweep_error, sweep_reported, sweep_repeats = None, 0.0, 0
             while True:
                 tickets.set_setting('worker_service',{'pid':os.getpid(),'observed':time.time()})
                 children = [p for p in children if p.poll() is None]
                 recover(tickets, {p.pid for p in children})
                 from .autonomy import dispatch
-                if not tickets.setting('paused',False):dispatch(tickets)
+                if not tickets.setting('paused',False):
+                    try:
+                        dispatch(tickets)
+                        if sweep_error is not None:
+                            tickets.set_setting('autonomy_sweep_error', None); sweep_error = None
+                    except Exception as exc:  # The policy sweep is advisory: claiming and running work must continue.
+                        # Reported when the error changes and at most once a minute while it repeats (review of PR #17).
+                        key = repr(exc)[:300]
+                        if key != sweep_error or time.time() - sweep_reported > 60:
+                            import traceback
+                            if sweep_repeats: print(f'(previous sweep error repeated {sweep_repeats} times)', file=sys.stderr)
+                            traceback.print_exc()
+                            tickets.set_setting('autonomy_sweep_error', {'error': key, 'at': time.time()})
+                            sweep_error, sweep_reported, sweep_repeats = key, time.time(), 0
+                        else:
+                            sweep_repeats += 1
                 if time.time() - last_health > 30:
                     observe_models(tickets); last_health = time.time()
                 while True:

@@ -71,12 +71,14 @@ def acceptable(ticket):
             and not draft.get('questions') and state.get('revision') is not None)
 
 def dispatch(tickets):
+    import sqlite3
     from .report_commands import act
     for ticket in tickets.list():
-        state=ticket['state'];repo=state.get('intake',{}).get('repository_id')
-        if not repo or ticket['lease_owner'] or ticket.get('cancel') or ticket['paused']:continue
-        setting=policy(tickets,repo);cycle=f"{state['revision']}c{state.get('acceptance_cycle',0)}"  # Per acceptance cycle.
         try:
+            state=ticket['state'];repo=(state.get('intake') or {}).get('repository_id')
+            if not repo or ticket['lease_owner'] or ticket.get('cancel') or ticket['paused']:continue
+            if state.get('revision') is None:continue  # Not investigated yet: nothing for the policy to accept, start or recover.
+            setting=policy(tickets,repo);cycle=f"{state['revision']}c{state.get('acceptance_cycle',0)}"  # Per acceptance cycle.
             if setting['auto_accept'] and acceptable(ticket):
                 act(tickets,{'ticket_id':ticket['id'],'revision':state['revision'],'actor':setting['actor'],'action':'accept',
                     'autonomy_policy_updated':setting['updated']},'autoaccept-'+ticket['id']+'-'+cycle)
@@ -88,6 +90,8 @@ def dispatch(tickets):
                     'autostart-'+ticket['id']+'-'+cycle+'-'+digest(setting)[:8])
             elif ticket['status'] in ('blocked','escalated') and recoverable(ticket):
                 recover(tickets,ticket,setting)
+        except sqlite3.OperationalError:
+            raise  # Lock contention is the scheduler's to throttle and report, not a ticket's to record.
         except ValueError as exc:
             # Operator actions can race the snapshot above. Reconsider next sweep,
             # retaining one receipt per reason instead of terminating the service.
@@ -96,6 +100,15 @@ def dispatch(tickets):
                 with tickets.db:
                     tickets.db.execute('UPDATE tickets SET last_reason=? WHERE id=?',(reason,ticket['id']))
                     tickets.store._event(ticket['run_id'],ticket['node'],'autonomy_admission_deferred',{'reason':reason})
+        except Exception as exc:
+            # One ticket's unexpected state must never stop the sweep for the others (GE-FDD2275A, 2026-10-21: a
+            # KeyError here killed the worker service). Recorded once per distinct error, without overwriting the
+            # ticket's own block reason.
+            error=f'{type(exc).__name__}: {str(exc)[:200]}'
+            last=tickets.db.execute("SELECT data FROM events WHERE run_id=? AND kind='autonomy_sweep_error' ORDER BY rowid DESC LIMIT 1",(ticket['run_id'],)).fetchone()
+            if not last or json.loads(last[0]).get('error')!=error:
+                with tickets.db:
+                    tickets.store._event(ticket['run_id'],ticket['node'],'autonomy_sweep_error',{'error':error})
 
 
 def recover(tickets,ticket,setting):
@@ -115,5 +128,13 @@ def recover(tickets,ticket,setting):
         tickets.db.execute("UPDATE runs SET state=json_set(state,'$.autonomy_recoveries',?) WHERE id=?",(used+1,run_id))
         tickets.store._event(run_id,ticket['node'],'autonomy_recovery',{'round':used+1,'limit':setting['recovery_rounds'],'actor':setting['actor'],
             'status':ticket['status'],'error':str((state.get('error') or {}).get('message','') if isinstance(state.get('error'),dict) else state.get('error') or '')[:300]})
-    tickets.command(ticket['id'],'retry',{},'autorecover-'+ticket['id']+'-'+f"{state.get('acceptance_cycle',0)}-{used+1}")
+    try:
+        tickets.command(ticket['id'],'retry',{},'autorecover-'+ticket['id']+'-'+f"{state.get('acceptance_cycle',0)}-{used+1}")
+    except BaseException:
+        # No retry happened: give the round (and any extension) back, so a race never burns the policy's rounds.
+        with tickets.db:
+            tickets.db.execute('UPDATE tickets SET max_retries=? WHERE id=?',(ticket['max_retries'],ticket['id']))
+            tickets.db.execute("UPDATE runs SET state=json_set(state,'$.autonomy_recoveries',?) WHERE id=?",(used,run_id))
+            tickets.store._event(run_id,ticket['node'],'autonomy_recovery_reverted',{'round':used+1})
+        raise
     return True
