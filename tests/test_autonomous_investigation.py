@@ -95,5 +95,60 @@ class RequestedFileRetrievalTests(unittest.TestCase):
         self.assertIn("…[line truncated]", found["excerpts"][0]["text"].splitlines()[10])
 
 
+class BudgetAndEvidenceTests(unittest.TestCase):
+    """Review of PR #4: the self-resolution round must fit the model budget and keep keyword evidence."""
+    setUp = test_intake.IntakeTests.setUp
+    tearDown = test_intake.IntakeTests.tearDown
+
+    def test_oversized_investigation_prompt_is_fitted_and_records_what_was_cut(self):
+        from graph_engineering.investigation import _size, fit_prompt, prompt_budget
+        from graph_engineering.models import default_models
+        config = {"models": default_models(), "routing": "baseline"}
+        excerpt = lambda i: {"file": f"mod{i}.js", "start_line": 1, "end_line": 160,
+                             "numbered_source": "\n".join(f"{n}: const v{n} = \"x\";" for n in range(1, 160))}
+        prompt = {"task": "t" * 2500, "repository_files": [f"src/module_{i}.js" for i in range(300)],
+                  "open_questions": ["q" * 800] * 8, "original": "o" * 3000, "user_context": {"logs": "l" * 1500},
+                  "triage": {}, "evidence": {"excerpts": [excerpt(i) for i in range(8)]},
+                  "clarifications": [{"text": "c" * 1000}] * 3, "reproduction_receipt": None, "prior_validation": {}}
+        self.assertGreater(_size(prompt), prompt_budget(config))  # Would have failed as "Input exceeds ... budget".
+        fitted = fit_prompt(config, prompt)
+        self.assertLessEqual(_size(fitted), prompt_budget(config))
+        self.assertTrue(fitted["omitted_for_budget"])
+        self.assertEqual(fitted["original"], prompt["original"])  # The report itself is never cut.
+        self.assertNotIn("omitted_for_budget", fit_prompt(config, prompt | {"repository_files": [], "open_questions": [],
+                         "clarifications": [], "evidence": {"excerpts": [excerpt(0)]}}))
+
+    def test_many_long_requested_files_leave_room_for_keyword_evidence(self):
+        for i in range(6):
+            (self.repo / f"mod{i}.py").write_text("\n".join(f"value_{n} = {n}  # padding text for size" for n in range(400)) + "\n")
+        (self.repo / "other.py").write_text("NEEDLE_TERM = 1\n")
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-m", "Long files")
+        sha = git(self.repo, "rev-parse", "HEAD").strip()
+        found = retrieve(Path(self.repo), sha, ["NEEDLE_TERM"], "", files=[f"mod{i}.py" for i in range(6)])
+        files = [e["file"] for e in found["excerpts"]]
+        self.assertIn("other.py", files)  # The only file containing the search term is not crowded out.
+        requested = sum(len(e["text"]) for e in found["excerpts"] if e["file"].startswith("mod"))
+        self.assertLessEqual(requested, 12000)
+        self.assertTrue(set(found.get("omitted_files", [])) | set(files) >= {f"mod{i}.py" for i in range(6)})
+
+    def test_quote_containing_the_truncation_marker_is_not_source_text(self):
+        from graph_engineering.investigation import InvestigationNodes, TRUNCATION_MARKER
+        line = "PROMPT = 'xxxx" + TRUNCATION_MARKER
+        state = {"enhanced": {"findings": [{"file": "a.py", "line": 1, "quote": "xxxx" + TRUNCATION_MARKER, "observation": "o"}]},
+                 "retrieved": {"excerpts": [{"file": "a.py", "start_line": 1, "end_line": 1, "text": line}]},
+                 "revision": 1, "intake": {"ticket_id": "GE-1"}}
+        updates, _, _ = InvestigationNodes.node_finding_validation(None, state)
+        self.assertFalse(updates["finding_validation"]["source_references_valid"])
+        genuine = state | {"enhanced": {"findings": [{"file": "a.py", "line": 1, "quote": "PROMPT = 'xxxx", "observation": "o"}]}}
+        self.assertTrue(InvestigationNodes.node_finding_validation(None, genuine)[0]["finding_validation"]["source_references_valid"])
+
+    def test_review_card_lists_questions_that_remain_open(self):
+        from graph_engineering.attention import item
+        from tests.test_attention import DRAFT, row
+        found = item(row("ready_for_review", enhanced=DRAFT, finding_validation={"source_references_valid": True, "verified_references": 2}))
+        self.assertIn("Open question: Where is the model configured?", found["context"])
+
+
 if __name__ == "__main__":
     unittest.main()
