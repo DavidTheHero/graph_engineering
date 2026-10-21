@@ -119,7 +119,8 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
                                     f"Hypothesis: {_short(draft.get('root_cause_hypothesis'))}" if draft.get("root_cause_hypothesis") else None,
                                     f"Verified source references: {validation.get('verified_references', 0)}"
                                     + ("" if valid else " (accept unavailable until references verify)"),
-                                    *[f"Acceptance: {_short(x, 160)}" for x in draft.get("acceptance_criteria", [])[:3]]] if c],
+                                    *[f"Acceptance: {_short(x, 160)}" for x in draft.get("acceptance_criteria", [])[:3]],
+                                    *[f"Open question: {_short(q, 160)}" for q in draft.get("questions", [])[:3]]] if c],
             "actions": actions}
 
     if intake and status in ("ready_for_development", "development_queued") and not automatic_development:
