@@ -223,11 +223,16 @@ def guard_hidden_tail(content,old):
             raise ValueError('An old fragment ends inside a long line whose remainder may have been shown shortened; end that old line with the "…[line truncated]" marker (and its replacement too) to keep the remainder, or anchor on complete lines')
 
 
-def materialize_hunks(path,patch,allowed,skipped=None):
+ALREADY_APPLIED_MIN=20  # Characters of replacement text below which "already present" proves nothing.
+
+
+def materialize_hunks(path,patch,allowed,skipped=None,base_sha=None):
     """``skipped`` (a list, when given) receives the edits whose replacement text is already present exactly once
-    while the old fragment is absent: the edit was applied in an earlier proposal of this round (GE-30D05C40: the
-    27B re-proposed the ``model`` key its previous proposal had added, anchored on the line as it no longer was)."""
-    result={}
+    while the old fragment is absent and the text was not in the file at ``base_sha``: the edit was applied by an
+    earlier proposal of this round (GE-30D05C40: the 27B re-proposed the ``model`` key its previous proposal had
+    added, anchored on the line as it no longer was). Marker edits are never skipped: they are expanded first.
+    A proposal whose every edit is already applied is refused with the reason fed back to the model."""
+    result={};baseline={}
     for edit in patch['edits']:
         name=edit['path']
         if name not in allowed:raise ValueError('Replacement path outside approved source scope')
@@ -236,8 +241,12 @@ def materialize_hunks(path,patch,allowed,skipped=None):
         content=result.get(name,target.read_text(encoding='utf-8'))
         old,new=expand_shortened_lines(content,edit['old'],edit['new'])
         matches=content.count(old)
-        if matches==0 and skipped is not None and new.strip() and content.count(new)==1:
-            skipped.append({'path':name,'new':edit['new'][:160]});continue
+        if matches==0 and skipped is not None and len(new.strip())>=ALREADY_APPLIED_MIN and content.count(new)==1:
+            if name not in baseline:
+                shown=command(['git','show',f'{base_sha}:{name}'],Path(path),timeout=20) if base_sha else None
+                baseline[name]=shown['output'] if shown and shown['returncode']==0 else None
+            if baseline[name] is not None and new not in baseline[name]:
+                skipped.append({'path':name,'new':edit['new'][:160]});continue
         if matches!=1:
             # The model can only correct what it is told: the file, the match count and the fragment (GE-30D05C40: the
             # 27B anchored on a line the previous round had already changed and was told only "exactly one").
@@ -246,6 +255,9 @@ def materialize_hunks(path,patch,allowed,skipped=None):
                              '<<<%s>>>; the file content shown to you is current, anchor on it'%(name,matches,shown))
         guard_hidden_tail(content,old)
         result[name]=content.replace(old,new,1)
+    if skipped and not result:
+        raise ValueError('Replacement edits are all already applied this round (%s); the evidence shows the files as they are now: propose only the remaining changes'
+                         %', '.join(sorted({s['path'] for s in skipped})))
     return [{'path':name,'content':content} for name,content in result.items()]
 
 

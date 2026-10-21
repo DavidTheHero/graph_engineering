@@ -470,9 +470,15 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             for _ in range(max_nodes):
                 run = self.store.get(run_id)
                 node_name, state = run["node"], run["state"]
-                config = state["config"]  # Nodes may rewrite budgets (development_setup applies the policy's).
+                config = state["config"]  # Accepted development takes the policy's current budgets below, every step.
                 if node_name == "done":
                     return run
+                if self.cancelled():
+                    self.store.checkpoint(run_id, node_name, {}, node_name, "cancelled", "cancelled")
+                    return self.store.get(run_id)
+                if node_name == until:
+                    self.store.checkpoint(run_id, node_name, {}, node_name, "scanned", "yielded")
+                    return self.store.get(run_id)
                 budget_changed = False
                 if config.get("run_mode") == "accepted_development":
                     from .accepted_development import policy_budgets
@@ -481,12 +487,6 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                         state["config"] = config = config | budgets  # The policy's current budget, persisted with the attempt below.
                         budget_changed = True
                         self.store.event(run_id, node_name, "policy_budget_applied", budgets)
-                if self.cancelled():
-                    self.store.checkpoint(run_id, node_name, {}, node_name, "cancelled", "cancelled")
-                    return self.store.get(run_id)
-                if node_name == until:
-                    self.store.checkpoint(run_id, node_name, {}, node_name, "scanned", "yielded")
-                    return self.store.get(run_id)
                 spec = REGISTRY[node_name]
                 input_fields = spec.inputs | OPTIONAL_INPUTS.get(node_name, {})
                 inputs = {key: state[key] for key in input_fields if key in state}
@@ -499,7 +499,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                 # Accepted development follows the repository policy's budget; other modes keep each node's own cap.
                 limit = config["max_node_attempts"] if config.get("run_mode") == "accepted_development" else min(config["max_node_attempts"], spec.max_attempts)
                 if attempts[key] > limit and node_name not in ("approval_gate", "ci_policy_verification"):
-                    self.store.checkpoint(run_id, node_name, {"error": "Attempt budget exhausted"}, node_name, "blocked", "exhausted")
+                    self.store.checkpoint(run_id, node_name, {"error": "Attempt budget exhausted"} | ({"config": config} if budget_changed else {}), node_name, "blocked", "exhausted")
                     return self.store.get(run_id)
                 self.store.checkpoint(run_id, node_name, {"attempts": attempts} | ({"config": config} if budget_changed else {}), node_name, "running", "started")
                 started = time.monotonic()
@@ -945,7 +945,7 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
             fitted = fit() if accepted else request
             patch = self.ask(state, "implementation", fitted, HUNK_SCHEMA if accepted else PATCH_SCHEMA, routing.LARGE)
             skipped = []
-            edits = validate_edits(path, materialize_hunks(path,patch,state['plan']['files'],skipped) if accepted else patch["files"], state["plan"]["files"], adapted=adapted)
+            edits = validate_edits(path, materialize_hunks(path,patch,state['plan']['files'],skipped,state['base_sha']) if accepted else patch["files"], state["plan"]["files"], adapted=adapted)
             if skipped:
                 self.store.event(self.run_id, "isolated_implementation", "edits_already_applied", {"edits": skipped})
             # The model that actually wrote the patch (routing may have fallen back since model_selection).

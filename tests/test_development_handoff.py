@@ -400,12 +400,23 @@ class DevelopmentHandoffTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,r"first 160 of 200 characters"):
             materialize_hunks(self.repo,{'edits':[{'path':'calc.py','old':'z'*200,'new':'y'}]},['calc.py'])
         # An edit whose replacement is already in the file (applied by an earlier proposal this round) is skipped, not refused.
+        base=git(self.repo,'rev-parse','HEAD').strip()
+        (self.repo/'calc.py').write_text((self.repo/'calc.py').read_text().replace('return a-b','return a-b  # applied by an earlier proposal'))
+        applied={'path':'calc.py','old':'return a-b\n','new':'return a-b  # applied by an earlier proposal\n'}
         skipped=[]
-        out=materialize_hunks(self.repo,{'edits':[{'path':'calc.py','old':'return a+b','new':'return a-b'},{'path':'calc.py','old':'def add','new':'def add'}]},['calc.py'],skipped)
+        out=materialize_hunks(self.repo,{'edits':[applied,{'path':'calc.py','old':'def add','new':'def add'}]},['calc.py'],skipped,base)
         self.assertEqual([s['path'] for s in skipped],['calc.py'])
         self.assertEqual(out[0]['path'],'calc.py')  # The second edit (old == new, present once) still applies as a no-op.
+        with self.assertRaisesRegex(ValueError,'all already applied this round \\(calc.py\\)'):  # Nothing left: the reason is fed back.
+            materialize_hunks(self.repo,{'edits':[applied]},['calc.py'],[],base)
         with self.assertRaises(ValueError):  # Without the skip list the refusal stands.
-            materialize_hunks(self.repo,{'edits':[{'path':'calc.py','old':'return a+b','new':'return a-b'}]},['calc.py'])
+            materialize_hunks(self.repo,{'edits':[applied]},['calc.py'])
+        # Review: text that was already in the file at the accepted commit, or too short to prove anything, is never "applied".
+        with self.assertRaisesRegex(ValueError,'has 0 matches'):
+            materialize_hunks(self.repo,{'edits':[{'path':'calc.py','old':'def sub(a,b)','new':'def add(a, b): return a-b  # applied by an earlier proposal'}]},['calc.py'],[],base)
+        with self.assertRaisesRegex(ValueError,'has 0 matches'):
+            materialize_hunks(self.repo,{'edits':[{'path':'calc.py','old':'return a-b;','new':'return a-b'}]},['calc.py'],[],base)
+        git(self.repo,'checkout','--','calc.py')
 
     def test_partial_dependency_directory_does_not_count_as_success(self):
         from graph_engineering.accepted_development import prepare_dependencies
