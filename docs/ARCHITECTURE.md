@@ -131,6 +131,25 @@ were answered from `backend/llm.js:84` and `frontend/src/App.jsx`, and the ticke
 four verified references and no questions. Review, development authorisation and merge approval
 remain human gates unless a repository's autonomy policy says otherwise.
 
+## Policy-owned recovery (2026-10-21)
+
+GE-30D05C40 stopped six times in one day; five stops were controller or environment faults, and each
+ended with a person pressing Retry. The repository autonomy policy now owns recovery:
+
+* **Budgets.** With `development` on, `max_repairs` and `max_node_attempts` (1–4 each) come from the
+  policy; accepted-development nodes use that attempt budget directly, and the regression authoring
+  and review rounds scale with it.
+* **Recovery rounds.** A blocked or escalated development is retried automatically, with the restart
+  the stop needs (re-author, fresh setup, re-plan), for `recovery_rounds` (0–6) rounds. Each round is
+  an `autonomy_recovery` event; when the ticket's retry limit is exhausted the round extends it by one
+  (`retry_budget_extended`), so `retries n/m` stays honest. `UNRECOVERABLE` stops (the requirement,
+  policy or repository must change first) are never retried. While rounds remain the ticket is not in
+  "Needs you".
+* **Automatic acceptance.** `auto_accept` accepts an investigated ticket whose references verified and
+  that has no open questions; the `accept` action re-checks the policy at execution time.
+* **Human gates that remain.** Clarification when evidence is missing, acceptance when questions
+  remain, publication under the existing `publish` flag, and **merge approval, always**.
+
 ## Directory structure
 
 ```text

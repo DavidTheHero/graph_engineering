@@ -71,7 +71,7 @@ def registered_timeout(flow,state):
     return value if type(value) is int and 1<=value<=600 else state['config']['command_timeout']
 
 
-REGRESSION_VALIDATION_ROUNDS = 2  # Proposals run against the original source before the step blocks (node attempt limit).
+REGRESSION_VALIDATION_ROUNDS = 2  # Default proposals run against the original source; the node attempt budget raises it.
 
 
 def development_files(state,source_files,cited,limit=10):
@@ -189,6 +189,10 @@ class AcceptedDevelopmentNodes:
         discard_checkouts(self,path)
         config=state['config']|{'repo':str(path),'base':'graph-base','auto_merge':False,'command_timeout':registered_timeout(self,state)}
         config=current_environment(config,registered_config(self,state))
+        from .autonomy import BUDGETS, current
+        setting=current(self,state)
+        if setting['development']:  # The policy owns the budgets of autonomous development (bounded by BUDGETS).
+            config|={k:max(BUDGETS[k][0],min(BUDGETS[k][1],int(setting[k]))) for k in ('max_repairs','max_node_attempts')}
         if config['backend']=='github':
             remote=git(Path(config['source_repo']),'remote','get-url','origin')
             if remote.removesuffix('.git').casefold()!=('https://github.com/'+config['slug']).casefold():raise ValueError('GitHub delivery remote must match the approved repository slug')
@@ -241,7 +245,7 @@ class AcceptedDevelopmentNodes:
         approved=review['decision']=='approve' and not any(f['severity'] in ('critical','required') for f in review['findings'])
         count=state.get('regression_review_round',0)+1
         update={'regression_review':review|{'approved':approved},'regression_review_round':count}
-        if not approved and count>=2:return update|{'error':'Regression review rejected twice; refine the accepted requirement'},'regression_review','blocked'
+        if not approved and count>=max(2,state['config'].get('max_node_attempts',2)):return update|{'error':'Regression review rejected twice; refine the accepted requirement'},'regression_review','blocked'
         return update,'regression_validation' if approved else 'regression_authoring','ready'
 
     def node_regression_validation(self,state):
@@ -263,7 +267,7 @@ class AcceptedDevelopmentNodes:
                 target=path/regression['path']
                 if regression['path'] in git(path,'ls-files').splitlines() or target.read_text(encoding='utf-8')!=regression['content']:raise ValueError('Regression changed outside its authorisation')
                 target.unlink()
-                if count>=REGRESSION_VALIDATION_ROUNDS:
+                if count>=max(REGRESSION_VALIDATION_ROUNDS,state['config'].get('max_node_attempts',2)):
                     # Recorded so an operator retry re-authors with this feedback instead of re-running the rejected test.
                     self.store.checkpoint(self.run_id,'regression_validation',{'regression_feedback':feedback},'regression_validation','running','regression_rejected')
                     raise ValueError('Regression repair budget exhausted. '+feedback)

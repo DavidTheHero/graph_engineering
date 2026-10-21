@@ -9,7 +9,7 @@ from .runtime import digest,now
 DEVELOPMENT_STATE=('development','development_information','question_answer_request','question_answers','error','last_error',
     'baseline','baseline_path','frozen','bundle','regression','regression_feedback','regression_review','regression_review_round',
     'regression_validation_round','regression_baseline','plan','implementation_model','worktree','branch','patch','verification',
-    'head','diff','review','issue','delivery_revision')
+    'head','diff','review','issue','delivery_revision','autonomy_recoveries','development_round')
 
 
 def act(tickets,data,key):
@@ -61,7 +61,9 @@ def act(tickets,data,key):
             state['clarifications']=[*state.get('clarifications',[]),*({'actor':n['actor'],'at':n['at'],'text':n['text']} for n in state.get('development_information',[]))]
             for field in DEVELOPMENT_STATE:state.pop(field,None)
             state['config'].update(run_mode='intake',repo=state['config']['source_repo'])
-            state.update(attempts={},repairs=0,accepted_revision=None,publication_revision=None,intake_phase='Ready for Review')
+            # A new acceptance cycle: automatic acceptance, start and recovery keys must not collide with the last one's.
+            state.update(attempts={},repairs=0,accepted_revision=None,publication_revision=None,intake_phase='Ready for Review',
+                         acceptance_cycle=state.get('acceptance_cycle',0)+1)
             db.execute('UPDATE tickets SET retries=0,not_before=0 WHERE id=?',(ticket['id'],))
             node,status='ticket_finalisation','ready_for_review'
         elif action=='edit_enhancement':
@@ -81,6 +83,12 @@ def act(tickets,data,key):
             state.update(enhanced=enhanced,revision=number,accepted_revision=None,publication_revision=None)
             node,status='ticket_finalisation','ready_for_review'
         elif action=='accept':
+            if 'autonomy_policy_updated' in data:  # Automatic acceptance: the policy must still say so.
+                from .autonomy import policy
+                setting=policy(tickets,original['repository_id'])
+                if not setting['auto_accept'] or setting.get('updated')!=data['autonomy_policy_updated']:
+                    raise ValueError('Repository autonomy policy changed before acceptance')
+                if state.get('enhanced',{}).get('questions'):raise ValueError('Automatic acceptance requires no open questions')
             validation=state.get('finding_validation',{})
             if status!='ready_for_review' or not validation.get('source_references_valid') or not validation.get('verified_references'):
                 raise ValueError('A draft with independently checked source references is required; runtime cause remains a hypothesis')

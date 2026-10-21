@@ -30,7 +30,7 @@ def _action(action_id, label, endpoint, payload, *, input=None, primary=False, h
             "primary": primary, "help": help, "confirm": confirm}
 
 
-def item(ticket, *, approved_head=None, original=None, automatic_development=False):
+def item(ticket, *, approved_head=None, original=None, automatic_development=False, automatic_recovery=False, automatic_acceptance=False):
     """The attention item for one ticket row (``Tickets.list()`` shape), or None if nothing is needed."""
     state, status, node = ticket["state"], ticket["status"], ticket["node"]
     # Working, queued or cancelled tickets need nobody right now. A paused merge approval means the operator
@@ -38,6 +38,11 @@ def item(ticket, *, approved_head=None, original=None, automatic_development=Fal
     if ticket.get("lease_owner") or ticket.get("cancel") or status in ("cancelled", "ready", "running"):
         return None
     if ticket.get("paused") and status not in ("blocked", "escalated", "failed"):
+        return None
+    # The repository policy will act on these itself on the next scheduler sweep: nobody needs to.
+    if automatic_recovery and status in ("blocked", "escalated"):
+        return None
+    if automatic_acceptance and status == "ready_for_review":
         return None
     intake = state["config"].get("run_mode") == "intake"
     developing = state["config"].get("run_mode") == "accepted_development"
@@ -205,16 +210,23 @@ def items(tickets, rows=None) -> list[dict]:
 
     Pass ``rows`` (already loaded ``Tickets.list()``) to stay inside the caller's read transaction.
     """
-    from .autonomy import policy
-    result, automatic_by_repository = [], {}
+    from .autonomy import acceptable, policy, recoverable
+    result, automatic_by_repository, policies = [], {}, {}
+    sweeping = not tickets.setting("paused", False)  # A paused scheduler sweeps nothing: nothing is hidden then.
     originals = dict(tickets.db.execute("SELECT ticket_id, original FROM ticket_reports").fetchall())  # One query.
     for ticket in rows if rows is not None else tickets.list():
         repository_id = ticket["state"].get("intake", {}).get("repository_id")
-        if repository_id and repository_id not in automatic_by_repository:
-            automatic_by_repository[repository_id] = bool(policy(tickets, repository_id).get("development"))
+        if repository_id and repository_id not in policies:
+            policies[repository_id] = policy(tickets, repository_id)
+            automatic_by_repository[repository_id] = bool(policies[repository_id].get("development"))
+        setting = policies.get(repository_id) or {}
+        recovering = bool(sweeping and setting.get("development") and ticket["state"].get("autonomy_recoveries", 0) < setting.get("recovery_rounds", 0)
+                          and recoverable(ticket))
+        accepting = bool(sweeping and setting.get("auto_accept") and acceptable(ticket))
         found = item(ticket, approved_head=tickets.store.approved_head(ticket["run_id"]),
                      original={"original": originals[ticket["id"]]} if ticket["id"] in originals else None,
-                     automatic_development=automatic_by_repository.get(repository_id, False))
+                     automatic_development=automatic_by_repository.get(repository_id, False),
+                     automatic_recovery=recovering, automatic_acceptance=accepting)
         if found:
             found["repository"] = ticket["state"]["config"].get("source_repo", ticket["repo"])
             result.append(found)

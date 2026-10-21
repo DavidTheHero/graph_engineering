@@ -204,7 +204,7 @@ class Tickets:
                     retry_node='task_planning'
                     state.update(repairs=0,development_round=state.get('development_round',0)+1)
                     state.pop('outcome',None)
-                    state['attempts']={key:0 if key.split(':')[0] in ('task_planning','model_selection','isolated_implementation','test_execution','repair','independent_review') else count
+                    state['attempts']={key:0 if key.split(':')[0] in ('task_planning','model_selection','isolated_implementation','test_execution','repair','independent_review','escalation','completion') else count
                                        for key,count in state['attempts'].items()}
                 elif retry_node=='regression_validation':
                     # Re-running a rejected test cannot succeed. Start again from a pristine snapshot (development_setup

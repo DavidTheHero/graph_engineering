@@ -9,7 +9,7 @@ def execution_limits(ticket):
     if config.get('run_mode')=='intake':
         key+=f":g{state['intake'].get('generation',0)}:s{state.get('search_round',0)}:v{state.get('validation_round',0)}:r{state.get('revision',0)}"
     result={'step':node,'step_used':state.get('attempts',{}).get(key,0),
-        'step_limit':min(config.get('max_node_attempts',2),spec.max_attempts if spec else 2),
+        'step_limit':config.get('max_node_attempts',2) if config.get('run_mode')=='accepted_development' else min(config.get('max_node_attempts',2),spec.max_attempts if spec else 2),
         'retries_used':ticket['retries'],'retry_limit':ticket['max_retries'],
         'repairs_used':state.get('repairs',0),'repair_limit':config.get('max_repairs',2),
         'exhausted':state.get('error')=='Attempt budget exhausted'}
