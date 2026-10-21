@@ -75,21 +75,37 @@ REGRESSION_VALIDATION_ROUNDS = 2  # Proposals run against the original source be
 
 
 def development_files(state,source_files,cited,limit=8):
-    """Source files the test author and implementer see: the validated findings first, then the files the
-    investigation chose to read, then committed files matching the acceptance criteria (where a feature lives).
+    """Source files the test author and implementer see, at the commit under development:
 
-    GE-30D05C40: only backend/llm.js was cited, so the author never saw the API or the chat bar its
+    1. the validated findings;
+    2. the import chain above them (files importing a cited file, then files importing those): where an
+       entry point such as the API app or a UI component wires the cited code in;
+    3. source files matching the most distinct acceptance-criteria terms (the investigation's read_files
+       count only when they match too).
+
+    GE-30D05C40: only backend/llm.js was cited, so the author never saw the API app or the chat bar its
     acceptance criteria describe and kept testing behaviour that already existed."""
-    from .investigation import retrieve
-    draft=state['enhanced'];allowed=set(source_files)
-    wanted=list(cited)+[f for f in draft.get('read_files') or [] if f in allowed]
+    repo=Path(state['config']['source_repo']);sha=state['base_sha'];allowed=[f for f in source_files]
+    def grep(term):
+        found=command(['git','grep','-l','-I','-i','-F','-e',term,sha,'--',*allowed],repo,timeout=20)
+        return {line.split(':',1)[1] for line in found['output'].splitlines() if ':' in line} if found['returncode']==0 else set()
+    wanted=list(cited);frontier=list(cited)
+    for _ in range(2):  # Two hops up the import chain.
+        importers=[]
+        for name in frontier:
+            stem=PurePosixPath(name).stem
+            importers+=sorted(f for f in grep('/'+stem) | grep(stem+'.') | grep("'"+stem+"'") | grep('"'+stem+'"')
+                              if f not in wanted and f!=name)
+        frontier=[f for f in dict.fromkeys(importers) if f not in wanted][:3]
+        wanted+=frontier
+    draft=state['enhanced']
     criteria=' '.join(draft.get('acceptance_criteria') or [])+' '+str(draft.get('proposed_solution') or '')
-    terms=[t for t in dict.fromkeys(re.findall(r'[A-Za-z_/][A-Za-z0-9_/.-]{3,}',criteria)) if t.lower() not in STOP_TERMS][:8]
-    try:
-        found=retrieve(Path(state['config']['source_repo']),state['base_sha'],terms,criteria)
-        wanted+=[e['file'] for e in found['excerpts'] if e['file'] in allowed]
-    except ValueError:
-        pass  # Search is best effort; the cited files remain.
+    terms=[t for t in dict.fromkeys(w.lower() for w in re.findall(r'[A-Za-z_][A-Za-z0-9_]{3,}',criteria)) if t not in STOP_TERMS][:10]
+    score={}
+    for term in terms:
+        for name in grep(term):score[name]=score.get(name,0)+1
+    ranked=sorted((f for f in score if f not in wanted),key=lambda f:(-score[f],f not in (draft.get('read_files') or []),f))
+    wanted+=[f for f in ranked if score[f]>=2]
     return list(dict.fromkeys(wanted))[:limit]
 
 
