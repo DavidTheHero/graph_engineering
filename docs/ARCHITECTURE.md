@@ -145,6 +145,10 @@ ended with a person pressing Retry. The repository autonomy policy now owns reco
   (`retry_budget_extended`), so `retries n/m` stays honest. `UNRECOVERABLE` stops (the requirement,
   policy or repository must change first) are never retried. While rounds remain the ticket is not in
   "Needs you".
+* **Repairs widen, never narrow.** A repair re-plans from the latest failure, but keeps the previous
+  plan's files and adapted tests (`plan_widened` event): their edits stay in the worktree, so one
+  failure can never undo the half of the change it is not about. Only a fresh round after escalation
+  starts again from the accepted commit.
 * **Automatic acceptance.** `auto_accept` accepts an investigated ticket whose references verified and
   that has no open questions; the `accept` action re-checks the policy at execution time.
 * **Human gates that remain.** Clarification when evidence is missing, acceptance when questions

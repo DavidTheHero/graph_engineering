@@ -814,6 +814,11 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                 "Preserve all tests and policy." if accepted else
                 "Plan a minimal source-only fix to the validated test failure. Preserve all tests and policy. Select only complete source files from the supplied bundle.")
         request = {"task": task, "candidate": state["candidate"], "evidence": state["bundle"], "additional_information": troubleshooting_context(state)}
+        # A repair within the round keeps the previous plan: its edits stay in the worktree, so dropping a file
+        # would revert the half of the change the latest failure is not about (GE-30D05C40 oscillated between
+        # {llm.js, agent.js} and {agent.js, agent.test.js}, each re-plan undoing the other). A fresh round after
+        # escalation starts from the accepted commit and may plan differently.
+        previous = {}
         if accepted:
             request["regression_test"] = {"path": state["regression"]["path"], "content": state["regression"]["content"]}
             if state.get("plan") and state.get("verification"):  # A repair, or a retry after escalation.
@@ -821,16 +826,23 @@ class Workflow(InvestigationNodes,AcceptedDevelopmentNodes,QuestionAnsweringNode
                 request["previous_attempt"] = {"files": state["plan"].get("files", []),
                                                "failure_output": state["verification"].get("output", "")[-3000:],
                                                **({"review_findings": review} if review and not review.get("approved") else {})}
+                if state.get("worktree_round", 0) == state.get("development_round", 0):
+                    previous = state["plan"]
+                    request["previous_attempt"]["note"] = "These files stay planned and keep their current edits; add the files the failure shows were missing."
         if accepted:
             request = fit_planning_request(state["config"], request)
             if request.get("shortened_for_budget"):
                 self.store.event(self.run_id, "task_planning", "prompt_fitted", {"shortened": request["shortened_for_budget"]})
-        adaptable = adaptable_tests(self, state) if accepted else []
+        adaptable = sorted(set(adaptable_tests(self, state)) | set(previous.get("adapted_tests") or [])) if accepted else []
         if adaptable:
             request["adaptable_existing_tests"] = adaptable
             request["task"] += (" The frozen regression now passes but these EXISTING tests fail because they pin the behaviour the accepted "
                                 "requirement changes; you may include them in files ONLY to adapt those assertions: " + ", ".join(adaptable) + ".")
         plan = self.ask(state, "planning", request, PLAN_SCHEMA, routing.LARGE)
+        kept = [f for f in previous.get("files", []) if f not in plan["files"]]
+        if kept:
+            plan["files"] = plan["files"] + kept
+            self.store.event(self.run_id, "task_planning", "plan_widened", {"kept": kept, "reason": "a repair keeps the previous plan's files and their edits"})
         complete = {f["path"] for f in state["bundle"]["files"] if f["complete"] or state['config'].get('run_mode')=='accepted_development'}
         adapted = sorted(set(plan["files"]) & set(adaptable))
         if not set(plan["files"]) - set(adapted) <= (set(state["repository"]["source_files"]) & complete) - set(state["frozen"]):
