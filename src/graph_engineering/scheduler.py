@@ -194,7 +194,12 @@ def serve_scheduler(home, workers=2, once=False, poll=.5):
                 children = [p for p in children if p.poll() is None]
                 recover(tickets, {p.pid for p in children})
                 from .autonomy import dispatch
-                if not tickets.setting('paused',False):dispatch(tickets)
+                if not tickets.setting('paused',False):
+                    try:
+                        dispatch(tickets)
+                    except Exception:  # The policy sweep is advisory: claiming and running work must continue.
+                        import traceback
+                        traceback.print_exc()
                 if time.time() - last_health > 30:
                     observe_models(tickets); last_health = time.time()
                 while True:

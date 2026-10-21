@@ -75,8 +75,9 @@ def dispatch(tickets):
     for ticket in tickets.list():
         state=ticket['state'];repo=state.get('intake',{}).get('repository_id')
         if not repo or ticket['lease_owner'] or ticket.get('cancel') or ticket['paused']:continue
-        setting=policy(tickets,repo);cycle=f"{state['revision']}c{state.get('acceptance_cycle',0)}"  # Per acceptance cycle.
+        if state.get('revision') is None:continue  # Not investigated yet: nothing for the policy to accept, start or recover.
         try:
+            setting=policy(tickets,repo);cycle=f"{state['revision']}c{state.get('acceptance_cycle',0)}"  # Per acceptance cycle.
             if setting['auto_accept'] and acceptable(ticket):
                 act(tickets,{'ticket_id':ticket['id'],'revision':state['revision'],'actor':setting['actor'],'action':'accept',
                     'autonomy_policy_updated':setting['updated']},'autoaccept-'+ticket['id']+'-'+cycle)
@@ -88,10 +89,11 @@ def dispatch(tickets):
                     'autostart-'+ticket['id']+'-'+cycle+'-'+digest(setting)[:8])
             elif ticket['status'] in ('blocked','escalated') and recoverable(ticket):
                 recover(tickets,ticket,setting)
-        except ValueError as exc:
-            # Operator actions can race the snapshot above. Reconsider next sweep,
-            # retaining one receipt per reason instead of terminating the service.
-            reason='Autonomous admission deferred: '+str(exc)
+        except Exception as exc:
+            # Operator actions can race the snapshot above, and one ticket's unexpected state must never stop the
+            # sweep for the others (GE-FDD2275A, 2026-10-21: a KeyError here killed the worker service). Reconsider
+            # next sweep, retaining one receipt per reason instead of terminating the service.
+            reason='Autonomous admission deferred: '+(str(exc) if isinstance(exc,ValueError) else f'{type(exc).__name__}: {exc}')
             if tickets.get(ticket['id'])['last_reason']!=reason:
                 with tickets.db:
                     tickets.db.execute('UPDATE tickets SET last_reason=? WHERE id=?',(reason,ticket['id']))

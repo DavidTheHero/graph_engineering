@@ -191,6 +191,27 @@ class AutonomousRecoveryTests(unittest.TestCase):
         self.assertEqual((run['state']['config']['max_node_attempts'], run['state']['config']['max_repairs']), (4, 3))
         self.assertIn('policy_budget_applied', [e['kind'] for e in self.tickets.store.events(self.run['id'])])
 
+    def test_sweep_skips_new_tickets_and_survives_a_failing_one(self):
+        """GE-FDD2275A: a freshly filed ticket has no revision; reading it raised KeyError and killed the worker service."""
+        from unittest.mock import patch
+        self.set_policy('sweep-policy-1', auto_accept=True, recovery_rounds=2)
+        fresh = create(self.tickets, {'repository_id': self.registration['id'], 'description': 'A brand new report not investigated yet'}, 'sweep-create-1')
+        dispatch(self.tickets)  # Must not raise; the accepted ticket from setUp is still started.
+        self.assertEqual(self.tickets.get(self.ticket['ticket_id'])['node'], 'development_setup')
+        self.assertEqual(self.tickets.get(fresh['ticket_id'])['node'], 'manual_intake')
+        # Any unexpected error for one ticket is recorded on it and the sweep goes on.
+        with patch('graph_engineering.autonomy.acceptable', side_effect=RuntimeError('boom')):
+            dispatch(self.tickets)
+        self.assertIn('RuntimeError: boom', self.tickets.get(self.ticket['ticket_id'])['last_reason'])
+
+    def test_scheduler_keeps_claiming_when_the_sweep_fails(self):
+        from unittest.mock import patch
+        from graph_engineering.scheduler import serve_scheduler
+        with patch('graph_engineering.autonomy.dispatch', side_effect=KeyError('revision')), \
+             patch('graph_engineering.scheduler.claim', return_value=None) as claim:
+            serve_scheduler(self.home, workers=1, once=True)
+        self.assertTrue(claim.called)
+
     def test_policy_validation(self):
         with self.assertRaisesRegex(ValueError, 'recovery_rounds'):
             self.set_policy('bad-policy-1', recovery_rounds=7)
