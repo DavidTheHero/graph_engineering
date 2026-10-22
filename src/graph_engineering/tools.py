@@ -5,8 +5,11 @@ the workspace root and cannot leave it. Output is clipped so one call cannot flo
 """
 from __future__ import annotations
 
+import ast
+import json
 from pathlib import Path
 import re
+import shlex
 import subprocess
 
 from .sandbox import Sandbox, clip
@@ -109,12 +112,50 @@ class Workspace:
         more = f"\n[{len(lines) - 80} more matches; narrow the pattern or path]" if len(lines) > 80 else ""
         return "\n".join(lines[:80]) + more
 
+    def syntax_error(self, target: Path) -> str | None:
+        """SWE-agent's lint-on-edit: an edit that breaks the file's syntax is not applied (removing it cost 3 points)."""
+        suffix = target.suffix
+        if suffix == ".py":
+            try:
+                ast.parse(target.read_text(), filename=target.name)
+            except SyntaxError as exc:
+                return f"line {exc.lineno}: {exc.msg}"
+        elif suffix == ".json":
+            try:
+                json.loads(target.read_text())
+            except ValueError as exc:
+                return str(exc)
+        elif suffix in (".js", ".mjs", ".cjs") and self.sandbox is not None:
+            # Node 25's module detection makes a plain `node --check file.js` miss errors; parse explicitly instead.
+            modes = {".mjs": ["module"], ".cjs": ["commonjs"]}.get(suffix, ["module", "commonjs"])
+            source = shlex.quote(str(target.relative_to(self.root)))
+            errors = []
+            for mode in modes:
+                code, out, _ = self.sandbox.run(f"node --input-type={mode} --check < {source}", timeout=30)
+                if code == 0 or code == 127:  # parses (127: no node here, nothing to say)
+                    return None
+                errors.append(out.strip())
+            return clip(errors[0], 1200)
+        return None
+
+    def checked(self, path: str, target: Path, previous: str | None, message: str) -> str:
+        problem = self.syntax_error(target)
+        if not problem:
+            return message
+        if previous is None:
+            target.unlink()
+        else:
+            target.write_text(previous)
+        return (f"Error: the change was not applied because it breaks the syntax of {path}: {problem}\n"
+                "The file is unchanged. Fix the change and try again.")
+
     def write_file(self, path: str, content: str) -> str:
         target = self.path(path)
-        existed = target.exists()
+        previous = target.read_text() if target.exists() else None
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content)
-        return f"{'Replaced' if existed else 'Created'} {path} ({content.count(chr(10)) + 1} lines)"
+        return self.checked(path, target, previous,
+                            f"{'Replaced' if previous is not None else 'Created'} {path} ({content.count(chr(10)) + 1} lines)")
 
     def edit_file(self, path: str, old_text: str, new_text: str) -> str:
         target = self.path(path)
@@ -122,7 +163,7 @@ class Workspace:
         count = text.count(old_text) if old_text else 0
         if count == 1:
             target.write_text(text.replace(old_text, new_text, 1))
-            return f"Edited {path}"
+            return self.checked(path, target, text, f"Edited {path}")
         if count > 1:
             return f"Error: old_text occurs {count} times in {path}; include more surrounding lines so it is unique."
         squash = lambda s: re.sub(r"\s+", " ", s).strip()

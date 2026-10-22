@@ -34,6 +34,16 @@ class Tools(unittest.TestCase):
         (self.ws.root / "wide.txt").write_text("\n".join("w" * 1500 for _ in range(100)))
         self.assertLess(len(self.ws.read_file("wide.txt")), 26000)
 
+    def test_an_edit_that_breaks_syntax_is_not_applied(self):
+        before = (self.ws.root / "calc.py").read_text()
+        reply = self.ws.edit_file("calc.py", "return a + b", "return a +")
+        self.assertIn("not applied because it breaks the syntax of calc.py", reply)
+        self.assertEqual((self.ws.root / "calc.py").read_text(), before)
+        reply = self.ws.write_file("new.json", "{bad json")
+        self.assertTrue(reply.startswith("Error"))
+        self.assertFalse((self.ws.root / "new.json").exists())
+        self.assertTrue(self.ws.write_file("ok.py", "x = 1\n").startswith("Created"))
+
     def test_search_and_list_include_new_files(self):
         self.ws.write_file("new_module.py", "def subtract():\n    pass\n")
         self.assertIn("new_module.py:1:def subtract", self.ws.search("subtract"))
@@ -80,6 +90,14 @@ class Confinement(unittest.TestCase):
         self.assertNotIn("GE_SECRET_PROBE", out)
         self.assertNotIn("GITHUB_TOKEN", out)
         self.assertIn(f"HOME={self.root / 'home'}", out)
+
+    def test_javascript_syntax_is_checked_with_node(self):
+        import shutil
+        if not shutil.which("node"):
+            self.skipTest("node missing")
+        ws = Workspace(self.root / "work", self.sandbox)
+        self.assertIn("breaks the syntax", ws.write_file("bad.js", "export function f( {\n"))
+        self.assertTrue(ws.write_file("good.mjs", "export const f = () => 1;\n").startswith("Created"))
 
     def test_timeout_kills_the_process_group(self):
         code, out, _ = self.sandbox.run("sleep 30 & sleep 30", timeout=1)
