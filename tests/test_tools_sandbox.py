@@ -68,6 +68,11 @@ class Confinement(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertFalse(outside.exists())
 
+    def test_a_pipe_keeps_the_failing_exit_code(self):
+        """Live: the coder ran `npm test 2>&1 | tail -25` and read tail's exit code 0 as a passing suite."""
+        code, _, _ = self.sandbox.run("exit 3 | tail -1")
+        self.assertNotEqual(code, 0)
+
     def test_credentials_are_unreadable(self):
         ssh = Path.home() / ".ssh"
         if not ssh.exists():

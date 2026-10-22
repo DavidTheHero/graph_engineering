@@ -72,7 +72,8 @@ class Sandbox:
         return path
 
     def command(self, command: str, network: bool = False) -> list[str]:
-        shell = ["/bin/sh", "-c", command]
+        # pipefail: `npm test 2>&1 | tail -25` otherwise reports tail's exit code, and a failing suite reads as passing.
+        shell = ["/bin/bash", "-o", "pipefail", "-c", command] if Path("/bin/bash").exists() else ["/bin/sh", "-c", command]
         if self.mechanism == "sandbox-exec":
             return ["sandbox-exec", "-f", str(self._profile(network))] + shell
         if self.mechanism == "bwrap":
