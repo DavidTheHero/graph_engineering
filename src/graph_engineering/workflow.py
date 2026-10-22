@@ -76,7 +76,7 @@ def _explorer(ctx: Context, ticket: dict, workspace: Workspace, directory: Path,
 
     def explore(question: str) -> str:
         count[0] += 1
-        brief = prompts.project_brief(workspace.root, read_memory(ctx, ticket["repo"]), question)
+        brief = prompts.project_brief(workspace.root, read_memory(ctx, ticket["repo"]), question, slim=True)
         task = f"Question: {question}\n\n<project>\n{brief}\n</project>"
         agent, run, _ = _agent(ctx, ticket, "explore" if "explore" in ctx.registry.roles else "coding", workspace, READ_ONLY,
                                prompts.REPORT, prompts.EXPLORE, directory / f"explore-{count[0]}", round_, max_steps=20,

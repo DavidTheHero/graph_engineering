@@ -173,6 +173,9 @@ class Context(unittest.TestCase):
         self.assertNotIn("readme text", brief)  # the agent guide wins; the README stays on demand
         self.assertIn("tests/  (2 files)", brief)
         self.assertIn("calc.py", brief)
+        slim = project_brief(self.repo, "M" * 4000, "calc", slim=True)
+        self.assertNotIn("Use unittest", slim)  # the explorer reads the guide only if it needs it
+        self.assertLess(len(slim), len(project_brief(self.repo, "M" * 4000, "calc")) - 2000)
 
 
 if __name__ == "__main__":

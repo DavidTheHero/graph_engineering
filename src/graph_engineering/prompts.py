@@ -267,15 +267,16 @@ REPORT = {
 MEMORY_CHARS = 4000
 
 
-def project_brief(root: Path, memory: str = "", query: str = "") -> str:
+def project_brief(root: Path, memory: str = "", query: str = "", slim: bool = False) -> str:
     """Hybrid retrieval: a little context up front (the project's own agent guide, what earlier tickets learned about
-    the repository, and its shape), the rest on demand."""
+    the repository, and its shape), the rest on demand. A slim brief, for the explorer, skips the agent guide and
+    shortens the rest: its full brief took half of the 9B's working budget before it read anything."""
     root = Path(root)
     parts = []
     if memory.strip():
         parts.append("What earlier tickets learned about this repository (a guide, not the truth: check before relying "
-                     f"on it):\n{memory.strip()[:MEMORY_CHARS]}")
-    for name in BRIEF_FILES:
+                     f"on it):\n{memory.strip()[:MEMORY_CHARS // 3 if slim else MEMORY_CHARS]}")
+    for name in () if slim else BRIEF_FILES:
         path = root / name
         if path.is_file():
             text = path.read_text(errors="replace")
@@ -293,7 +294,7 @@ def project_brief(root: Path, memory: str = "", query: str = "") -> str:
     parts.append("Repository layout (tracked files):\n" + "\n".join(tree))
     if query.strip():
         from .repomap import build
-        ranked = build(root, query, budget_chars=3000)
+        ranked = build(root, query, budget_chars=1500 if slim else 3000)
         if ranked:
             parts.append("Files most related to this task, with their main symbols (a map from the harness; read files "
                          "to confirm):\n" + ranked)
