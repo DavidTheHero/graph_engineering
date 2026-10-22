@@ -27,7 +27,7 @@ from .llm import LLMError, Model, chat
 from .tools import Workspace
 
 CHARS_PER_TOKEN = 3.0
-WORKING_TOKENS = 40000      # the working set we aim for, well inside a long context window
+WORKING_TOKENS = 80000      # about half of a 150K window; 40K made the coder re-read files instead of editing
 NOTES_CHARS = 6000
 
 NOTES_TOOL = {"name": "update_notes",
@@ -102,6 +102,8 @@ class Agent:
         self.evidence = evidence          # finish must cite commands actually run after the last file change
         self.commands: list[tuple[int, str, int]] = []   # (step, command, exit code) of every run call
         self.last_change = 0
+        self.reads: dict[str, tuple] = {}     # tool call id -> (path, first line, last line, step)
+        self.edits: dict[str, int] = {}       # path -> step of its latest edit
 
     def log(self, entry: dict) -> None:
         if self.transcript:
@@ -116,8 +118,8 @@ class Agent:
         """Clear the oldest tool results first, keeping the latest ten, then if needed the latest three.
 
         A cleared result is forgotten by the repeat guard too, so the agent may make that call again."""
+        cleared = self.supersede(messages)
         size = sum(len(json.dumps(m)) for m in messages)
-        cleared = set()
         for keep in (10, 3):
             for message in [m for m in messages if m["role"] == "tool"][:-keep]:
                 if size <= self.history_chars:
@@ -129,6 +131,29 @@ class Agent:
         if seen is not None and cleared:
             for signature in [s for s, (_, call_id) in seen.items() if call_id in cleared]:
                 del seen[signature]
+
+    def supersede(self, messages: list) -> set:
+        """Clear reads that a newer read of the same lines, or an edit of the file, has made redundant.
+        One current copy of each file stays in context, so re-reading never pushes other files out."""
+        cleared = set()
+        latest: dict[str, list] = {}
+        for message in reversed([m for m in messages if m["role"] == "tool"]):
+            read = self.reads.get(message.get("tool_call_id"))
+            if not read or message["content"].startswith("["):
+                continue
+            path, start, end, step = read
+            edited = self.edits.get(path, 0)
+            newer = latest.setdefault(path, [])
+            if step < edited:
+                note = f"[an older read of {path}, from before your edit at step {edited}; read it again if needed]"
+            elif any(s <= start and end <= e for s, e in newer):
+                note = f"[an older read of {path}; a newer read of the same lines is further down]"
+            else:
+                newer.append((start, end))
+                continue
+            message["content"] = note
+            cleared.add(message.get("tool_call_id"))
+        return cleared
 
     def read_notes(self) -> str:
         return self.notes.read_text()[:NOTES_CHARS] if self.notes and self.notes.exists() else ""
@@ -237,7 +262,7 @@ class Agent:
                                      "what you have found; say in it what you could not check."})
                     self.log(messages[-1])
                     self.emit(step, "note", "3 steps left: asked to finish")
-                if self.nudge_after and since_change == self.nudge_after:
+                if self.nudge_after and since_change and since_change % self.nudge_after == 0:
                     messages.append({"role": "user", "content": f"You have explored for {self.nudge_after} steps without changing "
                                      "a file. Stop exploring: state your plan in a short paragraph, then make the first change."})
                     self.log(messages[-1])
@@ -296,11 +321,17 @@ class Agent:
             self.emit(step, "explored", answer[:400])
             return answer
         result = self.workspace.call(name, args, allowed)
+        if name == "read_file" and not result.startswith("Error"):
+            start = int(args.get("start_line") or 1)
+            total = re.match(r".*? \((\d+) lines\)", result)
+            end = min(int(args.get("end_line") or start + 399), int(total.group(1)) if total else 10 ** 9)
+            self.reads[call["id"]] = (str(args.get("path")), start, end, step)
         if name == "run":
             match = re.match(r"exit code (-?\d+)", result)
             self.commands.append((step, str(args.get("command", "")).strip(), int(match.group(1)) if match else -1))
         elif name in ("write_file", "edit_file") and not result.startswith("Error"):
             self.last_change = step
+            self.edits[str(args.get("path"))] = step
         brief = ", ".join(f"{k}={str(v)[:80]!r}" for k, v in args.items() if k not in ("content", "new_text", "old_text"))
         self.emit(step, "tool", f"{name}({brief}) -> {result.splitlines()[0][:160] if result else ''}")
         return result

@@ -28,7 +28,7 @@ class AgentLoop(unittest.TestCase):
         self.assertEqual(outcome.result["summary"], "done")
         self.assertIn("# sum", (self.repo / "calc.py").read_text())
         tool_results = [m for m in llm.requests[-1]["messages"] if m["role"] == "tool"]
-        self.assertTrue(tool_results[0]["content"].startswith("calc.py (2 lines)"))
+        self.assertTrue(tool_results[0]["content"].startswith("[an older read of calc.py, from before your edit"))
         self.assertEqual(tool_results[1]["content"], "Edited calc.py")
 
     def test_invalid_finish_is_returned_to_the_model(self):

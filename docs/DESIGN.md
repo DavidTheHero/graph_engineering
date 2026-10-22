@@ -19,7 +19,7 @@ the smallest useful context, and a person at the merge.**
 | Same-model reviewers share blind spots; decorrelate [26] | review uses the coder's model unless `review` lists a second model | gap |
 | Poka-yoke the agent-computer interface: few non-overlapping tools, exact unique-match edits, errors that say how to recover, formats the model writes easily [1][3][6] | six tools in `tools.py`; `edit_file` needs a unique exact match | done |
 | Tool output discipline: paginate, truncate, filter [6][17] | reads paged at 400 lines / 24K characters, command output clipped to 8K | done |
-| Context is a finite budget ("context rot"); smallest set of high-signal tokens [7][4] | 40K-token working budget, well inside the 150K window | done |
+| Context is a finite budget ("context rot"); smallest set of high-signal tokens [7][4] | 80K-token working budget (half the 150K window); redundant reads superseded. 40K caused re-read thrash in evals | done |
 | Right-altitude prompts; add instructions only for observed failures; must-always rules belong in code, not prose [7][4] | short prompts; rules such as "don't delete tests" are also gates | done |
 | Just-in-time retrieval with a little preloaded (hybrid) [7][8] | opening brief (agent guide + layout); agentic search with grep/read | done |
 | Clear old tool results first, then compact; notes outside the context; sub-agents return 1–2K-token summaries [7][C] | tool-result clearing → compaction into notes; `update_notes`; `explore` returns ~300 words | done |
@@ -83,7 +83,9 @@ Each agent works from the smallest high-signal context that lets it act [7]:
   CLAUDE.md, CONTRIBUTING.md or README, first one found, up to 5,000 characters) and a compact layout. The
   agent finds everything else just in time, with search and read.
 - **Token-efficient tools.** Output is clipped, reads are paged, and errors say how to recover.
-- **Tool-result clearing.** Past a 40K-token working budget, the oldest tool output is elided first, keeping
+- **Superseded reads.** A read made redundant by a newer read of the same lines, or by an edit of the file, is cleared
+  at once, so one current copy of each file stays in context.
+- **Tool-result clearing.** Past an 80K-token working budget (about half the 27B window), the oldest tool output is elided, keeping
   the latest ten results, then the latest three.
 - **Notes.** `update_notes` keeps the plan and findings in a file outside the context. Every session on the
   ticket opens with them, including later rounds.

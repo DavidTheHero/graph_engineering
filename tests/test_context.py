@@ -54,8 +54,8 @@ class Context(unittest.TestCase):
         self.assertIn("DONE SO FAR", restarted[1]["content"])
 
     def test_tool_result_clearing_comes_before_compaction(self):
-        (self.repo / "mid.txt").write_text("\n".join("z" * 1000 for _ in range(4)))
-        counter = iter(range(1000))
+        for n in range(15):
+            (self.repo / f"mid{n}.txt").write_text("\n".join("z" * 1000 for _ in range(4)))
         steps = 0
 
         def script(role, messages):
@@ -63,8 +63,7 @@ class Context(unittest.TestCase):
             steps += 1
             if steps > 14:
                 return [call("finish", summary="s", coverage=[])]
-            n = next(counter)
-            return [call("read_file", path="mid.txt", start_line=1, end_line=100 + n)]  # distinct calls, same output
+            return [call("read_file", path=f"mid{steps}.txt")]
 
         agent, llm = self.agent(script, notes=self.notes, working_tokens=12000, max_steps=20)
         agent.run("task")
@@ -90,6 +89,25 @@ class Context(unittest.TestCase):
         self.assertEqual(outcome.status, "done")
         replies = [m["content"] for m in llm.requests[-1]["messages"] if m["role"] == "tool"]
         self.assertTrue(replies[-1].startswith("mid.txt"), replies[-1][:80])
+
+    def test_rereading_a_file_keeps_one_current_copy(self):
+        """Live failure: with older copies kept, each re-read pushed other files out and the coder never edited."""
+        (self.repo / "a.py").write_text("A = 1\n")
+        steps = iter([[call("read_file", path="calc.py")], [call("read_file", path="a.py")],
+                      [call("read_file", path="calc.py", start_line=1, end_line=50)],
+                      [call("edit_file", path="a.py", old_text="A = 1", new_text="A = 2")],
+                      [call("read_file", path="calc.py", start_line=1, end_line=2)],
+                      [call("finish", summary="s", coverage=[])]])
+        agent, llm = self.agent(lambda r, m: next(steps))
+        agent.workspace_tools = None
+        from graph_engineering.tools import READ_WRITE
+        agent.tools = READ_WRITE[:5]
+        agent.run("task")
+        tools = [m["content"] for m in llm.requests[-1]["messages"] if m["role"] == "tool"]
+        self.assertTrue(tools[0].startswith("[an older read of calc.py"), tools[0])
+        self.assertTrue(tools[1].startswith("[an older read of a.py, from before your edit"), tools[1])
+        self.assertTrue(tools[2].startswith("[an older read of calc.py"), "same lines once clipped to the file's length")
+        self.assertTrue(tools[4].startswith("calc.py"))
 
     def test_explore_returns_only_the_answer(self):
         questions = []
