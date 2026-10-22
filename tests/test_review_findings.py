@@ -90,7 +90,7 @@ class SetupRecovery(unittest.TestCase):
         source = python_repo(root)
         home = root / "home"
         store, repos = Store(home / "ge.db"), Repos(home)
-        repos.save(Repo(name="calc", path=str(source), test_command=TEST_COMMAND, setup=["touch setup-ran"]))
+        repos.save(Repo(name="calc", path=str(source), test_command=TEST_COMMAND, setup=["touch setup-ran"], acceptance_tests=False))
         ticket = store.create("calc", "x", "p", spec={"title": "Add subtract", "problem": "p", "acceptance_criteria": ["a"]},
                               state="proposed")
         workflow.accept(store, repos, ticket["id"], "p")

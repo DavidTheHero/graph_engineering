@@ -8,6 +8,7 @@ becomes the next round's feedback, until the round budget is spent.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -129,8 +130,57 @@ def update_memory(ctx: Context, ticket: dict, repo: Repo, work: Path, directory:
         ctx.store.event(ticket["id"], "memory_updated", f"memory:{model.name}", {"characters": len(content)})
 
 
+def write_acceptance_tests(ctx: Context, ticket: dict, repo: Repo, work: Path, base: str, sandbox: Sandbox,
+                           directory: Path, round_: int, brief: str) -> dict:
+    """Tests written from the criteria alone, before any plan or code (Agentless reproduction tests, Otter): they must
+    fail now. Anything else the session changed is undone; tests that already pass are dropped."""
+    spec = ticket["spec"]
+    agent, run, _ = _agent(ctx, ticket, "coding", Workspace(work, sandbox, repo.run_timeout), READ_WRITE, prompts.SUBMIT_TESTS,
+                           prompts.TESTWRITER, directory / "acceptance", round_, max_steps=40, nudge_after=15,
+                           thinking_budget=4096)
+    outcome = agent.run(prompts.testwriter_task(spec, brief, repo.test_command))
+    ctx.store.run_end(run, outcome.status, outcome.usage)
+    if outcome.status == "cancelled":
+        raise Cancelled()
+    if outcome.status == "error":
+        raise RuntimeError(outcome.error)
+
+    def undo(status: str, path: str) -> None:
+        if status == "A":
+            (work / path).unlink(missing_ok=True)
+        else:
+            git(work, "checkout", "-q", base, "--", path)
+
+    rows = gates.changes(work, base)
+    for status, path in rows:
+        if not repo.is_test(path) or repo.test_config(path) or status == "D":
+            undo(status, path)   # the test writer may only add or change tests
+    kept, dropped = {}, []
+    for status, path in rows:
+        if status == "D" or not repo.is_test(path) or repo.test_config(path) or not (work / path).is_file():
+            continue
+        code, _, _ = sandbox.run(repo.runner(path) or repo.test_command, timeout=repo.run_timeout)
+        if code != 0:
+            kept[path] = hashlib.sha256((work / path).read_bytes()).hexdigest()
+        else:
+            undo(status, path)
+            dropped.append(path)
+    git(work, "reset", "-q")
+    record = {"status": outcome.status, "files": kept, "dropped": dropped,
+              "tests": (outcome.result or {}).get("tests", []), "untested": (outcome.result or {}).get("untested", "")}
+    ctx.store.event(ticket["id"], "acceptance_tests", "harness", {"kept": list(kept), "dropped": dropped})
+    return record
+
+
+def changed_acceptance(work: Path, acceptance: dict, base: str) -> str:
+    """How the coder changed the acceptance tests, for the reviewer; empty when they are untouched."""
+    changed = [p for p, digest in acceptance.get("files", {}).items()
+               if not (work / p).is_file() or hashlib.sha256((work / p).read_bytes()).hexdigest() != digest]
+    return "\n".join(f"{p} was changed or removed by the coder." for p in changed)
+
+
 def make_plan(ctx: Context, ticket: dict, work: Path, directory: Path, round_: int, brief: str, explorer,
-              notes: Path | None = None) -> tuple[dict, dict]:
+              notes: Path | None = None, acceptance: list[str] = ()) -> tuple[dict, dict]:
     """The sprint contract: a read-only plan, checked mechanically (a test per criterion) and by the reviewer,
     before any edit. Two attempts; after that the coder works from the last plan with the reviewer's concerns."""
     spec = ticket["spec"]
@@ -140,7 +190,7 @@ def make_plan(ctx: Context, ticket: dict, work: Path, directory: Path, round_: i
         agent, run, planner = _agent(ctx, ticket, "coding", Workspace(work), READ_ONLY, prompts.SUBMIT_PLAN, prompts.PLAN,
                                      directory / f"plan-{attempt}", round_, max_steps=30, explorer=explorer, nudge_after=None,
                                      notes=notes, thinking_budget=6144)
-        outcome = agent.run(prompts.plan_task(spec, brief, feedback))
+        outcome = agent.run(prompts.plan_task(spec, brief, feedback, acceptance))
         ctx.store.run_end(run, outcome.status, outcome.usage)
         if outcome.status == "cancelled":
             raise Cancelled()
@@ -271,10 +321,18 @@ def develop(ctx: Context, ticket: dict) -> dict:
 
     brief = prompts.project_brief(work, read_memory(ctx, repo.name), prompts.ticket_query(spec))
     explorer = _explorer(ctx, ticket, Workspace(work), directory / "coding", round_)
+    if repo.wants_acceptance_tests(spec) and "acceptance" not in data:
+        try:
+            data["acceptance"] = write_acceptance_tests(ctx, ticket, repo, work, data["base"], sandbox, directory, round_, brief)
+        except Cancelled:
+            return ctx.store.get(ticket["id"])
+        ctx.store.merge_data(ticket["id"], acceptance=data["acceptance"])
+    acceptance = data.get("acceptance") or {}
     plan = data.get("plan")
     if repo.wants_plan(spec) and not plan:
         try:
-            plan, plan_record = make_plan(ctx, ticket, work, directory, round_, brief, explorer, notes=root / "notes.md")
+            plan, plan_record = make_plan(ctx, ticket, work, directory, round_, brief, explorer, notes=root / "notes.md",
+                                          acceptance=list(acceptance.get("files", {})))
         except Cancelled:
             return ctx.store.get(ticket["id"])
         data.update(plan=plan, plan_record=plan_record)
@@ -288,7 +346,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
                                prompts.CODING, directory / "coding", round_, max_steps=repo.coding_steps, nudge_after=15,
                                notes=root / "notes.md", explorer=explorer, evidence=True, verify=repo.test_command)
     outcome = agent.run(prompts.coding_task(spec, {"test_command": repo.test_command, "build_command": repo.build_command},
-                                            data.get("feedback"), brief, plan or None))
+                                            data.get("feedback"), brief, plan or None, list(acceptance.get("files", {}))))
     ctx.store.run_end(run, outcome.status, outcome.usage)
     record = {"round": round_, "coding": {"model": coder.name, **outcome.asdict()}}
     if outcome.status == "cancelled":
@@ -318,6 +376,11 @@ def develop(ctx: Context, ticket: dict) -> dict:
         # Eval: a plan reviewer predicted the bug that later failed the hidden tests; its concern reached the coder but
         # not the final reviewer, who approved. Unresolved plan concerns are now the final review's checklist.
         concerns = (data.get("plan_record") or {}).get("concerns")
+        edited = changed_acceptance(work, acceptance, data["base"])
+        if edited:
+            # Editing an acceptance test is allowed (it may be wrong), but never silently: the reviewer judges it.
+            concerns = ((concerns or "") + "\n- The coder changed acceptance tests written from the criteria before coding. "
+                        "A change that weakens what they check is a blocking finding:\n" + edited).strip()
         review_text = prompts.review_task(spec, clip(diff_text, DIFF_CHARS), gates.summary(report), summary, brief,
                                           plan or None, concerns)
         # Same-model reviewers share the coder's blind spots: prefer another model when one fits the review.

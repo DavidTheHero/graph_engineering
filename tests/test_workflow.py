@@ -64,6 +64,7 @@ class Workflow(unittest.TestCase):
         self.home = self.root / "home"
         self.store, self.repos = Store(self.home / "ge.db"), Repos(self.home)
         self.repos.save(Repo(name="calc", path=str(self.source), test_command=TEST_COMMAND, auto_accept=True, plan=False,
+                             acceptance_tests=False,
                              test_file_runners=[{"pattern": r"^tests/.*\.py$", "command": "python3 -m unittest {file}"}]))
 
     def context(self, script):
@@ -259,7 +260,7 @@ class Planning(unittest.TestCase):
         source = python_repo(root)
         home = root / "home"
         store, repos = Store(home / "ge.db"), Repos(home)
-        repos.save(Repo(name="calc", path=str(source), test_command=TEST_COMMAND, plan=True,
+        repos.save(Repo(name="calc", path=str(source), test_command=TEST_COMMAND, plan=True, acceptance_tests=False,
                         test_file_runners=[{"pattern": r"^tests/.*\.py$", "command": "python3 -m unittest {file}"}]))
         seen = {"plans": 0, "coder": None, "review": None, "plan_feedback": None}
         good_plan = {"approach": "add subtract beside add", "files": [{"path": "calc.py", "change": "add subtract"}],
@@ -295,3 +296,50 @@ class Planning(unittest.TestCase):
         self.assertIn("subtract(5, 3) == 2", seen["coder"])
         self.assertIn("The agreed plan", seen["review"])
         self.assertTrue(ticket["data"]["plan_record"]["approved"])
+
+
+@unittest.skipUnless(available(), "no OS sandbox on this host")
+class AcceptanceTests(unittest.TestCase):
+    def test_written_before_coding_kept_only_if_red_and_edits_reach_the_reviewer(self):
+        root = temp_dir(self)
+        source = python_repo(root)
+        home = root / "home"
+        store, repos = Store(home / "ge.db"), Repos(home)
+        repos.save(Repo(name="calc", path=str(source), test_command=TEST_COMMAND, plan=False,
+                        test_file_runners=[{"pattern": r"^tests/test_[^/]*\.py$", "command": "python3 -m unittest {file}"}]))
+        seen = {}
+        already_green = "import unittest\nfrom calc import add\n\n\nclass G(unittest.TestCase):\n    def test_g(self):\n        self.assertEqual(add(1, 1), 2)\n"
+
+        def script(role, messages):
+            turn = sum(m["role"] == "assistant" for m in messages)
+            if role == "acceptance":
+                return [[call("write_file", path="tests/test_sub.py", content=SUB_TEST)],
+                        [call("write_file", path="calc.py", content="def add(a, b):\n    return 0\n")],   # not allowed: undone
+                        [call("write_file", path="tests/test_green.py", content=already_green)],          # passes now: dropped
+                        [call("submit_tests", tests=[{"path": "tests/test_sub.py", "criterion": 1, "checks": "5-3"}])]][turn]
+            if role == "review":
+                seen["review"] = messages[1]["content"]
+                return [call("submit_review", verdict="approve", findings=[], summary="ok")]
+            if role == "memory":
+                return [call("submit_memory", content="- guide")]
+            if turn == 0:
+                seen["coder"] = messages[1]["content"]
+            return [[call("write_file", path="calc.py", content=SUB_SOURCE)],
+                    [call("write_file", path="tests/test_sub.py", content=SUB_TEST + "\n# tidied\n")],
+                    [call("run", command=TEST_COMMAND)],
+                    [call("finish", summary="done", coverage=[], evidence=[{"command": TEST_COMMAND, "exit_code": 0}])]][min(turn, 3)]
+
+        llm = FakeLLM(script)
+        self.addCleanup(llm.close)
+        ctx = workflow.Context(home, store, repos, llm.registry(), owner="w")
+        ticket = store.create("calc", "x", "p", spec={k: SPEC[k] for k in ("title", "kind", "problem", "acceptance_criteria")},
+                              state="proposed")
+        workflow.accept(store, repos, ticket["id"], "p")
+        workflow.develop(ctx, store.claim("w", 600))
+        ticket = store.get(ticket["id"])
+        self.assertEqual(ticket["state"], "ready", ticket["error"])
+        acceptance = ticket["data"]["acceptance"]
+        self.assertEqual(list(acceptance["files"]), ["tests/test_sub.py"])
+        self.assertEqual(acceptance["dropped"], ["tests/test_green.py"])
+        self.assertIn("you may not change them (the harness checks): tests/test_sub.py", seen["coder"])
+        self.assertIn("tests/test_sub.py was changed or removed by the coder", seen["review"])

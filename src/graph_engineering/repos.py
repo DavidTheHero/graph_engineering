@@ -38,6 +38,7 @@ class Repo:
     branch_template: str = "{kind}/{issue}-{slug}"
     plan: bool | str = "auto"               # plan before any edit: True, False, or "auto" (tickets with 3+ criteria)
     profile: str = "thorough"               # "quick": one coding agent, the gates, then the person reviews the PR
+    acceptance_tests: bool = True           # thorough profile: tests written from the criteria before coding
     max_rounds: int = 3
     coding_steps: int = 80
     run_timeout: int = 300
@@ -71,6 +72,9 @@ class Repo:
 
     def profile_for(self, spec: dict) -> str:
         return spec.get("profile") if spec.get("profile") in ("quick", "thorough") else self.profile
+
+    def wants_acceptance_tests(self, spec: dict) -> bool:
+        return self.acceptance_tests and self.profile_for(spec) != "quick"
 
     def wants_review(self, spec: dict) -> bool:
         return self.profile_for(spec) != "quick"

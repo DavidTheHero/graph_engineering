@@ -33,7 +33,8 @@ class FakeLLM:
                 role = ("intake" if "turn a request" in system else "review" if "You review a change" in system
                         else "plan" if "You plan a change" in system else "plan_review" if "You check a plan" in system
                         else "explore" if "You answer one question" in system
-                        else "memory" if "You keep a short guide" in system else "coding")
+                        else "memory" if "You keep a short guide" in system
+                        else "acceptance" if "You write acceptance tests" in system else "coding")
                 reply = fake.script(role, body["messages"])
                 if isinstance(reply, str):
                     message, finish = {"role": "assistant", "content": reply}, "stop"

@@ -112,6 +112,38 @@ SUBMIT_REVIEW = {
 }
 
 
+TESTWRITER = f"""You write acceptance tests for a ticket before anyone implements it. You know the ticket and the code as it is
+now; someone else will write the implementation afterwards and must make your tests pass without changing them.
+
+For each acceptance criterion, write a test that fails now and will pass once the behaviour exists:
+- Test the behaviour at the outermost interface the criterion names (an HTTP route, a CLI command, what the UI shows),
+  so you do not have to invent internal function names. Where you must name something new, use the name the ticket uses.
+- Follow the existing tests: same framework, helpers and fixtures, and build objects the way they build them (if they
+  inject fakes, your test must work with those fakes too).
+- Change only test files. Do not implement the feature.
+Run your tests and confirm each fails because the behaviour is missing, not because of a mistake in the test (a typo,
+a syntax error, a wrong import path of an existing module). Then call submit_tests. If a criterion cannot be tested
+automatically, leave it out and say why.
+
+{UNTRUSTED}"""
+
+SUBMIT_TESTS = {
+    "name": "submit_tests",
+    "description": "Submit the acceptance tests. Ends the session.",
+    "parameters": {"type": "object", "properties": {
+        "tests": {"type": "array", "items": {"type": "object", "properties": {
+            "path": {"type": "string"}, "criterion": {"type": "integer"}, "checks": {"type": "string"}},
+            "required": ["path", "criterion", "checks"]}},
+        "untested": {"type": "string", "description": "Criteria left out, and why"}},
+        "required": ["tests"]},
+}
+
+
+def testwriter_task(ticket: dict, brief: str, test_command: str) -> str:
+    return (f"<project>\n{brief}\n</project>\n\nTicket: {ticket['title']}\n\n{ticket['problem']}\n\n"
+            f"Acceptance criteria:\n{criteria_text(ticket)}\n\nTest command: {test_command}\n")
+
+
 PLAN = f"""You plan a change before anyone edits code. You can list, read and search the repository, and ask explore for broad
 questions; you cannot change anything. Read the code the ticket touches and the tests next to it, then call submit_plan:
 
@@ -166,9 +198,12 @@ def plan_text(plan: dict) -> str:
             + (f"\n\nRisks: {plan['risks']}" if plan.get("risks") else ""))
 
 
-def plan_task(ticket: dict, brief: str, feedback: str | None = None) -> str:
+def plan_task(ticket: dict, brief: str, feedback: str | None = None, acceptance: list[str] = ()) -> str:
     text = (f"<project>\n{brief}\n</project>\n\nTicket: {ticket['title']}\n\n{ticket['problem']}\n\n"
             f"Acceptance criteria:\n{criteria_text(ticket)}\n")
+    if acceptance:
+        text += ("\nAcceptance tests for these criteria already exist and fail now: " + ", ".join(acceptance)
+                 + ". Read them; plan the implementation that makes them pass, and name them as the tests in your plan.\n")
     if feedback:
         text += f"\nYour previous plan was not accepted:\n<feedback>\n{feedback}\n</feedback>\nRevise it.\n"
     return text
@@ -278,9 +313,13 @@ def intake_task(request: str, repo_name: str, brief: str = "") -> str:
             + f"Request from a person:\n<request>\n{request}\n</request>")
 
 
-def coding_task(ticket: dict, repo: dict, feedback: str | None = None, brief: str = "", plan: dict | None = None) -> str:
+def coding_task(ticket: dict, repo: dict, feedback: str | None = None, brief: str = "", plan: dict | None = None,
+                acceptance: list[str] = ()) -> str:
     text = (f"<project>\n{brief}\n</project>\n\n" if brief else "") + (f"Ticket: {ticket['title']}\n\n{ticket['problem']}\n\nAcceptance criteria:\n{criteria_text(ticket)}\n\n"
             f"Test command: {repo['test_command']}\n" + (f"Build command: {repo['build_command']}\n" if repo.get("build_command") else ""))
+    if acceptance:
+        text += ("\nAcceptance tests were written from the criteria before you started. Make them pass; you may not change "
+                 "them (the harness checks): " + ", ".join(acceptance) + "\n")
     if plan:
         text += f"\nThe agreed plan (follow it; if it proves wrong, say why in finish):\n<plan>\n{plan_text(plan)}\n</plan>\n"
     elif ticket.get("relevant_files"):
