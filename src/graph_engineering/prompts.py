@@ -232,7 +232,7 @@ REPORT = {
 MEMORY_CHARS = 4000
 
 
-def project_brief(root: Path, memory: str = "") -> str:
+def project_brief(root: Path, memory: str = "", query: str = "") -> str:
     """Hybrid retrieval: a little context up front (the project's own agent guide, what earlier tickets learned about
     the repository, and its shape), the rest on demand."""
     root = Path(root)
@@ -256,7 +256,17 @@ def project_brief(root: Path, memory: str = "") -> str:
     if len(tree) > TREE_LINES:
         tree = tree[:TREE_LINES] + [f"[{len(tree) - TREE_LINES} more entries; use list_files]"]
     parts.append("Repository layout (tracked files):\n" + "\n".join(tree))
+    if query.strip():
+        from .repomap import build
+        ranked = build(root, query, budget_chars=3000)
+        if ranked:
+            parts.append("Files most related to this task, with their main symbols (a map from the harness; read files "
+                         "to confirm):\n" + ranked)
     return "\n\n".join(parts)
+
+
+def ticket_query(ticket: dict) -> str:
+    return " ".join([ticket.get("title", ""), ticket.get("problem", ""), *(ticket.get("acceptance_criteria") or [])])
 
 
 def criteria_text(ticket: dict) -> str:

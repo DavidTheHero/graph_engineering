@@ -75,8 +75,8 @@ def _explorer(ctx: Context, ticket: dict, workspace: Workspace, directory: Path,
 
     def explore(question: str) -> str:
         count[0] += 1
-        task = (f"Question: {question}\n\n<project>\n{prompts.project_brief(workspace.root, read_memory(ctx, ticket['repo']))}"
-                "\n</project>")
+        brief = prompts.project_brief(workspace.root, read_memory(ctx, ticket["repo"]), question)
+        task = f"Question: {question}\n\n<project>\n{brief}\n</project>"
         agent, run, _ = _agent(ctx, ticket, "explore" if "explore" in ctx.registry.roles else "coding", workspace, READ_ONLY,
                                prompts.REPORT, prompts.EXPLORE, directory / f"explore-{count[0]}", round_, max_steps=20,
                                working_tokens=20000, prompt_chars=len(task) + len(prompts.EXPLORE), thinking_budget=2048)
@@ -189,7 +189,8 @@ def intake(ctx: Context, ticket: dict) -> dict:
     agent, run, model = _agent(ctx, ticket, "intake", Workspace(directory / "work"), READ_ONLY, prompts.SUBMIT_TICKET,
                                prompts.INTAKE, directory, 0, max_steps=40)
     outcome = agent.run(prompts.intake_task(ticket["request"], repo.name,
-                                            prompts.project_brief(directory / "work", read_memory(ctx, repo.name))))
+                                            prompts.project_brief(directory / "work", read_memory(ctx, repo.name),
+                                                                  ticket["request"])))
     ctx.store.run_end(run, outcome.status, outcome.usage)
     shutil.rmtree(directory / "work", ignore_errors=True)
     if outcome.status == "cancelled":
@@ -268,7 +269,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
         ctx.store.merge_data(ticket["id"], base=data["base"], setup_done=True, dependencies=data["dependencies"])
     spec = ticket["spec"]
 
-    brief = prompts.project_brief(work, read_memory(ctx, repo.name))
+    brief = prompts.project_brief(work, read_memory(ctx, repo.name), prompts.ticket_query(spec))
     explorer = _explorer(ctx, ticket, Workspace(work), directory / "coding", round_)
     plan = data.get("plan")
     if repo.wants_plan(spec) and not plan:
