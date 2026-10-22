@@ -210,6 +210,21 @@ def intake(ctx: Context, ticket: dict) -> dict:
     return ticket
 
 
+def accept_round(ctx: Context, ticket: dict, repo: Repo, work: Path, directory: Path, round_: int, root: Path,
+                 plan: dict | None, summary: str, report: dict, data: dict, record: dict) -> dict:
+    """An accepted round: learn from it, then commit exactly the gated tree and move to ready."""
+    spec = ticket["spec"]
+    update_memory(ctx, ticket, repo, work, directory, round_, root / "notes.md", plan or None, summary,
+                  [path for _, path in report["changed"]])
+    # The published commit has exactly the tree the gates tested; a later round stacks on the previous one.
+    message = f"{spec['title']}\n\n{neutral(summary)}\n\nTicket: {ticket['id']}"
+    head = git(work, "commit-tree", report["tree"], "-p", data.get("head") or data["base"], "-m", message).strip()
+    git(work, "reset", "-q", "--soft", head)
+    data.update(head=head, summary=summary, round_dir=str(directory), gates=record["gates"], review=record["review"],
+                publish=repo.auto_publish, rounds=data.get("rounds", []) + [record], feedback=None)
+    return _move(ctx, ticket, "ready", "ready", {"round": round_, "head": head}, round=round_, data=data, error=None)
+
+
 def base_ref(repo: Repo, data: dict) -> str:
     """What development starts from: a pinned commit if one is given, else the freshly fetched GitHub base."""
     if data.get("base_ref"):
@@ -289,6 +304,11 @@ def develop(ctx: Context, ticket: dict) -> dict:
     ctx.store.event(ticket["id"], "gates", "harness", {"round": round_, "passed": report["passed"], "checks": record["gates"]})
     summary = (outcome.result or {}).get("summary") or f"(the coding agent stopped without a summary: {outcome.status})"
 
+    if report["passed"] and not repo.wants_review(spec):
+        # Quick profile: the gates are the machine check; the person reviews intent in the PR.
+        record["review"] = {"model": None, "verdict": "not reviewed",
+                            "summary": "Quick profile: no model review. The harness gates passed; please review the change."}
+        return accept_round(ctx, ticket, repo, work, directory, round_, root, plan, summary, report, data, record)
     if report["passed"]:
         ctx.renew()
         reviewer_ws = Workspace(work)
@@ -320,15 +340,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
             verdict = "approve"  # only blocking findings send a change back; notes alone reach the person in the PR
         record["review"] = {"model": reviewer.name, "status": review.status, **(review.result or {})}
         if verdict == "approve":
-            update_memory(ctx, ticket, repo, work, directory, round_, root / "notes.md", plan or None, summary,
-                          [path for _, path in report["changed"]])
-            # The published commit has exactly the tree the gates tested; a later round stacks on the previous one.
-            message = f"{spec['title']}\n\n{neutral(summary)}\n\nTicket: {ticket['id']}"
-            head = git(work, "commit-tree", report["tree"], "-p", data.get("head") or data["base"], "-m", message).strip()
-            git(work, "reset", "-q", "--soft", head)
-            data.update(head=head, summary=summary, round_dir=str(directory), gates=record["gates"], review=record["review"], publish=repo.auto_publish,
-                        rounds=data.get("rounds", []) + [record], feedback=None)
-            return _move(ctx, ticket, "ready", "ready", {"round": round_, "head": head}, round=round_, data=data, error=None)
+            return accept_round(ctx, ticket, repo, work, directory, round_, root, plan, summary, report, data, record)
         feedback = "The reviewer requested changes:\n" + "\n".join(
             f"- {f.get('file')}: {f.get('problem')} Fix: {f.get('fix')}" for f in (review.result or {}).get("findings", [])) \
             if verdict == "changes" else f"The review did not complete ({review.status}); make sure the change is clear and complete."
@@ -367,7 +379,8 @@ def pr_body(ticket: dict, issue: int | None) -> str:
              "Acceptance criteria:", prompts.criteria_text(spec), "", "## Validation",
              f"Measured by the graph_engineering harness in a sandbox on {data['head']} (base {data['base']}):"]
     lines += [f"- {'passed' if g['ok'] else 'FAILED'}: {g['name']}" for g in data.get("gates", [])]
-    lines += ["", "## Review", f"Model review ({review.get('model', 'unknown')}): {review.get('verdict', 'none')}.",
+    lines += ["", "## Review", (f"Model review ({review.get('model', 'unknown')}): {review.get('verdict', 'none')}."
+                                if review.get("model") else "No model review (quick profile)."),
               neutral(str(review.get("summary", "")).strip())]
     if review.get("notes"):
         lines += ["", "Reviewer notes (not blocking):"] + [f"- {neutral(str(n))}" for n in review["notes"]]

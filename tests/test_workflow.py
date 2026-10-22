@@ -199,6 +199,28 @@ class Workflow(unittest.TestCase):
         body = workflow.pr_body(ticket, 7)
         self.assertIn("Reviewer notes (not blocking):\n- shutdown waits 10 s on spawn failure", body)
 
+    def test_quick_profile_skips_plan_and_review_and_says_so_in_the_pr(self):
+        roles = []
+
+        def script(role, messages):
+            roles.append(role)
+            if role == "intake":
+                return [call("submit_ticket", **{**SPEC, "acceptance_criteria": ["a", "b", "c"]})]
+            if role == "memory":
+                return [call("submit_memory", content="- guide")]
+            return coder()(messages)
+
+        repo = self.repos.get("calc")
+        from dataclasses import replace
+        self.repos.save(replace(repo, profile="quick", plan=True))
+        ctx = self.context(script)
+        self.store.create("calc", "Please add subtract", "person")
+        ticket = self.drive(ctx, ("awaiting_merge", "failed"))
+        self.assertEqual(ticket["state"], "awaiting_merge", ticket["error"])
+        self.assertNotIn("plan", roles)
+        self.assertNotIn("review", roles)
+        self.assertIn("Quick profile: no model review", workflow.pr_body(ticket, 3))
+
     def test_needs_info_and_answer(self):
         def script(role, messages):
             if "Clarification from the person" in messages[1]["content"]:

@@ -37,6 +37,7 @@ class Repo:
     issue_required: bool = True             # create a GitHub issue and reference it with "Closes #N"
     branch_template: str = "{kind}/{issue}-{slug}"
     plan: bool | str = "auto"               # plan before any edit: True, False, or "auto" (tickets with 3+ criteria)
+    profile: str = "thorough"               # "quick": one coding agent, the gates, then the person reviews the PR
     max_rounds: int = 3
     coding_steps: int = 80
     run_timeout: int = 300
@@ -68,8 +69,16 @@ class Repo:
     def test_config(self, path: str) -> bool:
         return any(fnmatch.fnmatch(path, pattern) for pattern in self.test_config_paths)
 
+    def profile_for(self, spec: dict) -> str:
+        return spec.get("profile") if spec.get("profile") in ("quick", "thorough") else self.profile
+
+    def wants_review(self, spec: dict) -> bool:
+        return self.profile_for(spec) != "quick"
+
     def wants_plan(self, spec: dict) -> bool:
         """Planning cost about a third of agent time in evals; it pays on larger tickets, not on two-criterion ones."""
+        if self.profile_for(spec) == "quick":
+            return False
         if self.plan == "auto":
             return len(spec.get("acceptance_criteria") or []) >= 3
         return bool(self.plan)
