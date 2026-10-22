@@ -55,13 +55,18 @@ together. The old 25-node pipeline never completed GE-FDD2275A; this design comp
 
 ## Shape
 
+Two profiles share the same gates and the same person at the merge:
+
 ```
- request ─► intake ─► ticket ─► accept ─► [plan ─► plan review] ─► coding ─► gates ─► review ─► PR ─► person merges
-            agent     (spec)   (person    (3+ criteria only)        agent    (harness  agent    (GitHub,
-                                or policy)                          sandbox)  decides)  fresh)   protections)
-                                                                       ▲                  │
-                                                                       └─ feedback, ≤ N rounds
+quick     request ─► intake ─► accept ─► coding ─► gates ─► PR ─► person reviews and merges
+thorough  request ─► intake ─► accept ─► acceptance tests ─► [plan ─► plan review] ─► coding ─► gates ─► review ─► PR ─► person merges
+                                         (from the criteria   (3+ criteria only)        ▲                 │
+                                          alone, must fail)                              └ feedback, ≤ N rounds
 ```
+
+The quick profile is what an interactive tool such as OpenCode does with a person watching: one agent, then
+the machine checks, then the person judges intent. The thorough profile adds the steps that let a change be
+trusted unattended. Which one pays, and when, is measured, not assumed.
 
 ## The agent loop
 
@@ -83,11 +88,20 @@ Each measure below came from a failure in a live transcript:
 | Explored for many steps without editing | nudge to plan and change, repeated every 15 steps |
 | Reviewers read until the budget ran out, ignoring warnings | warning 3 steps before the end; **the last step offers only the finish tool** |
 | `finish` was refused for stale evidence, costing turns | the harness runs the test command itself and accepts if it passes |
+| Uncapped reasoning used every output token and gave no answer | **a thinking budget per agent, enforced by vLLM** (`thinking_token_budget`): planning 6,144, coding, review and intake 4,096, explore and memory 2,048 |
+| Broken edits were found steps later by a failing suite | **an edit that breaks syntax is rolled back** with the error (Python, JSON, JavaScript); SWE-agent measured 3 points for this |
 
 ## Context engineering
 
-- **Opening brief.** AGENTS.md / CLAUDE.md / CONTRIBUTING.md / README (first found, ≤ 5,000 characters) plus
-  a compact layout.
+- **Opening brief.** It contains:
+  - the repository memory (below);
+  - AGENTS.md / CLAUDE.md / CONTRIBUTING.md / README (first found, ≤ 5,000 characters);
+  - a compact layout;
+  - a **repository map** (after Aider): the files most related to the ticket, each with its main symbols. Files
+    are ranked by the ticket's words found in them and by the import graph, about 3,000 characters in all.
+- **Repository memory.** A guide per repository (layout, commands, test conventions, pitfalls), updated by a
+  librarian after each accepted round. It holds facts about the repository, never a ticket's solution. The 9B
+  wrote solutions into it despite instructions, so it runs on the 27B.
 - **Append-only history.** Nothing is rewritten until the 80K-token budget is passed. Then, in one batch:
   - superseded reads are cleared: a newer read of the same lines, or a read from before an edit of that file;
   - then the oldest outputs, keeping the latest ten, then three, down to 60% of the budget.
@@ -109,8 +123,20 @@ the dependency directories setup installed:
    per-file runner, the base suite must pass alone and fail with the new tests.
 4. The full test command and the build pass.
 
-The reviewer then returns blocking findings or notes. Plan concerns left unresolved before coding are a
-checklist in that review. The published commit has exactly the tree that was gated and reviewed.
+The reviewer then returns blocking findings or notes. Its checklist includes plan concerns left unresolved
+before coding, and any edit the coder made to an acceptance test. The published commit has exactly the tree
+that was gated and reviewed.
+
+**Acceptance tests (thorough profile).** Before planning and coding, a separate session writes tests from the
+acceptance criteria and the current code alone, at the outermost interface the criteria name:
+- only test files survive the session;
+- the harness keeps only tests that fail now;
+- the coder must make them pass.
+
+Editing one is allowed, since it may be wrong, but the reviewer judges the edit. This answers the most common
+failure the research names: 29.6% of patches that pass their tests behave differently from the real fix
+(PatchDiff). Agentless resolved 81 → 96 issues with reproduction tests; Otter raised patch precision from 61% to
+92%.
 
 ## Trust boundaries
 
@@ -193,9 +219,9 @@ Without the append-only change, the prefix-cache hit rate was 83%.
 
 | # | Item | Why | Cost |
 |---|---|---|---|
-| 1 | **Repository memory**: a per-repository notes file (layout, test conventions, pitfalls) updated after each accepted ticket and included in the opening brief | Planning and review spend 48% of time re-reading; Anthropic reports memory improving results [21]; skills built from observed failures [9] | small |
-| 2 | **Plan reviewer reads only what the plan names**, starting from the planner's notes | 223 plan-review reads repeat the planner's 219 | small |
-| 3 | **Measure the eight unmeasured changes**: a 4-task × 3-trial run | Every claim above is from code before them | 8–10 GPU-hours |
+| 1 | **Measure both profiles on the current code**: quick, then thorough, 4 tasks × 3 trials each | Repository memory, notes-first plan review, thinking budgets, syntax checks, the repository map and acceptance tests are all unmeasured | 10–15 GPU-hours |
+| 2 | **Mutation gate** on the changed lines: the new tests must kill a share of mutants of the diff | LLM test suites catch at most ~36% of mutated solutions (SWE-Mutation); Meta's ACH | 2–4 days per language |
+| 3 | **Speculative decoding on the model server** (Qwen3.5 MTP, 2 tokens) | Model card; inference is nearly all of the time | server change, the person's call |
 | 4 | **More eval tasks** from more repositories (`eval-mine` on other projects or small public libraries) | Avoid tuning to 4 tasks | small, GPU time to run |
 | 5 | **One live ticket to a real PR** on General_AI_Agent | Proves the publish/merge path | 1 ticket; needs the person's go-ahead |
 | 6 | **Containment fixes** from the stash | Required before any repository you do not own | medium |
