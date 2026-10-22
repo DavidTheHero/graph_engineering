@@ -7,148 +7,131 @@ The design follows Anthropic's published guidance on agents (sources at the end)
 **a fixed workflow outside, a tool-using agent inside, ground truth from tests the harness runs itself,
 the smallest useful context, and a person at the merge.**
 
+## Where it stands (2026-10-22)
+
+On the latest full measurement (9 trials, commit c86bc30, Qwen 27B on one GPU):
+
+| | Result |
+|---|---|
+| Trials accepted by gates and review | 8 of 9 (89%) |
+| Tasks solved in at least one trial (pass@k) | 3 of 3 |
+| Tasks solved in every trial (pass^k) | 2 of 3 (67%) |
+| Maintainers' hidden tests on accepted results | 2 of 3 |
+| Time per ticket | 9 min to 2 h 12 min (median 52 min) |
+| Prompt tokens per ticket | 0.6M to 6.8M (median 4.0M) |
+
+Eight changes made since that run target the failures and the time it measured; they are not yet measured
+together. The old 25-node pipeline never completed GE-FDD2275A; this design completes it in each trial.
+
 ## Principles, and where each lives
 
 | Principle (source) | Here | Status |
 |---|---|---|
-| Start simple. Workflows for predictable steps, agents only where the steps can't be known in advance [1] | `workflow.py` is a fixed state machine. Only intake, coding, review and explore are agent loops | done |
-| Ground truth from the environment at every step, plus stopping conditions [1] | the agent runs tests itself; step budget, stall and repeat detection, cancellation | done |
-| The agent doing the work is not the one grading it. Give it a pass/fail check, gate "done" deterministically [4][B] | the gates in `gates.py` decide, the agent's claims never do | done |
-| Require evidence, not assertions [4] | gate results go into the PR; the finish tool does not yet ask for the commands run | partial |
-| Evaluator-optimizer; reviewer in a fresh context, sees the diff and the criteria, flags only correctness and requirement gaps [1][4][B]; AI review is over-defensive [27] | review agent: read-only tools, new context; only blocking findings send a change back, notes go to the person in the PR | done |
-| Same-model reviewers share blind spots; decorrelate [26] | review uses the coder's model unless `review` lists a second model | gap |
-| Poka-yoke the agent-computer interface: few non-overlapping tools, exact unique-match edits, errors that say how to recover, formats the model writes easily [1][3][6] | six tools in `tools.py`; `edit_file` needs a unique exact match | done |
-| Tool output discipline: paginate, truncate, filter [6][17] | reads paged at 400 lines / 24K characters, command output clipped to 8K | done |
-| Context is a finite budget ("context rot"); smallest set of high-signal tokens [7][4] | 80K-token working budget (half the 150K window); redundant reads superseded. 40K caused re-read thrash in evals | done |
-| Right-altitude prompts; add instructions only for observed failures; must-always rules belong in code, not prose [7][4] | short prompts; rules such as "don't delete tests" are also gates | done |
-| Just-in-time retrieval with a little preloaded (hybrid) [7][8] | opening brief (agent guide + layout); agentic search with grep/read | done |
-| Clear old tool results first, then compact; notes outside the context; sub-agents return 1–2K-token summaries [7][C] | tool-result clearing → compaction into notes; `update_notes`; `explore` returns ~300 words | done |
-| Fresh context per retry instead of piling on corrections [4][13] | each round is a new session in the same workspace, opened with notes and a short feedback note | done |
-| Long-running work: progress file, git history, one unit at a time, clean state at the end of a session [13] | notes file per ticket; one ticket per workspace; the harness commits only gated snapshots | done |
-| Durable event log outside a stateless, restartable harness; disposable sandboxes [22] | SQLite event log; leased idempotent steps; one workspace per ticket | done |
-| Routing: easy inputs to small models, hard ones to large models [1] | roles in `models.json`; the 9B is configured but not routed to yet | gap |
-| Multi-agent fan-out is a poor fit for coding (shared context, few parallel subtasks) [5][26] | one coding agent per ticket; sub-agents only answer questions | done |
-| Oversight at plan level; agree on "done" before coding (sprint contract) [19][23] | acceptance criteria are accepted by a person before development | partial: no plan approval step |
-| Protect the gate from the agent; changes to tests or test configuration are detected mechanically [13][B] | deleted tests and protected paths fail; test-runner configuration is not yet guarded | gap |
-| Containment at the environment layer: both filesystem and network isolation; credentials never in the sandbox; resolve symlinks; don't run repo config before trust [10][25][B] | sandbox-exec / bwrap with no network; `gh` credentials stay in the controller | partial: see Known gaps |
-| Escalate to a person instead of looping [20] | round budget, then `failed` for a person; publish and merge errors stop after 3 | done |
-| Harness components encode assumptions about the model; ablate them when the model changes [19][24] | every loop mechanism is a parameter; evals measure them | process |
-| Evals: real tasks with reference solutions, isolated trials, grade outcomes, read transcripts, report pass^k for reliability [14][16] | `evals/`: real past tickets pinned to base commits, hidden maintainer tests, a fresh home per run | partial: 3 tasks, no pass^k |
-| Transparency: show the agent's steps; no framework that hides prompts [1] | every turn and tool call is a transcript line; the control centre streams them | done |
+| Start simple. Workflows for predictable steps, agents only where the steps can't be known in advance [1] | `workflow.py` is a fixed state machine; intake, plan, coding, review and explore are agent loops | done |
+| Ground truth from the environment, plus stopping conditions [1] | the agent runs tests itself; step budget, stall and repeat detection, cancellation | done |
+| The agent doing the work is not the one grading it; gate "done" deterministically [4][B] | the gates in `gates.py` decide; the agent's claims never do | done |
+| Require evidence, not assertions [4] | `finish` must cite commands run after the last edit, checked against what ran; if missing, the harness runs the test command itself | done |
+| Evaluator-optimizer; reviewer in a fresh context flags only correctness and requirement gaps; AI review is over-defensive [1][4][B][27] | read-only reviewer; only blocking findings send a change back, notes go to the PR | done |
+| Same-model reviewers share blind spots; decorrelate [26] | reviewer prefers a model other than the coder's when one fits; with one strong model it is the same 27B | gap (hardware) |
+| Poka-yoke the agent-computer interface [1][3][6] | six tools; `edit_file` needs a unique exact match; errors say how to recover | done |
+| Tool output discipline [6][17] | reads paged at 400 lines / 24K characters, command output clipped to 8K | done |
+| Context is a finite budget; smallest set of high-signal tokens [7][4] | 80K-token working budget (half the window); 40K caused re-read thrash in evals | done |
+| Keep the prompt prefix stable for caching: append, don't edit [21][C] | history is append-only between rare, batched clearings | done |
+| Right-altitude prompts; must-always rules belong in code [7][4] | rules the model ignored became code: forced finish on the last step, forced action after a cut-off | done |
+| Just-in-time retrieval with a little preloaded [7][8] | opening brief (agent guide + layout); agentic search | done |
+| Clearing, compaction, notes, sub-agents [7][C] | superseded reads and old outputs cleared in batches; notes file; compaction; `explore` | done |
+| Fresh context per retry [4][13] | each round is a new session in the same workspace, opened with notes and feedback | done |
+| Durable event log, restartable harness, disposable sandboxes [22] | SQLite event log; leased idempotent steps; one workspace per ticket | done |
+| Routing: small model for easy inputs [1] | role routing by reachability and context fit; `explore` prefers the 9B | done, unused: no agent has called `explore` |
+| Oversight at plan level; agree on "done" before coding [19][23] | plan step for tickets with 3+ criteria: a test per criterion, checked by the reviewer; unresolved concerns become the final review's checklist | partial: no person approves the plan |
+| Protect the gate from the agent [13][B] | deleted tests, protected paths and test-configuration changes fail the gates | done |
+| Containment: filesystem and network isolation, credentials outside, no-follow reads [10][25][A] | sandbox-exec / bwrap, no network, credentials in the controller | partial: see Limitations |
+| Escalate to a person instead of looping [20] | round budget, then `failed`; publish and merge errors stop after 3 | done |
+| Harness components encode model assumptions; ablate them [19][24] | each mechanism is a parameter; evals measure it | process |
+| Evals: real tasks, reference solutions, isolated trials, pass^k, read transcripts [14][16] | 4 tasks from real tickets, validated by the miner; hidden maintainer tests; a fresh home per trial | partial: too few tasks |
+| Transparency [1] | every turn and tool call is a transcript line; the control centre streams them | done |
 
-"done" means implemented and covered by tests. It does not mean proven on many tasks; only the evals can show that.
+"done" means implemented and covered by tests, not proven on many tasks.
 
 ## Shape
 
 ```
- request ─► intake agent ─► ticket ─► accept ─► coding agent ─► gates ─► review agent ─► PR ─► person merges
-            (read-only)     (spec)   (person   (sandboxed,       (harness  (read-only,     (GitHub,
-                                      or policy) read/edit/run)   decides)  fresh context)  protections)
-                                                     ▲                          │
-                                                     └── feedback, ≤ N rounds ──┘
+ request ─► intake ─► ticket ─► accept ─► [plan ─► plan review] ─► coding ─► gates ─► review ─► PR ─► person merges
+            agent     (spec)   (person    (3+ criteria only)        agent    (harness  agent    (GitHub,
+                                or policy)                          sandbox)  decides)  fresh)   protections)
+                                                                       ▲                  │
+                                                                       └─ feedback, ≤ N rounds
 ```
-
-Two steps are **agents** because only they must decide what to do next: understanding a request in a
-codebase (intake) and changing the codebase (coding). The coding agent can ask an **explore** sub-agent
-broad questions. The **review** is the evaluator in an evaluator-optimizer loop. Everything else is plain
-code: which state comes next, what counts as passing, and when to stop, are never a model's decision.
 
 ## The agent loop
 
-`agent.py` runs one loop for every agent. It sends the conversation and tool definitions to an
-OpenAI-compatible endpoint (vLLM serving Qwen with native tool calls), runs each tool call, and appends
-the result. It stops when the agent calls its finish tool, or on a stopping condition:
+`agent.py` runs one loop for every agent against an OpenAI-compatible endpoint (vLLM serving Qwen with
+native tool calls). It stops on the finish tool or a stopping condition:
 
-- a step budget (80 for coding, 40 intake, 30 review, 20 explore);
-- four turns without a tool call (stalled);
-- the same call repeated three times with nothing changed in between (looping);
-- cancellation by a person.
+- a step budget (80 coding, 40 intake, 30 plan and review, 20 explore);
+- four turns without a tool call;
+- three identical calls in a row with nothing changed in between;
+- cancellation.
 
-Measures added after live runs with the local 27B:
+Each measure below came from a failure in a live transcript:
 
-- **Sampling.** Use Qwen's recommended sampling (temperature 0.6, top-p 0.95, top-k 20 with thinking).
-  Near-greedy decoding made the model repeat one call indefinitely.
-- **Reasoning cut off at the output limit is handed back as notes.** The model then acts instead of
-  restarting its analysis, because the chat template drops earlier reasoning.
-- **Repeat answers.** A repeated identical call is answered with "you already have this result" rather than
-  run again.
-- **Exploration nudge.** After 15 steps without changing a file, the agent is asked to state its plan and
-  make the first change.
+| Failure seen | Measure |
+|---|---|
+| Near-greedy decoding repeated one call forever | Qwen's recommended sampling |
+| Reasoning hit the output limit without acting | reasoning tail handed back as notes; **next turn runs without thinking and must call a tool** |
+| Re-reads of cleared results were refused as repeats | clearing a result also forgets it in the repeat guard |
+| Explored for many steps without editing | nudge to plan and change, repeated every 15 steps |
+| Reviewers read until the budget ran out, ignoring warnings | warning 3 steps before the end; **the last step offers only the finish tool** |
+| `finish` was refused for stale evidence, costing turns | the harness runs the test command itself and accepts if it passes |
 
 ## Context engineering
 
-Each agent works from the smallest high-signal context that lets it act [7]:
-
-- **Opening brief (hybrid retrieval).** The first message carries the project's own agent guide (AGENTS.md,
-  CLAUDE.md, CONTRIBUTING.md or README, first one found, up to 5,000 characters) and a compact layout. The
-  agent finds everything else just in time, with search and read.
-- **Token-efficient tools.** Output is clipped, reads are paged, and errors say how to recover.
-- **Superseded reads.** A read made redundant by a newer read of the same lines, or by an edit of the file, is cleared
-  at once, so one current copy of each file stays in context.
-- **Tool-result clearing.** Past an 80K-token working budget (about half the 27B window), the oldest tool output is elided, keeping
-  the latest ten results, then the latest three.
-- **Notes.** `update_notes` keeps the plan and findings in a file outside the context. Every session on the
-  ticket opens with them, including later rounds.
-- **Compaction.** Only if clearing is not enough, the model writes its notes and the conversation restarts
-  from the task and the notes. This is the last resort: the model is at its weakest when compacting [C].
-- **Sub-agents.** `explore(question)` answers a broad question in a fresh read-only context. Only the answer,
-  about 300 words, enters the coder's context.
-- **Full transcripts on disk.** Every transcript stays on disk; what enters the context is a slice of it,
-  never the only record [22].
+- **Opening brief.** AGENTS.md / CLAUDE.md / CONTRIBUTING.md / README (first found, ≤ 5,000 characters) plus
+  a compact layout.
+- **Append-only history.** Nothing is rewritten until the 80K-token budget is passed. Then, in one batch:
+  - superseded reads are cleared: a newer read of the same lines, or a read from before an edit of that file;
+  - then the oldest outputs, keeping the latest ten, then three, down to 60% of the budget.
+- **Notes.** `update_notes` writes a file outside the context. It opens every later session on the ticket,
+  for the planner and the coder alike.
+- **Compaction.** The last resort: the model writes its notes and the conversation restarts from them.
+- **Sub-agents.** `explore(question)` answers in a fresh read-only context.
+- **Full transcripts on disk.** The context is a slice of them, never the only record.
 
 ## Gates: the harness decides
 
-After each coding session, the harness snapshots exactly what the agent staged as an unreferenced commit.
-It runs every check on a **clean checkout of that commit**, with only the dependency directories that setup
-installed added:
+The harness snapshots exactly what the agent staged. It checks a clean checkout of that commit, plus only
+the dependency directories setup installed:
 
-1. Some test file and some non-test file changed. No test file was deleted.
-2. No protected path changed (`.github/` by default, plus configured paths), and no generated or local file
-   was added.
-3. **Red/green.** Each changed test file, copied onto the untouched base revision, fails; on the result it
-   passes. Without a per-file runner, the base suite must pass alone and fail once the new tests are added.
-4. The full test command and the build command pass.
+1. Some test file and some source file changed; no test file deleted.
+2. No protected path, generated or local file, or test configuration changed (test runner configs,
+   conftest, `test*` package scripts), unless a person allowed it on the ticket.
+3. **Red/green.** Each changed test fails on the untouched base and passes on the result. Without a
+   per-file runner, the base suite must pass alone and fail with the new tests.
+4. The full test command and the build pass.
 
-Then the review agent reads the ticket, the diff and the gate results with read-only tools, and returns
-`approve`, or `changes` with blocking findings. A failed gate or a `changes` verdict starts another round
-(three by default). The published commit has exactly the tree that was gated and reviewed.
+The reviewer then returns blocking findings or notes. Plan concerns left unresolved before coding are a
+checklist in that review. The published commit has exactly the tree that was gated and reviewed.
 
 ## Trust boundaries
 
-Two zones, which must never mix:
+- **Sandboxed (untrusted).** Everything the model does, and every command from the target repository.
+  The sandbox runs `sandbox-exec` or `bwrap` with:
+  - a minimal environment and a neutral git identity;
+  - no network except loopback (setup may install dependencies);
+  - credential directories unreadable.
+- **Controller (privileged).** Pushes, GitHub API calls, merges with the person's `gh` credentials. Model
+  text enters only as PR prose, with closing keywords and @mentions neutralised.
 
-- **Sandboxed (untrusted).** Everything the model does, and every command from the target repository
-  (setup, tests, build). It runs under the OS sandbox (`sandbox-exec` on macOS, `bwrap` on Linux) with a
-  minimal environment, no network except loopback (setup may install dependencies), and credentials
-  directories unreadable. Without a sandbox, only repositories registered as `trusted` run.
-- **Controller (privileged).** Git pushes, GitHub API calls and merges, using the person's `gh`
-  credentials. Only harness code runs here, on facts the harness measured. Model text enters this zone only
-  as PR prose, with closing keywords and @mentions neutralised.
-
-Repository content is data. The prompts say so. The design goal is that no instruction found in a
-repository can reach the privileged zone. **The current implementation does not yet meet that goal**;
-see Known gaps.
+The goal, that no instruction in a repository can reach the privileged zone, **is not yet met**; see
+Limitations.
 
 ## Merge
 
-Publication is GitHub-native:
-
-- an issue, when the repository requires one;
-- a branch following the repository's convention (checked against General_AI_Agent's own `pr-policy.mjs`);
-- a PR body built from measured facts;
-- a commit status carrying the harness's result.
-
-Merging requires all of the following at the same head commit:
-
-- the person's approval in the control centre or CLI;
-- passing required checks;
-- satisfied reviews;
-- a mergeable state;
-- readable branch protection.
-
-The controller never uses admin rights, and never merges without approval. Approval is not an MCP
-capability. Since AI review tends to be over-defensive [27], the person reviews intent and evidence: the PR
-shows the criteria, the gate results and the review.
+- **Publication:** an issue when required, the repository's branch convention (checked against
+  General_AI_Agent's `pr-policy.mjs`), a PR body built from measured facts, and a commit status.
+- **Merge:** needs, at one head commit, the person's approval, passing required checks, satisfied reviews,
+  a mergeable state and readable branch protection.
+- **Never:** admin rights, or approval over MCP.
 
 ## States
 
@@ -160,76 +143,107 @@ needs_info ──answer──► new         failed ──retry──► accepte
                    rejected
 ```
 
-Every state change is a compare-and-set against a declared transition table, with an event in an
-append-only log. Steps are leased and idempotent, so a crash restarts the step, not the ticket. A worker that
-loses its lease stops.
+Compare-and-set transitions against a declared table; an append-only event log; leased, idempotent steps.
+
+## Where the time goes
+
+Measured across the 9 trials (9.4 agent-hours):
+
+| Phase | Share of time | File reads |
+|---|---|---|
+| Coding | 43% | 208 |
+| Planning | 25% | 219 |
+| Plan review | 23% | 223 |
+| Final review | 9% | 105 |
+
+Setup and gates take 1–2 minutes per ticket; the rest is model inference at 20–45 s per step. Planning
+and plan review together use **48%** of the time, mostly re-reading code the next agent reads again.
+Without the append-only change, the prefix-cache hit rate was 83%.
+
+## Limitations
+
+1. **Containment is not sound (deferred, prototype first).** An independent review found the following,
+   so use the controller only on your own repositories until they are fixed:
+   - the sandbox can write the workspace's git metadata, which the controller later uses unsandboxed;
+   - the macOS profile denies writes only under `$HOME`;
+   - controller-owned files sit where the sandbox can write;
+   - loopback reaches the control centre;
+   - some reads follow planted symlinks.
+
+   A partial fix is parked in git stash `17a0331`.
+2. **Tests can be weaker than the criteria.** Red/green proves the new tests detect the change, not that
+   they cover every way the code is used. That is how a change passed every gate and failed the
+   maintainers' test. The plan-concern checklist addresses the case seen; the general problem remains.
+3. **One model reviews its own kind of work.** The reviewer is the same 27B as the coder; the 9B's 16K
+   window cannot hold a real diff.
+4. **Slow: 10 minutes to 2 hours per ticket**, serial on one GPU, nearly all of it inference.
+5. **The agent cannot add dependencies.** It has no network, so a ticket that needs a new package cannot
+   succeed (General_AI_Agent commit 8e9d7c1 is an example).
+6. **No base-drift handling.** If the base branch moves during a ticket, nothing rebases; the local
+   backend refuses, GitHub may report the PR as behind.
+7. **No live end-to-end run yet.** Publication and merge are covered by tests, including the repository's
+   own PR policy, but no real PR has been opened by this design.
+8. **Evals are thin.** 4 tasks from one repository; Anthropic suggests 20–50. Every tuning step so far fits
+   these tasks. Intake (request → spec) is not evaluated at all; tasks start from a written spec.
+9. **No memory across tickets.** Each ticket rediscovers the repository: test conventions, layout, where
+   things live.
+10. **Windows.** No sandbox mechanism, so only `trusted` repositories run there.
+
+## What is missing, in order of expected value
+
+| # | Item | Why | Cost |
+|---|---|---|---|
+| 1 | **Repository memory**: a per-repository notes file (layout, test conventions, pitfalls) updated after each accepted ticket and included in the opening brief | Planning and review spend 48% of time re-reading; Anthropic reports memory improving results [21]; skills built from observed failures [9] | small |
+| 2 | **Plan reviewer reads only what the plan names**, starting from the planner's notes | 223 plan-review reads repeat the planner's 219 | small |
+| 3 | **Measure the eight unmeasured changes**: a 4-task × 3-trial run | Every claim above is from code before them | 8–10 GPU-hours |
+| 4 | **More eval tasks** from more repositories (`eval-mine` on other projects or small public libraries) | Avoid tuning to 4 tasks | small, GPU time to run |
+| 5 | **One live ticket to a real PR** on General_AI_Agent | Proves the publish/merge path | 1 ticket; needs the person's go-ahead |
+| 6 | **Containment fixes** from the stash | Required before any repository you do not own | medium |
+| 7 | **Reviewer that can probe**: a throwaway checkout where the reviewer may write and run a scratch test | Would have caught the `model: undefined` case | medium |
+| 8 | **Dependency requests**: a tool that asks for a package; the harness installs it with network after a person or allow-list approves | Unblocks tickets that need a library | medium |
+| 9 | **Rebase round** when the base moves: re-run gates on the new base, a coding round only on conflict | Keeps PRs mergeable | medium |
+| 10 | **Two concurrent tickets** to use vLLM batching (KV cache holds about 2.6 working budgets) | Throughput, not latency | small |
+| 11 | **Intake eval**: requests with known good specs | The first step is unmeasured | small |
+| 12 | **Optional plan approval by a person** [23] | Oversight before 30–60 minutes of coding | small |
 
 ## Layout
 
 ```
 src/graph_engineering/
-  llm.py         OpenAI-compatible chat with tools; model registry and role routing
+  llm.py         OpenAI-compatible chat with tools; model registry; routing by reachability and context fit
   sandbox.py     OS sandbox for commands; workspace preparation
-  tools.py       the agent-computer interface: read-only and read-write tool sets
-  agent.py       the agent loop: stopping conditions, context engineering, transcripts
-  prompts.py     system prompts, finish tools and the opening project brief
+  tools.py       the agent-computer interface
+  agent.py       the agent loop: stopping conditions, context engineering, evidence, transcripts
+  prompts.py     system prompts, finish tools, opening brief, plan and review tasks
   gates.py       the harness's checks on a clean snapshot
-  repos.py       repository registration and detection of setup/test/build commands
-  store.py       SQLite: tickets, append-only events, agent runs, declared transitions
-  workflow.py    the state machine: intake, development rounds, publication, merge, a person's actions
-  publish.py     GitHub (issue, PR, status, merge gate, merge) and local publication
+  repos.py       repository registration, command detection, planning policy
+  store.py       SQLite: tickets, events, runs, declared transitions
+  workflow.py    the state machine and a person's actions
+  publish.py     GitHub and local publication, merge gate
   scheduler.py   leased worker threads with heartbeats, backoff and escalation
-  web.py, web/   control centre: JSON API and one page, localhost only
-  mcp_server.py  MCP tools for other agents: file and follow tickets, no approvals
-  evaluation.py  eval runner
+  web.py, web/   control centre, localhost only
+  mcp_server.py  MCP tools for other agents (no approvals)
+  evaluation.py  eval runner: pass@k, pass^k, hidden tests
+  mining.py      eval tasks mined from history, validated against the reference commit
   cli.py         graph-engineer command
-evals/tasks/     eval tasks from real tickets
+evals/tasks/     eval tasks; evals/tasks/mined/ from the miner
 ```
 
-Python standard library only. `gh`, Git and the target repository's toolchain are external. The MCP SDK
-is an optional extra.
-
-## Known gaps
-
-**Containment (deferred by decision on 2026-10-21, prototype first).** An independent review found the
-sandbox boundary not yet sound. Until these items are fixed, use the controller only on your own
-repositories, and don't describe it as isolating untrusted code:
-
-- the sandbox can write the workspace's git metadata, which the controller later uses outside it;
-- the macOS profile denies writes only under `$HOME`;
-- controller-owned files (notes, transcripts, gate reports, profiles) live where the sandbox can write;
-- loopback is open, including the control centre's port;
-- some reads follow symbolic links planted in the workspace.
-
-Planned, following [10][25] and Claude Code's sandbox [A]: deny-by-default writes with only the box
-directory writable, git metadata read-only inside the sandbox, controller files outside the box, a
-per-process control-centre token and a closed port, and no-follow reads.
-
-**Against the guidance:**
-
-- No plan step before coding [19][23]. Candidate: a read-only planning turn whose plan the reviewer checks
-  against the criteria before edits.
-- Test configuration (package scripts, test-runner configs) is not guarded [13]. Candidate: flag such
-  changes as a failed gate unless the ticket allows them.
-- The finish tool does not require evidence (commands run and their results) [4].
-- The reviewer is the same model as the coder unless a second model is configured [26].
-- The 9B is not routed to [1]. Candidates: intake triage and explore questions, which are short and
-  read-only.
-- Evals: 3 tasks, one trial each. Anthropic suggests 20–50 tasks from real failures, several trials, pass^k
-  for reliability, and fixed resources [14][16].
+Python standard library only; `gh`, Git and the target toolchain are external; the MCP SDK is optional.
 
 ## Sources
 
-Anthropic engineering and blog (anthropic.com/engineering unless noted). Publications after June 2026 were
-read through a research agent's fetches on 2026-10-21, not first-hand.
+Anthropic engineering and blog (anthropic.com/engineering unless noted). Posts after June 2026 were read
+through a research agent's fetches on 2026-10-21, not first-hand.
 
 1. Building effective agents (2024-12-19)
 3. Raising the bar on SWE-bench Verified (2025-01-06)
-4. Claude Code best practices (living docs, code.claude.com/docs/en/best-practices)
+4. Claude Code best practices (code.claude.com/docs/en/best-practices)
 5. How we built our multi-agent research system (2025-06-13)
 6. Writing effective tools for agents — with agents (2025-09-11)
 7. Effective context engineering for AI agents (2025-09-29)
 8. Building agents with the Claude Agent SDK (2025-09-29, claude.com/blog)
+9. Equipping agents for the real world with Agent Skills (2025-10-16)
 10. Beyond permission prompts: Claude Code sandboxing (2025-10-20)
 13. Effective harnesses for long-running agents (2025-11-26)
 14. Demystifying evals for AI agents (2026-01-09)
@@ -237,6 +251,7 @@ read through a research agent's fetches on 2026-10-21, not first-hand.
 17. Building a C compiler with parallel Claudes (2026-02-05)
 19. Harness design for long-running app development (2026-03-24)
 20. Claude Code auto mode (2026-03-25)
+21. Agent harness design: 3 patterns (2026-04-02, claude.com/blog)
 22. Scaling Managed Agents (2026-04-08)
 23. Trustworthy agents in practice (2026-04-09)
 24. April 23 postmortem (2026-04-23)
@@ -244,8 +259,5 @@ read through a research agent's fetches on 2026-10-21, not first-hand.
 26. Patterns and problems in multiagent systems (2026-08-13)
 27. Redesigning source control (2026-10-13)
 
-Claude Code documentation (code.claude.com/docs/en/...):
-
-- A. sandboxing
-- B. best-practices (verification, writer/reviewer)
-- C. how-claude-code-works (agent loop, compaction) and the session-management post (claude.com/blog)
+Claude Code documentation (code.claude.com/docs/en/...): A. sandboxing; B. best-practices;
+C. how-claude-code-works, and the session-management post (claude.com/blog).
