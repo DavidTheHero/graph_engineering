@@ -218,7 +218,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
     brief = prompts.project_brief(work)
     explorer = _explorer(ctx, ticket, Workspace(work), directory / "coding", round_)
     plan = data.get("plan")
-    if repo.plan and not plan:
+    if repo.wants_plan(spec) and not plan:
         try:
             plan, plan_record = make_plan(ctx, ticket, work, directory, round_, brief, explorer, notes=root / "notes.md")
         except Cancelled:

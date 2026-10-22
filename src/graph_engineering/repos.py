@@ -36,7 +36,7 @@ class Repo:
     auto_publish: bool = True               # open the PR as soon as gates and review pass (merge always needs a person)
     issue_required: bool = True             # create a GitHub issue and reference it with "Closes #N"
     branch_template: str = "{kind}/{issue}-{slug}"
-    plan: bool = True                       # plan and check the plan against the criteria before any edit
+    plan: bool | str = "auto"               # plan before any edit: True, False, or "auto" (tickets with 3+ criteria)
     max_rounds: int = 3
     coding_steps: int = 80
     run_timeout: int = 300
@@ -67,6 +67,12 @@ class Repo:
 
     def test_config(self, path: str) -> bool:
         return any(fnmatch.fnmatch(path, pattern) for pattern in self.test_config_paths)
+
+    def wants_plan(self, spec: dict) -> bool:
+        """Planning cost about a third of agent time in evals; it pays on larger tickets, not on two-criterion ones."""
+        if self.plan == "auto":
+            return len(spec.get("acceptance_criteria") or []) >= 3
+        return bool(self.plan)
 
     def protected(self, path: str) -> bool:
         return any(fnmatch.fnmatch(path, pattern) for pattern in self.protected_paths)

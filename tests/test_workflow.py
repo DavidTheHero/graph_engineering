@@ -190,12 +190,18 @@ if __name__ == "__main__":
 
 @unittest.skipUnless(available(), "no OS sandbox on this host")
 class Planning(unittest.TestCase):
+    def test_auto_planning_depends_on_ticket_size(self):
+        repo = Repo(name="r", path="/tmp", test_command="t")
+        self.assertFalse(repo.wants_plan({"acceptance_criteria": ["a", "b"]}))
+        self.assertTrue(repo.wants_plan({"acceptance_criteria": ["a", "b", "c"]}))
+        self.assertTrue(Repo(name="r", path="/tmp", test_command="t", plan=True).wants_plan({"acceptance_criteria": ["a"]}))
+
     def test_plan_is_checked_then_given_to_the_coder_and_the_reviewer(self):
         root = temp_dir(self)
         source = python_repo(root)
         home = root / "home"
         store, repos = Store(home / "ge.db"), Repos(home)
-        repos.save(Repo(name="calc", path=str(source), test_command=TEST_COMMAND,
+        repos.save(Repo(name="calc", path=str(source), test_command=TEST_COMMAND, plan=True,
                         test_file_runners=[{"pattern": r"^tests/.*\.py$", "command": "python3 -m unittest {file}"}]))
         seen = {"plans": 0, "coder": None, "review": None, "plan_feedback": None}
         good_plan = {"approach": "add subtract beside add", "files": [{"path": "calc.py", "change": "add subtract"}],
