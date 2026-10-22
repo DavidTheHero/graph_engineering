@@ -24,8 +24,10 @@ TRAILER = re.compile(r"^(Co-Authored-By|Signed-off-by|Reviewed-by):.*$", re.I | 
 def candidates(repo: Repo, ref: str, limit: int, max_files: int = 12, max_lines: int = 600) -> list[dict]:
     """Commits on ``ref`` (first-parent, no merges) that change tests and source, add no dependency, and stay small."""
     found = []
-    for line in git(Path(repo.path), "log", "--no-merges", "--format=%H", ref).splitlines():
-        sha = line.strip()
+    for line in git(Path(repo.path), "log", "--no-merges", "--format=%H %P", ref).splitlines():
+        sha, *parents = line.split()
+        if not parents:
+            continue  # a root commit has no base to start from
         rows = git(Path(repo.path), "show", "--format=", "--numstat", "--no-renames", sha).splitlines()
         files, size = [], 0
         for row in rows:
