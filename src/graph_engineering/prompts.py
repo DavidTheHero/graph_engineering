@@ -116,7 +116,9 @@ questions; you cannot change anything. Read the code the ticket touches and the 
   real behaviour through the code's public interface; they do not stub out the code under test;
 - risks: what could break, and existing tests that may need to change (with the reason).
 
-Keep the plan to what the criteria ask. {UNTRUSTED}"""
+Old tool output is cleared as you work: record what you learn (paths, functions, how tests are written) with
+update_notes as you go, so you never need to read a file twice. The engineer who implements the plan starts from
+your notes. Use explore for broad questions. Keep the plan to what the criteria ask. {UNTRUSTED}"""
 
 SUBMIT_PLAN = {
     "name": "submit_plan",

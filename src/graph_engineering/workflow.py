@@ -92,7 +92,8 @@ class Cancelled(Exception):
     pass
 
 
-def make_plan(ctx: Context, ticket: dict, work: Path, directory: Path, round_: int, brief: str, explorer) -> tuple[dict, dict]:
+def make_plan(ctx: Context, ticket: dict, work: Path, directory: Path, round_: int, brief: str, explorer,
+              notes: Path | None = None) -> tuple[dict, dict]:
     """The sprint contract: a read-only plan, checked mechanically (a test per criterion) and by the reviewer,
     before any edit. Two attempts; after that the coder works from the last plan with the reviewer's concerns."""
     spec = ticket["spec"]
@@ -100,7 +101,8 @@ def make_plan(ctx: Context, ticket: dict, work: Path, directory: Path, round_: i
     feedback, plan, record = None, None, {"attempts": []}
     for attempt in (1, 2):
         agent, run, planner = _agent(ctx, ticket, "coding", Workspace(work), READ_ONLY, prompts.SUBMIT_PLAN, prompts.PLAN,
-                                     directory / f"plan-{attempt}", round_, max_steps=30, explorer=explorer, nudge_after=None)
+                                     directory / f"plan-{attempt}", round_, max_steps=30, explorer=explorer, nudge_after=None,
+                                     notes=notes)
         outcome = agent.run(prompts.plan_task(spec, brief, feedback))
         ctx.store.run_end(run, outcome.status, outcome.usage)
         if outcome.status == "cancelled":
@@ -218,7 +220,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
     plan = data.get("plan")
     if repo.plan and not plan:
         try:
-            plan, plan_record = make_plan(ctx, ticket, work, directory, round_, brief, explorer)
+            plan, plan_record = make_plan(ctx, ticket, work, directory, round_, brief, explorer, notes=root / "notes.md")
         except Cancelled:
             return ctx.store.get(ticket["id"])
         data.update(plan=plan, plan_record=plan_record)
