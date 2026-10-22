@@ -61,6 +61,9 @@ def run_task(task: dict, repos: Repos, registry: Registry, out: Path, index: int
               "prompt_tokens": sum(r["usage"].get("prompt_tokens", 0) for r in runs),
               "completion_tokens": sum(r["usage"].get("completion_tokens", 0) for r in runs),
               "agent_runs": {role: sum(1 for r in runs if r["role"] == role) for role in {r["role"] for r in runs}},
+              # Wall time per role; an explorer's time is also inside the time of the agent that asked it.
+              "seconds_by_role": {role: round(sum((r["ended"] or r["started"]) - r["started"] for r in runs if r["role"] == role))
+                                  for role in {r["role"] for r in runs}},
               "home": str(home)}
     if task.get("hidden_tests") and result["passed"]:
         result["hidden"] = hidden(task["hidden_tests"], repo, home / "work" / ticket["id"])
