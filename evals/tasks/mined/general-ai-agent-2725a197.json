@@ -1,0 +1,25 @@
+{
+  "id": "general-ai-agent-2725a197",
+  "source": "general-ai-agent commit 2725a197724e (spec from issue #20; live-measurement criteria dropped as untestable offline)",
+  "repo": "general-ai-agent",
+  "base": "2725a197724e70131ecaf9beb058a8743d1d75f1^",
+  "reference": "2725a197724e70131ecaf9beb058a8743d1d75f1",
+  "spec": {
+    "title": "Defer tool schemas and build task-relevant agent context",
+    "kind": "feat",
+    "problem": "Chat requests send the model every tool schema (about 55 tools, roughly 9,500 tokens) and every domain protocol, even for a simple news question. Implement tool search with deferred full-schema loading inside the existing OpenAI-compatible agent loop: keep a small, locally retrieved initial tool set plus an always-available discovery tool, load full schemas only when the model asks for them, include only the domain instructions the request needs, and place stable definitions before changing state. Preserve company-identity checks, trading validation, source attribution and explicit multi-part requests. Put context selection in backend/context.js.",
+    "acceptance_criteria": [
+      "Common news prompts omit unrelated trading schemas and protocols.",
+      "Model-requested searches load only relevant authorized tool definitions.",
+      "Discovery can recover from a poor initial match and remains bounded.",
+      "Existing company and trading protections remain enforced.",
+      "A single requested report finishes without an unnecessary extra model call; multi-part goals can continue."
+    ]
+  },
+  "hidden_tests": {
+    "files": {
+      "backend/tests/context.test.js": "@backend/tests/context.test.js@2725a197724e70131ecaf9beb058a8743d1d75f1@"
+    },
+    "command": "node --test backend/tests/context.test.js"
+  }
+}

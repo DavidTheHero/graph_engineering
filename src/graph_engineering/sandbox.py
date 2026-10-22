@@ -51,7 +51,10 @@ class Sandbox:
         self.env = {k: os.environ[k] for k in PASS_ENV if k in os.environ}
         self.env.update({"HOME": str(self.home), "TMPDIR": str(self.tmp), "CI": "1", "NO_COLOR": "1", "FORCE_COLOR": "0",
                          "npm_config_cache": str(self.tmp / "npm"), "npm_config_update_notifier": "false",
-                         "PIP_CACHE_DIR": str(self.tmp / "pip"), "PYTHONDONTWRITEBYTECODE": "1", "GIT_TERMINAL_PROMPT": "0"})
+                         "PIP_CACHE_DIR": str(self.tmp / "pip"), "PYTHONDONTWRITEBYTECODE": "1", "GIT_TERMINAL_PROMPT": "0",
+                         # HOME is empty, so tests that commit need an identity (a neutral one, never the person's).
+                         "GIT_AUTHOR_NAME": "graph_engineering", "GIT_AUTHOR_EMAIL": "graph-engineering@localhost",
+                         "GIT_COMMITTER_NAME": "graph_engineering", "GIT_COMMITTER_EMAIL": "graph-engineering@localhost"})
         self.env.update(env or {})
 
     def _profile(self, network: bool) -> Path:

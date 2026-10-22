@@ -85,6 +85,12 @@ def main(argv: list[str] | None = None) -> int:
     evals.add_argument("tasks", nargs="+")
     evals.add_argument("--repeat", type=int, default=1)
     evals.add_argument("--out", help="results directory (default <home>/evals/<timestamp>)")
+    mine = sub.add_parser("eval-mine", help="turn past commits with tests into validated eval tasks")
+    mine.add_argument("repo")
+    mine.add_argument("--ref", help="branch to mine (default: the repository's base)")
+    mine.add_argument("--limit", type=int, default=10)
+    mine.add_argument("--out", default="evals/tasks/mined")
+    mine.add_argument("--no-validate", action="store_true", help="skip running the reference solution")
     sub.add_parser("mcp", help="serve MCP over stdio (needs the mcp extra)")
 
     args = parser.parse_args(argv)
@@ -154,6 +160,13 @@ def main(argv: list[str] | None = None) -> int:
         show(summary)
         print(f"results: {out}")
         return 0 if summary["pass_rate"] == 1 else 1
+
+    if args.command == "eval-mine":
+        from .mining import mine
+        repo = repos.get(args.repo)
+        written = mine(repo, args.ref or repo.base, Path(args.out), args.limit, check=not args.no_validate)
+        print(f"{len(written)} task(s) written to {args.out}")
+        return 0
 
     if args.command == "mcp":
         from .mcp_server import serve_stdio
