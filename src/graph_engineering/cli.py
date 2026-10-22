@@ -19,7 +19,7 @@ MODELS_EXAMPLE = {
         "qwen9b": {"endpoint": "http://192.168.0.62:18035/v1", "model_id": "docker.io/local/qwen35-9b:16k", "context": 16384,
                    "max_output": 4096, "think": False}},
     "roles": {"intake": ["qwen27b"], "coding": ["qwen27b"], "review": ["qwen27b"], "explore": ["qwen9b", "qwen27b"],
-              "memory": ["qwen9b", "qwen27b"]},
+              "memory": ["qwen27b"]},  # the 9B wrote the ticket's solution into the guide despite instructions
 }
 
 

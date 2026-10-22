@@ -185,10 +185,20 @@ def plan_review_task(ticket: dict, plan: dict, notes: str = "") -> str:
 MEMORY = f"""You keep a short guide to one repository for the engineers who will work on its next tickets. You are given the
 current guide and what was learned while finishing one ticket. Return the updated guide.
 
-Keep only facts about the repository that will help on other tickets: layout and where key things live; exact commands
-to run the tests, a single test file and the build; test conventions, helpers and how things are mocked; pitfalls met
-and how they were resolved. Remove anything the new notes show to be wrong. Leave out this ticket's own solution, its
-file-by-file changes and anything true only for it. Plain bullet points, at most 4,000 characters.
+Write it under exactly these four headings, as short bullet points, at most 4,000 characters in all:
+
+## Layout
+Where kinds of code live (for example "API routes: backend/app.js; React components: frontend/src/").
+## Commands
+Exact commands that worked: the full suite, one test file per test framework, the build.
+## Test conventions
+Frameworks, helpers, how dependencies and network calls are faked, naming.
+## Pitfalls
+Problems met while working and what resolved them (for example "vitest needs --config frontend/vite.config.js").
+
+Never describe what this ticket added or changed: no new endpoints, functions, components or behaviour. The next
+ticket starts from a different revision where they may not exist. If the notes contradict the current guide, keep
+what the notes show.
 
 {UNTRUSTED}"""
 
