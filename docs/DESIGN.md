@@ -15,7 +15,7 @@ the smallest useful context, and a person at the merge.**
 | Ground truth from the environment at every step, plus stopping conditions [1] | the agent runs tests itself; step budget, stall and repeat detection, cancellation | done |
 | The agent doing the work is not the one grading it. Give it a pass/fail check, gate "done" deterministically [4][B] | the gates in `gates.py` decide, the agent's claims never do | done |
 | Require evidence, not assertions [4] | gate results go into the PR; the finish tool does not yet ask for the commands run | partial |
-| Evaluator-optimizer; reviewer in a fresh context, sees the diff and the criteria, flags only correctness and requirement gaps [1][4][B] | review agent: read-only tools, new context, "blocking problems only" | done |
+| Evaluator-optimizer; reviewer in a fresh context, sees the diff and the criteria, flags only correctness and requirement gaps [1][4][B]; AI review is over-defensive [27] | review agent: read-only tools, new context; only blocking findings send a change back, notes go to the person in the PR | done |
 | Same-model reviewers share blind spots; decorrelate [26] | review uses the coder's model unless `review` lists a second model | gap |
 | Poka-yoke the agent-computer interface: few non-overlapping tools, exact unique-match edits, errors that say how to recover, formats the model writes easily [1][3][6] | six tools in `tools.py`; `edit_file` needs a unique exact match | done |
 | Tool output discipline: paginate, truncate, filter [6][17] | reads paged at 400 lines / 24K characters, command output clipped to 8K | done |
