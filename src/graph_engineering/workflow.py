@@ -256,7 +256,11 @@ def develop(ctx: Context, ticket: dict) -> dict:
         ctx.renew()
         reviewer_ws = Workspace(work)
         diff_text = gates.diff(work, data["base"], report["commit"])
-        review_text = prompts.review_task(spec, clip(diff_text, DIFF_CHARS), gates.summary(report), summary, brief, plan or None)
+        # Eval: a plan reviewer predicted the bug that later failed the hidden tests; its concern reached the coder but
+        # not the final reviewer, who approved. Unresolved plan concerns are now the final review's checklist.
+        concerns = (data.get("plan_record") or {}).get("concerns")
+        review_text = prompts.review_task(spec, clip(diff_text, DIFF_CHARS), gates.summary(report), summary, brief,
+                                          plan or None, concerns)
         # Same-model reviewers share the coder's blind spots: prefer another model when one fits the review.
         agent, run, reviewer = _agent(ctx, ticket, "review", reviewer_ws, READ_ONLY, prompts.SUBMIT_REVIEW, prompts.REVIEW,
                                       directory / "review", round_, exclude={coder.name},

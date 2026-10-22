@@ -190,6 +190,13 @@ if __name__ == "__main__":
 
 @unittest.skipUnless(available(), "no OS sandbox on this host")
 class Planning(unittest.TestCase):
+    def test_unresolved_plan_concerns_become_the_final_reviews_checklist(self):
+        from graph_engineering import prompts
+        text = prompts.review_task({"title": "t", "problem": "p", "acceptance_criteria": ["a"]}, "diff", "- PASS x", "s",
+                                   concerns="- chains.model is undefined with fakeChains")
+        self.assertIn("any that the code does not resolve is a blocking finding", text)
+        self.assertIn("chains.model is undefined with fakeChains", text)
+
     def test_auto_planning_depends_on_ticket_size(self):
         repo = Repo(name="r", path="/tmp", test_command="t")
         self.assertFalse(repo.wants_plan({"acceptance_criteria": ["a", "b"]}))

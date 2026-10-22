@@ -237,8 +237,11 @@ def coding_task(ticket: dict, repo: dict, feedback: str | None = None, brief: st
     return text
 
 
-def review_task(ticket: dict, diff: str, gates: str, summary: str, brief: str = "", plan: dict | None = None) -> str:
+def review_task(ticket: dict, diff: str, gates: str, summary: str, brief: str = "", plan: dict | None = None,
+                concerns: str | None = None) -> str:
+    checklist = (f"Concerns raised about the plan before coding. Check each one against the code; any that the code does "
+                 f"not resolve is a blocking finding:\n<concerns>\n{concerns}\n</concerns>\n\n") if concerns else ""
     return ((f"<project>\n{brief}\n</project>\n\n" if brief else "")
-            + (f"The agreed plan:\n<plan>\n{plan_text(plan)}\n</plan>\n\n" if plan else "") + f"Ticket: {ticket['title']}\n\n{ticket['problem']}\n\nAcceptance criteria:\n{criteria_text(ticket)}\n\n"
+            + (f"The agreed plan:\n<plan>\n{plan_text(plan)}\n</plan>\n\n" if plan else "") + checklist + f"Ticket: {ticket['title']}\n\n{ticket['problem']}\n\nAcceptance criteria:\n{criteria_text(ticket)}\n\n"
             f"Harness results:\n{gates}\n\nThe author's summary (a claim, verify it):\n{summary}\n\n"
             f"The diff against the base revision:\n```diff\n{diff}\n```")
