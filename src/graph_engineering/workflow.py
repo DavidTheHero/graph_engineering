@@ -232,7 +232,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
                                 + plan_record["concerns"]).strip()
     agent, run, coder = _agent(ctx, ticket, "coding", Workspace(work, sandbox, repo.run_timeout), READ_WRITE, prompts.FINISH,
                                prompts.CODING, directory / "coding", round_, max_steps=repo.coding_steps, nudge_after=15,
-                               notes=root / "notes.md", explorer=explorer, evidence=True)
+                               notes=root / "notes.md", explorer=explorer, evidence=True, verify=repo.test_command)
     outcome = agent.run(prompts.coding_task(spec, {"test_command": repo.test_command, "build_command": repo.build_command},
                                             data.get("feedback"), brief, plan or None))
     ctx.store.run_end(run, outcome.status, outcome.usage)

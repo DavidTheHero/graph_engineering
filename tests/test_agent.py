@@ -123,7 +123,7 @@ class Evidence(unittest.TestCase):
         self.root = temp_dir(self)
         self.repo = python_repo(self.root)
 
-    def run_agent(self, plan):
+    def run_agent(self, plan, verify=None):
         from graph_engineering.sandbox import Sandbox
         llm = FakeLLM(lambda role, messages: plan[min(sum(m["role"] == "assistant" for m in messages), len(plan) - 1)])
         self.addCleanup(llm.close)
@@ -131,7 +131,7 @@ class Evidence(unittest.TestCase):
         import shutil
         shutil.copytree(self.repo, work)
         ws = Workspace(work, Sandbox(self.root, work, trusted=True))
-        agent = Agent(llm.model(), ws, READ_WRITE, FINISH, "system", evidence=True, max_steps=8)
+        agent = Agent(llm.model(), ws, READ_WRITE, FINISH, "system", evidence=True, max_steps=8, verify=verify)
         return agent.run("task"), llm
 
     def last_tool_reply(self, llm):
@@ -195,3 +195,19 @@ class LastStep(unittest.TestCase):
         last = llm.requests[-1]
         self.assertEqual([t["function"]["name"] for t in last["tools"]], ["finish"])
         self.assertEqual(last["tool_choice"], {"type": "function", "function": {"name": "finish"}})
+
+
+class HarnessVerification(Evidence):
+    def test_missing_evidence_is_verified_by_the_harness(self):
+        test = "python3 -m unittest discover -s tests -q"
+        outcome, llm = self.run_agent([[call("finish", summary="s", coverage=[])]], verify=test)
+        self.assertEqual(outcome.status, "done")
+        self.assertEqual(outcome.result["evidence"], [{"command": test, "exit_code": 0, "run_by": "harness"}])
+        self.assertEqual(len(llm.requests), 1)  # no extra turn
+
+    def test_a_failing_check_is_shown_to_the_agent(self):
+        outcome, llm = self.run_agent([[call("finish", summary="s", coverage=[])],
+                                       [call("finish", summary="s", coverage=[], unresolved="x", evidence=[{"command": "false", "exit_code": 1}])]],
+                                      verify="false")
+        reply = [m["content"] for m in llm.requests[1]["messages"] if m["role"] == "tool"][0]
+        self.assertIn("the harness ran `false` for you", reply)

@@ -91,7 +91,7 @@ class Agent:
                  max_steps: int = 60, nudge_after: int | None = None, transcript: Path | None = None,
                  on_step: Callable[[dict], None] | None = None, cancelled: Callable[[], bool] = lambda: False,
                  notes: Path | None = None, explorer: Callable[[str], str] | None = None, working_tokens: int = WORKING_TOKENS,
-                 evidence: bool = False):
+                 evidence: bool = False, verify: str | None = None):
         self.model, self.workspace, self.tools, self.finish, self.system = model, workspace, tools, finish, system
         self.max_steps, self.nudge_after, self.on_step, self.cancelled = max_steps, nudge_after, on_step, cancelled
         self.transcript = Path(transcript) if transcript else None
@@ -101,6 +101,7 @@ class Agent:
         self.history_chars = int(min(window, working_tokens * CHARS_PER_TOKEN))
         self.compactions = 0
         self.evidence = evidence          # finish must cite commands actually run after the last file change
+        self.verify = verify              # the test command the harness runs itself when evidence is missing or stale
         self.commands: list[tuple[int, str, int]] = []   # (step, command, exit code) of every run call
         self.last_change = 0
         self.reads: dict[str, tuple] = {}     # tool call id -> (path, first line, last line, step)
@@ -307,6 +308,20 @@ class Agent:
             return f"Error: arguments are not a valid JSON object ({exc}). Call the tool again with valid JSON."
         if name == self.finish["name"]:
             problem = validate(args, self.finish["parameters"]) or (self.check_evidence(args) if self.evidence else None)
+            if problem and self.verify and self.workspace.sandbox and not validate(args, self.finish["parameters"]) \
+                    and ("needs evidence" in problem or "was not run after" in problem):
+                # Run the check for the agent instead of spending a turn asking it to.
+                result = self.workspace.run(self.verify)
+                match = re.match(r"exit code (-?\d+)", result)
+                code = int(match.group(1)) if match else -1
+                self.commands.append((step, self.verify, code))
+                self.emit(step, "verify", f"harness ran {self.verify}: exit {code}")
+                if code == 0:
+                    args = {**args, "evidence": [{"command": self.verify, "exit_code": 0, "run_by": "harness"}]}
+                    problem = None
+                else:
+                    return (f"Error: your finish had no fresh evidence, so the harness ran `{self.verify}` for you:\n{result}\n"
+                            "Fix the failures and run it again, or call finish saying in unresolved what is left.")
             if problem:
                 return f"Error: {problem}. Call {name} again with every required field."
             self.emit(step, "finish", json.dumps(args)[:400])
