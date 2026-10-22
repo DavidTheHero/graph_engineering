@@ -178,3 +178,20 @@ class FinalSteps(unittest.TestCase):
         self.addCleanup(llm.close)
         outcome = Agent(llm.model(), Workspace(repo), READ_WRITE[:3], FINISH, "s", max_steps=10).run("task")
         self.assertEqual((outcome.status, outcome.steps), ("done", 8))
+
+
+class LastStep(unittest.TestCase):
+    def test_the_last_step_offers_only_the_finish_tool(self):
+        root = temp_dir(self)
+        repo = python_repo(root)
+        counter = iter(range(100))
+
+        def script(role, messages):
+            return [call("read_file", path="calc.py", start_line=next(counter) + 1)]  # ignores every warning
+
+        llm = FakeLLM(script)
+        self.addCleanup(llm.close)
+        Agent(llm.model(), Workspace(repo), READ_WRITE[:3], FINISH, "s", max_steps=5).run("task")
+        last = llm.requests[-1]
+        self.assertEqual([t["function"]["name"] for t in last["tools"]], ["finish"])
+        self.assertEqual(last["tool_choice"], {"type": "function", "function": {"name": "finish"}})

@@ -35,7 +35,7 @@ class Model:
         known = {k: v for k, v in data.items() if k in cls.__dataclass_fields__ and k != "name"}
         return cls(name=name, **known)
 
-    def body(self, messages: list, tools: list | None, tool_choice: str = "auto") -> dict:
+    def body(self, messages: list, tools: list | None, tool_choice: str | dict = "auto") -> dict:
         # Qwen's recommended sampling; near-greedy decoding makes it repeat itself.
         sampling = {"temperature": 0.6, "top_p": 0.95, "top_k": 20} if self.think else \
                    {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "presence_penalty": 1.0}
@@ -56,7 +56,7 @@ class Reply:
     usage: dict
 
 
-def chat(model: Model, messages: list, tools: list | None = None, attempts: int = 4, tool_choice: str = "auto") -> Reply:
+def chat(model: Model, messages: list, tools: list | None = None, attempts: int = 4, tool_choice: str | dict = "auto") -> Reply:
     headers = {"Content-Type": "application/json"}
     if model.api_key_env:
         key = os.environ.get(model.api_key_env)

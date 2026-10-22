@@ -178,7 +178,14 @@ class Agent:
                 if self.size(messages) > self.history_chars:
                     messages = self.summarise(messages, specs, task, step)
                     seen.clear()
-                reply = chat(self.model, messages, specs)
+                if step == self.max_steps:
+                    # The last step can only end the session: a warning alone did not stop a reviewer from exploring.
+                    messages.append({"role": "user", "content": f"This is your last step. Call {self.finish['name']} now."})
+                    self.log(messages[-1])
+                    reply = chat(self.model, messages, [self.finish],
+                                 tool_choice={"type": "function", "function": {"name": self.finish["name"]}})
+                else:
+                    reply = chat(self.model, messages, specs)
                 for key in outcome.usage:
                     outcome.usage[key] += reply.usage.get(key, 0)
                 message = {"role": "assistant", "content": reply.content}
