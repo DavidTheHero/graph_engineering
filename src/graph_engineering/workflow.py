@@ -75,7 +75,8 @@ def _explorer(ctx: Context, ticket: dict, workspace: Workspace, directory: Path,
 
     def explore(question: str) -> str:
         count[0] += 1
-        task = f"Question: {question}\n\n<project>\n{prompts.project_brief(workspace.root)}\n</project>"
+        task = (f"Question: {question}\n\n<project>\n{prompts.project_brief(workspace.root, read_memory(ctx, ticket['repo']))}"
+                "\n</project>")
         agent, run, _ = _agent(ctx, ticket, "explore" if "explore" in ctx.registry.roles else "coding", workspace, READ_ONLY,
                                prompts.REPORT, prompts.EXPLORE, directory / f"explore-{count[0]}", round_, max_steps=20,
                                working_tokens=20000, prompt_chars=len(task) + len(prompts.EXPLORE))
@@ -90,6 +91,41 @@ def _explorer(ctx: Context, ticket: dict, workspace: Workspace, directory: Path,
 
 class Cancelled(Exception):
     pass
+
+
+def memory_path(ctx: Context, repo_name: str) -> Path:
+    return ctx.home / "memory" / f"{repo_name}.md"
+
+
+def read_memory(ctx: Context, repo_name: str) -> str:
+    path = memory_path(ctx, repo_name)
+    return path.read_text()[:prompts.MEMORY_CHARS] if path.exists() else ""
+
+
+def update_memory(ctx: Context, ticket: dict, repo: Repo, work: Path, directory: Path, round_: int, notes: Path,
+                  plan: dict | None, summary: str, changed: list[str]) -> None:
+    """After an accepted round, fold what was learned into the repository's guide. Never blocks the ticket."""
+    current = read_memory(ctx, repo.name)
+    task = prompts.memory_task(current, notes.read_text() if notes.exists() else "", plan, summary, changed)
+    try:
+        agent, run, model = _agent(ctx, ticket, "memory", Workspace(work), (), prompts.SUBMIT_MEMORY, prompts.MEMORY,
+                                   directory / "memory", round_, max_steps=3, prompt_chars=len(task) + len(prompts.MEMORY))
+        outcome = agent.run(task)
+        ctx.store.run_end(run, outcome.status, outcome.usage)
+    except Exception as exc:  # a failed librarian must not cost an accepted change
+        ctx.store.event(ticket["id"], "memory_skipped", "harness", {"error": str(exc)[:300]})
+        return
+    if outcome.status != "done":
+        ctx.store.event(ticket["id"], "memory_skipped", "harness", {"status": outcome.status})
+        return
+    content = str(outcome.result.get("content", "")).strip()[:prompts.MEMORY_CHARS]
+    if content:
+        path = memory_path(ctx, repo.name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(content + "\n")
+        temporary.replace(path)
+        ctx.store.event(ticket["id"], "memory_updated", f"memory:{model.name}", {"characters": len(content)})
 
 
 def make_plan(ctx: Context, ticket: dict, work: Path, directory: Path, round_: int, brief: str, explorer,
@@ -124,7 +160,7 @@ def make_plan(ctx: Context, ticket: dict, work: Path, directory: Path, round_: i
         agent, run, reviewer = _agent(ctx, ticket, "review", Workspace(work), READ_ONLY, prompts.SUBMIT_PLAN_REVIEW,
                                       prompts.PLAN_REVIEW, directory / f"plan-review-{attempt}", round_, exclude={planner.name},
                                       max_steps=15)
-        verdict = agent.run(prompts.plan_review_task(spec, plan))
+        verdict = agent.run(prompts.plan_review_task(spec, plan, notes.read_text() if notes and notes.exists() else ""))
         ctx.store.run_end(run, verdict.status, verdict.usage)
         if verdict.status == "cancelled":
             raise Cancelled()
@@ -151,7 +187,8 @@ def intake(ctx: Context, ticket: dict) -> dict:
     prepare_workspace(Path(repo.path), repo.base, directory / "work")
     agent, run, model = _agent(ctx, ticket, "intake", Workspace(directory / "work"), READ_ONLY, prompts.SUBMIT_TICKET,
                                prompts.INTAKE, directory, 0, max_steps=40)
-    outcome = agent.run(prompts.intake_task(ticket["request"], repo.name, prompts.project_brief(directory / "work")))
+    outcome = agent.run(prompts.intake_task(ticket["request"], repo.name,
+                                            prompts.project_brief(directory / "work", read_memory(ctx, repo.name))))
     ctx.store.run_end(run, outcome.status, outcome.usage)
     shutil.rmtree(directory / "work", ignore_errors=True)
     if outcome.status == "cancelled":
@@ -215,7 +252,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
         ctx.store.merge_data(ticket["id"], base=data["base"], setup_done=True, dependencies=data["dependencies"])
     spec = ticket["spec"]
 
-    brief = prompts.project_brief(work)
+    brief = prompts.project_brief(work, read_memory(ctx, repo.name))
     explorer = _explorer(ctx, ticket, Workspace(work), directory / "coding", round_)
     plan = data.get("plan")
     if repo.wants_plan(spec) and not plan:
@@ -283,6 +320,8 @@ def develop(ctx: Context, ticket: dict) -> dict:
             verdict = "approve"  # only blocking findings send a change back; notes alone reach the person in the PR
         record["review"] = {"model": reviewer.name, "status": review.status, **(review.result or {})}
         if verdict == "approve":
+            update_memory(ctx, ticket, repo, work, directory, round_, root / "notes.md", plan or None, summary,
+                          [path for _, path in report["changed"]])
             # The published commit has exactly the tree the gates tested; a later round stacks on the previous one.
             message = f"{spec['title']}\n\n{neutral(summary)}\n\nTicket: {ticket['id']}"
             head = git(work, "commit-tree", report["tree"], "-p", data.get("head") or data["base"], "-m", message).strip()

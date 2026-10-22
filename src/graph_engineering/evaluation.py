@@ -25,7 +25,7 @@ from .store import Store
 from .workflow import Context, accept, develop
 
 
-def run_task(task: dict, repos: Repos, registry: Registry, out: Path, index: int) -> dict:
+def run_task(task: dict, repos: Repos, registry: Registry, out: Path, index: int, memory: str = "") -> dict:
     home = (out / f"{task['id']}-{index}").resolve()
     if home.exists():
         shutil.rmtree(home)
@@ -39,6 +39,9 @@ def run_task(task: dict, repos: Repos, registry: Registry, out: Path, index: int
     if task.get("base"):
         store.merge_data(ticket["id"], base_ref=task["base"])
     accept(store, local, ticket["id"], "eval")
+    if memory:
+        (home / "memory").mkdir(parents=True, exist_ok=True)
+        (home / "memory" / f"{repo.name}.md").write_text(memory)
     ctx = Context(home, store, local, registry, owner="eval")
     started = time.time()
     while True:
@@ -60,6 +63,9 @@ def run_task(task: dict, repos: Repos, registry: Registry, out: Path, index: int
               "home": str(home)}
     if task.get("hidden_tests") and result["passed"]:
         result["hidden"] = hidden(task["hidden_tests"], repo, home / "work" / ticket["id"])
+    learned = home / "memory" / f"{repo.name}.md"
+    result["memory_in"] = len(memory)
+    result["memory_out"] = learned.read_text() if result["passed"] and learned.exists() else ""
     return result
 
 
@@ -81,11 +87,18 @@ def hidden(spec: dict, repo, root: Path) -> dict:
 def run(tasks: list[Path], repos: Repos, registry: Registry, out: Path, repeat: int = 1, log=print) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     results = []
-    for path in tasks:
-        task = json.loads(Path(path).read_text())
-        for index in range(1, repeat + 1):
-            log(f"{task['id']} run {index}/{repeat} ...")
-            result = run_task(task, repos, registry, out, index)
+    loaded = [json.loads(Path(path).read_text()) for path in tasks]
+    learned: dict[str, tuple[str, str]] = {}   # repository -> (task that taught it, memory)
+    # Round-robin, so every task's later trials can start from memory learned on other tasks, never its own:
+    # memory from the same task would carry that task's answer.
+    for index in range(1, repeat + 1):
+        for task in loaded:
+            source, text = learned.get(task["repo"], ("", ""))
+            memory = text if source and source != task["id"] else ""
+            log(f"{task['id']} run {index}/{repeat} ..." + (f" (memory from {source})" if memory else ""))
+            result = run_task(task, repos, registry, out, index, memory)
+            if result.get("memory_out"):
+                learned[task["repo"]] = (task["id"], result["memory_out"])
             results.append(result)
             log(f"  {'PASS' if result['passed'] else 'FAIL'} {result['state']} rounds={result['rounds']} "
                 f"{result['seconds']}s prompt={result['prompt_tokens']:,} completion={result['completion_tokens']:,}"

@@ -82,14 +82,17 @@ class Interfaces(unittest.TestCase):
         from graph_engineering import evaluation
         results = iter([True, False, True, True])
 
-        def fake_run_task(task, repos, registry, out, index):
+        seeds = []
+
+        def fake_run_task(task, repos, registry, out, index, memory=""):
+            seeds.append((task["id"], memory))
             return {"task": task["id"], "run": index, "state": "x", "passed": next(results), "rounds": 1, "seconds": 1,
-                    "error": None, "prompt_tokens": 1, "completion_tokens": 1}
+                    "error": None, "prompt_tokens": 1, "completion_tokens": 1, "memory_out": f"learned on {task['id']}"}
 
         tasks = []
         for name in ("a", "b"):
             path = self.root / f"{name}.json"
-            path.write_text(json.dumps({"id": name}))
+            path.write_text(json.dumps({"id": name, "repo": "calc"}))
             tasks.append(path)
         original = evaluation.run_task
         evaluation.run_task = fake_run_task
@@ -98,6 +101,8 @@ class Interfaces(unittest.TestCase):
         finally:
             evaluation.run_task = original
         self.assertEqual((summary["pass_at_k"], summary["pass_hat_k"], summary["pass_rate"]), (1.0, 0.5, 0.75))
+        # round-robin; a trial never starts from memory its own task produced
+        self.assertEqual(seeds, [("a", ""), ("b", "learned on a"), ("a", "learned on b"), ("b", "learned on a")])
 
     def test_cli_registers_a_repository_and_files_a_ticket(self):
         home = self.root / "cli-home"

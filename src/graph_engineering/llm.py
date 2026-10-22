@@ -9,7 +9,7 @@ import time
 import urllib.error
 import urllib.request
 
-ROLES = ("intake", "coding", "review", "explore")
+ROLES = ("intake", "coding", "review", "explore", "memory")
 
 
 class LLMError(RuntimeError):

@@ -95,6 +95,8 @@ class Workflow(unittest.TestCase):
             if role == "review":
                 reviews.append(messages[1]["content"])
                 return [call("submit_review", verdict="approve", findings=[], summary="Correct and tested.")]
+            if role == "memory":
+                return [call("submit_memory", content="- tests: python3 -m unittest discover -s tests -q")]
             return coder()(messages)
 
         ctx = self.context(script)
@@ -113,7 +115,34 @@ class Workflow(unittest.TestCase):
         self.assertEqual(ticket["state"], "done", ticket["error"])
         self.assertIn("def subtract", (self.source / "calc.py").read_text())
         kinds = [e["kind"] for e in self.store.events(ticket["id"]) if e["kind"] != "agent"]
-        self.assertEqual(kinds, ["created", "proposed", "accepted", "gates", "ready", "published", "merge_approved", "merged"])
+        self.assertEqual(kinds, ["created", "proposed", "accepted", "gates", "memory_updated", "ready", "published",
+                                 "merge_approved", "merged"])
+        self.assertIn("python3 -m unittest discover", workflow.read_memory(ctx, "calc"))
+
+    def test_memory_opens_the_next_ticket_and_a_failing_librarian_never_blocks(self):
+        openings = []
+
+        def script(role, messages):
+            if role == "intake":
+                return [call("submit_ticket", **SPEC)]
+            if role == "review":
+                return [call("submit_review", verdict="approve", findings=[], summary="ok")]
+            if role == "memory":
+                return "I will not call the tool."   # stalls: the librarian fails
+            if sum(m["role"] == "assistant" for m in messages) == 0:
+                openings.append(messages[1]["content"])
+            return coder()(messages)
+
+        ctx = self.context(script)
+        path = workflow.memory_path(ctx, "calc")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("- REMEMBERED: tests live in tests/\n")
+        self.store.create("calc", "Please add subtract", "person")
+        ticket = self.drive(ctx, ("awaiting_merge", "failed"))
+        self.assertEqual(ticket["state"], "awaiting_merge", ticket["error"])
+        self.assertIn("REMEMBERED: tests live in tests/", openings[0])
+        self.assertIn("memory_skipped", [e["kind"] for e in self.store.events(ticket["id"])])
+        self.assertEqual(path.read_text(), "- REMEMBERED: tests live in tests/\n")
 
     def test_failed_gates_feed_the_next_round(self):
         prompts_seen = []

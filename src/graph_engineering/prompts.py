@@ -174,9 +174,36 @@ def plan_task(ticket: dict, brief: str, feedback: str | None = None) -> str:
     return text
 
 
-def plan_review_task(ticket: dict, plan: dict) -> str:
+def plan_review_task(ticket: dict, plan: dict, notes: str = "") -> str:
+    findings = (f"\n\nThe planner's notes on the code (paths, functions, test conventions). Start from them and read only "
+                f"the files the plan names or a criterion needs; do not survey the repository again:\n<notes>\n{notes}\n</notes>"
+                if notes.strip() else "")
     return (f"Ticket: {ticket['title']}\n\n{ticket['problem']}\n\nAcceptance criteria:\n{criteria_text(ticket)}\n\n"
-            f"The plan:\n{plan_text(plan)}")
+            f"The plan:\n{plan_text(plan)}{findings}")
+
+
+MEMORY = f"""You keep a short guide to one repository for the engineers who will work on its next tickets. You are given the
+current guide and what was learned while finishing one ticket. Return the updated guide.
+
+Keep only facts about the repository that will help on other tickets: layout and where key things live; exact commands
+to run the tests, a single test file and the build; test conventions, helpers and how things are mocked; pitfalls met
+and how they were resolved. Remove anything the new notes show to be wrong. Leave out this ticket's own solution, its
+file-by-file changes and anything true only for it. Plain bullet points, at most 4,000 characters.
+
+{UNTRUSTED}"""
+
+SUBMIT_MEMORY = {
+    "name": "submit_memory",
+    "description": "Submit the updated guide. Ends the session.",
+    "parameters": {"type": "object", "properties": {"content": {"type": "string"}}, "required": ["content"]},
+}
+
+
+def memory_task(current: str, notes: str, plan: dict | None, summary: str, changed: list[str]) -> str:
+    return (f"The current guide:\n<guide>\n{current.strip() or '(empty)'}\n</guide>\n\n"
+            f"Notes the engineer kept while working on a ticket:\n<notes>\n{notes.strip()[:6000]}\n</notes>\n\n"
+            + (f"Its plan's approach: {plan.get('approach', '')}\n" if plan else "")
+            + f"Files it changed: {', '.join(changed[:40])}\n\nIts summary:\n{summary[:2000]}")
 
 
 EXPLORE = f"""You answer one question about a codebase for an engineer who is busy with a task. You can list, read and search
@@ -192,10 +219,17 @@ REPORT = {
 }
 
 
-def project_brief(root: Path) -> str:
-    """Hybrid retrieval: a little context up front (the project's own agent guide and its shape), the rest on demand."""
+MEMORY_CHARS = 4000
+
+
+def project_brief(root: Path, memory: str = "") -> str:
+    """Hybrid retrieval: a little context up front (the project's own agent guide, what earlier tickets learned about
+    the repository, and its shape), the rest on demand."""
     root = Path(root)
     parts = []
+    if memory.strip():
+        parts.append("What earlier tickets learned about this repository (a guide, not the truth: check before relying "
+                     f"on it):\n{memory.strip()[:MEMORY_CHARS]}")
     for name in BRIEF_FILES:
         path = root / name
         if path.is_file():
