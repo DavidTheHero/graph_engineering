@@ -211,3 +211,19 @@ class HarnessVerification(Evidence):
                                       verify="false")
         reply = [m["content"] for m in llm.requests[1]["messages"] if m["role"] == "tool"][0]
         self.assertIn("the harness ran `false` for you", reply)
+
+
+class ForcedAction(unittest.TestCase):
+    def test_after_a_cut_off_the_next_turn_must_act_without_thinking(self):
+        root = temp_dir(self)
+        repo = python_repo(root)
+        replies = iter([{"message": {"role": "assistant", "content": "", "reasoning": "long design"}, "finish_reason": "length"},
+                        [call("finish", summary="s", coverage=[])]])
+        llm = FakeLLM(lambda role, messages: next(replies))
+        self.addCleanup(llm.close)
+        model = llm.model()
+        model.think = True
+        Agent(model, Workspace(repo), READ_WRITE[:3], FINISH, "s").run("task")
+        first, second = llm.requests
+        self.assertEqual((first["chat_template_kwargs"]["enable_thinking"], first["tool_choice"]), (True, "auto"))
+        self.assertEqual((second["chat_template_kwargs"]["enable_thinking"], second["tool_choice"]), (False, "required"))

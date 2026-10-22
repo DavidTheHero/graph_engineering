@@ -35,12 +35,13 @@ class Model:
         known = {k: v for k, v in data.items() if k in cls.__dataclass_fields__ and k != "name"}
         return cls(name=name, **known)
 
-    def body(self, messages: list, tools: list | None, tool_choice: str | dict = "auto") -> dict:
+    def body(self, messages: list, tools: list | None, tool_choice: str | dict = "auto", think: bool | None = None) -> dict:
+        think = self.think if think is None else think and self.think
         # Qwen's recommended sampling; near-greedy decoding makes it repeat itself.
-        sampling = {"temperature": 0.6, "top_p": 0.95, "top_k": 20} if self.think else \
+        sampling = {"temperature": 0.6, "top_p": 0.95, "top_k": 20} if think else \
                    {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "presence_penalty": 1.0}
         body = {"model": self.model_id, "messages": messages, "max_tokens": self.max_output,
-                "chat_template_kwargs": {"enable_thinking": self.think}, **sampling, **self.sampling}
+                "chat_template_kwargs": {"enable_thinking": think}, **sampling, **self.sampling}
         if tools:
             body["tools"] = [{"type": "function", "function": tool} for tool in tools]
             body["tool_choice"] = tool_choice
@@ -56,14 +57,15 @@ class Reply:
     usage: dict
 
 
-def chat(model: Model, messages: list, tools: list | None = None, attempts: int = 4, tool_choice: str | dict = "auto") -> Reply:
+def chat(model: Model, messages: list, tools: list | None = None, attempts: int = 4, tool_choice: str | dict = "auto",
+         think: bool | None = None) -> Reply:
     headers = {"Content-Type": "application/json"}
     if model.api_key_env:
         key = os.environ.get(model.api_key_env)
         if not key:
             raise LLMError(f"environment variable {model.api_key_env} is not set")
         headers["Authorization"] = "Bearer " + key
-    data = json.dumps(model.body(messages, tools, tool_choice)).encode()
+    data = json.dumps(model.body(messages, tools, tool_choice, think)).encode()
     for attempt in range(attempts):
         try:
             request = urllib.request.Request(model.endpoint.rstrip("/") + "/chat/completions", data, headers)

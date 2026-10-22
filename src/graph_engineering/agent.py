@@ -199,6 +199,7 @@ class Agent:
         specs = self.workspace.specs(self.tools) + extra + [self.finish]
         allowed = self.tools
         idle = repeats = since_change = 0
+        force_action = False   # after reasoning ran out without acting: next turn without thinking, a tool call required
         seen: dict[str, tuple[int, str]] = {}   # call signature -> (step, tool call id) of results still in context
         try:
             for step in range(1, self.max_steps + 1):
@@ -216,6 +217,11 @@ class Agent:
                     self.log(messages[-1])
                     reply = chat(self.model, messages, [self.finish],
                                  tool_choice={"type": "function", "function": {"name": self.finish["name"]}})
+                elif force_action:
+                    # Eval: the 27B hit the output limit thinking four turns running and stalled; asking it to act
+                    # did not help. Without thinking and with a required tool call, it acts.
+                    reply = chat(self.model, messages, specs, tool_choice="required", think=False)
+                    force_action = False
                 else:
                     reply = chat(self.model, messages, specs)
                 for key in outcome.usage:
@@ -235,7 +241,8 @@ class Agent:
                                               + (reply.reasoning or reply.content)[-6000:])
                         nudge = ("Your thinking hit the output limit. Do not redo the analysis: act on your notes now with a "
                                  "single tool call, and think further after you see the result.")
-                        self.emit(step, "note", "thinking cut off; notes carried forward")
+                        self.emit(step, "note", "thinking cut off; next turn acts without thinking")
+                        force_action = True
                     else:
                         nudge = f"Continue with a tool call, or call {self.finish['name']} if you are done."
                     if idle == 4:
