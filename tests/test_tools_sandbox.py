@@ -25,6 +25,9 @@ class Tools(unittest.TestCase):
         self.assertIn("occurs 2 times", self.ws.edit_file("dup.py", "x = 1", "x = 2"))
         self.assertIn("check indentation", self.ws.edit_file("dup.py", "y = 2\n\n", "y = 3"))
         self.assertIn("Read the file again", self.ws.edit_file("dup.py", "z = 9", "z = 1"))
+        (self.ws.root / "near.py").write_text("def add(a, b):\n    return a + b\n\n\ndef sub(a, b):\n    return a - b\n")
+        error = self.ws.edit_file("near.py", "def sub(x, y):\n    return x - y", "pass")
+        self.assertIn("    5| def sub(a, b):\n    6|     return a - b", error)  # the retry needs no re-read
 
     def test_read_pages_and_caps_output(self):
         (self.ws.root / "long.txt").write_text("\n".join(f"line {i}" for i in range(1, 1001)))

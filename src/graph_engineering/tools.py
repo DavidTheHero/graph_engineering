@@ -6,6 +6,7 @@ the workspace root and cannot leave it. Output is clipped so one call cannot flo
 from __future__ import annotations
 
 import ast
+import difflib
 import json
 from pathlib import Path
 import re
@@ -168,7 +169,7 @@ class Workspace:
             return f"Error: old_text occurs {count} times in {path}; include more surrounding lines so it is unique."
         squash = lambda s: re.sub(r"\s+", " ", s).strip()
         hint = "The text matches if whitespace is ignored: check indentation." if old_text and squash(old_text) in squash(text) \
-            else "Read the file again; it may differ from what you expect."
+            else "Read the file again; it may differ from what you expect." + closest(text, old_text)
         return f"Error: old_text not found in {path}. {hint}"
 
     def run(self, command: str) -> str:
@@ -176,3 +177,20 @@ class Workspace:
             return "Error: commands are not available in this session."
         code, out, seconds = self.sandbox.run(command, timeout=self.run_timeout)
         return f"exit code {code} ({seconds:.0f}s)\n{clip(out, OUTPUT_CHARS)}"
+
+
+def closest(text: str, old_text: str, limit: int = 40) -> str:
+    """The lines of the file most like old_text, numbered, so a failed edit can be retried without a re-read."""
+    lines, want = text.splitlines(), old_text.strip("\n").splitlines()
+    if not lines or not want or len(want) > limit:
+        return ""
+    size, target = len(want), "\n".join(want)
+    # quick_ratio only compares characters, so it shortlists; ratio picks among the shortlist.
+    windows = sorted(range(max(1, len(lines) - size + 1)), reverse=True,
+                     key=lambda i: difflib.SequenceMatcher(None, target, "\n".join(lines[i:i + size])).quick_ratio())[:5]
+    best, start = max((difflib.SequenceMatcher(None, target, "\n".join(lines[i:i + size])).ratio(), i) for i in windows)
+    if best < 0.6:
+        return ""
+    shown = "\n".join(f"{n + 1:>5}| {lines[n]}" for n in range(start, min(len(lines), start + size)))
+    return f" The closest lines in the file are:\n{shown}"
+
