@@ -79,7 +79,7 @@ def _explorer(ctx: Context, ticket: dict, workspace: Workspace, directory: Path,
                 "\n</project>")
         agent, run, _ = _agent(ctx, ticket, "explore" if "explore" in ctx.registry.roles else "coding", workspace, READ_ONLY,
                                prompts.REPORT, prompts.EXPLORE, directory / f"explore-{count[0]}", round_, max_steps=20,
-                               working_tokens=20000, prompt_chars=len(task) + len(prompts.EXPLORE))
+                               working_tokens=20000, prompt_chars=len(task) + len(prompts.EXPLORE), thinking_budget=2048)
         outcome = agent.run(task)
         ctx.store.run_end(run, outcome.status, outcome.usage)
         if outcome.status == "done":
@@ -109,7 +109,8 @@ def update_memory(ctx: Context, ticket: dict, repo: Repo, work: Path, directory:
     task = prompts.memory_task(current, notes.read_text() if notes.exists() else "", plan, summary, changed)
     try:
         agent, run, model = _agent(ctx, ticket, "memory", Workspace(work), (), prompts.SUBMIT_MEMORY, prompts.MEMORY,
-                                   directory / "memory", round_, max_steps=3, prompt_chars=len(task) + len(prompts.MEMORY))
+                                   directory / "memory", round_, max_steps=3, prompt_chars=len(task) + len(prompts.MEMORY),
+                                   thinking_budget=2048)
         outcome = agent.run(task)
         ctx.store.run_end(run, outcome.status, outcome.usage)
     except Exception as exc:  # a failed librarian must not cost an accepted change
@@ -138,7 +139,7 @@ def make_plan(ctx: Context, ticket: dict, work: Path, directory: Path, round_: i
     for attempt in (1, 2):
         agent, run, planner = _agent(ctx, ticket, "coding", Workspace(work), READ_ONLY, prompts.SUBMIT_PLAN, prompts.PLAN,
                                      directory / f"plan-{attempt}", round_, max_steps=30, explorer=explorer, nudge_after=None,
-                                     notes=notes)
+                                     notes=notes, thinking_budget=6144)
         outcome = agent.run(prompts.plan_task(spec, brief, feedback))
         ctx.store.run_end(run, outcome.status, outcome.usage)
         if outcome.status == "cancelled":

@@ -227,3 +227,19 @@ class ForcedAction(unittest.TestCase):
         first, second = llm.requests
         self.assertEqual((first["chat_template_kwargs"]["enable_thinking"], first["tool_choice"]), (True, "auto"))
         self.assertEqual((second["chat_template_kwargs"]["enable_thinking"], second["tool_choice"]), (False, "required"))
+
+
+class ThinkingBudget(unittest.TestCase):
+    def test_the_reasoning_cap_is_sent_and_dropped_when_thinking_is_off(self):
+        root = temp_dir(self)
+        repo = python_repo(root)
+        replies = iter([{"message": {"role": "assistant", "content": "", "reasoning": "x"}, "finish_reason": "length"},
+                        [call("finish", summary="s", coverage=[])]])
+        llm = FakeLLM(lambda role, messages: next(replies))
+        self.addCleanup(llm.close)
+        model = llm.model()
+        model.think = True
+        Agent(model, Workspace(repo), READ_WRITE[:3], FINISH, "s", thinking_budget=6144).run("task")
+        first, second = llm.requests
+        self.assertEqual(first["thinking_token_budget"], 6144)
+        self.assertNotIn("thinking_token_budget", second)   # the forced turn runs without thinking

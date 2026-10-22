@@ -91,7 +91,7 @@ class Agent:
                  max_steps: int = 60, nudge_after: int | None = None, transcript: Path | None = None,
                  on_step: Callable[[dict], None] | None = None, cancelled: Callable[[], bool] = lambda: False,
                  notes: Path | None = None, explorer: Callable[[str], str] | None = None, working_tokens: int = WORKING_TOKENS,
-                 evidence: bool = False, verify: str | None = None):
+                 evidence: bool = False, verify: str | None = None, thinking_budget: int | None = None):
         self.model, self.workspace, self.tools, self.finish, self.system = model, workspace, tools, finish, system
         self.max_steps, self.nudge_after, self.on_step, self.cancelled = max_steps, nudge_after, on_step, cancelled
         self.transcript = Path(transcript) if transcript else None
@@ -102,6 +102,7 @@ class Agent:
         self.compactions = 0
         self.evidence = evidence          # finish must cite commands actually run after the last file change
         self.verify = verify              # the test command the harness runs itself when evidence is missing or stale
+        self.thinking_budget = thinking_budget   # per-agent reasoning cap; None uses the model's default
         self.commands: list[tuple[int, str, int]] = []   # (step, command, exit code) of every run call
         self.last_change = 0
         self.reads: dict[str, tuple] = {}     # tool call id -> (path, first line, last line, step)
@@ -223,7 +224,7 @@ class Agent:
                     reply = chat(self.model, messages, specs, tool_choice="required", think=False)
                     force_action = False
                 else:
-                    reply = chat(self.model, messages, specs)
+                    reply = chat(self.model, messages, specs, budget=self.thinking_budget)
                 for key in outcome.usage:
                     outcome.usage[key] += reply.usage.get(key, 0)
                 message = {"role": "assistant", "content": reply.content}

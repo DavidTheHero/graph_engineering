@@ -26,6 +26,7 @@ class Model:
     context: int = 32768            # tokens
     max_output: int = 8192          # tokens per turn, thinking included
     think: bool = True              # Qwen-style thinking via chat_template_kwargs
+    thinking_budget: int = 4096     # tokens of reasoning per turn, enforced by vLLM (thinking_token_budget); 0 = none
     timeout: int = 900              # seconds per model call
     api_key_env: str | None = None
     sampling: dict = field(default_factory=dict)
@@ -35,13 +36,18 @@ class Model:
         known = {k: v for k, v in data.items() if k in cls.__dataclass_fields__ and k != "name"}
         return cls(name=name, **known)
 
-    def body(self, messages: list, tools: list | None, tool_choice: str | dict = "auto", think: bool | None = None) -> dict:
+    def body(self, messages: list, tools: list | None, tool_choice: str | dict = "auto", think: bool | None = None,
+             budget: int | None = None) -> dict:
         think = self.think if think is None else think and self.think
         # Qwen's recommended sampling; near-greedy decoding makes it repeat itself.
         sampling = {"temperature": 0.6, "top_p": 0.95, "top_k": 20} if think else \
                    {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "presence_penalty": 1.0}
         body = {"model": self.model_id, "messages": messages, "max_tokens": self.max_output,
                 "chat_template_kwargs": {"enable_thinking": think}, **sampling, **self.sampling}
+        budget = self.thinking_budget if budget is None else budget
+        if think and budget:
+            # Uncapped, the 27B spent whole turns reasoning and never acted; vLLM enforces this cap.
+            body["thinking_token_budget"] = budget
         if tools:
             body["tools"] = [{"type": "function", "function": tool} for tool in tools]
             body["tool_choice"] = tool_choice
@@ -58,14 +64,14 @@ class Reply:
 
 
 def chat(model: Model, messages: list, tools: list | None = None, attempts: int = 4, tool_choice: str | dict = "auto",
-         think: bool | None = None) -> Reply:
+         think: bool | None = None, budget: int | None = None) -> Reply:
     headers = {"Content-Type": "application/json"}
     if model.api_key_env:
         key = os.environ.get(model.api_key_env)
         if not key:
             raise LLMError(f"environment variable {model.api_key_env} is not set")
         headers["Authorization"] = "Bearer " + key
-    data = json.dumps(model.body(messages, tools, tool_choice, think)).encode()
+    data = json.dumps(model.body(messages, tools, tool_choice, think, budget)).encode()
     for attempt in range(attempts):
         try:
             request = urllib.request.Request(model.endpoint.rstrip("/") + "/chat/completions", data, headers)
