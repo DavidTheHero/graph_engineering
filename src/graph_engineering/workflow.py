@@ -275,6 +275,8 @@ def develop(ctx: Context, ticket: dict) -> dict:
         if review.status == "error":
             raise RuntimeError(review.error)
         verdict = (review.result or {}).get("verdict") if review.status == "done" else None
+        if verdict == "changes" and not (review.result or {}).get("findings"):
+            verdict = "approve"  # only blocking findings send a change back; notes alone reach the person in the PR
         record["review"] = {"model": reviewer.name, "status": review.status, **(review.result or {})}
         if verdict == "approve":
             # The published commit has exactly the tree the gates tested; a later round stacks on the previous one.
@@ -323,7 +325,10 @@ def pr_body(ticket: dict, issue: int | None) -> str:
              f"Measured by the graph_engineering harness in a sandbox on {data['head']} (base {data['base']}):"]
     lines += [f"- {'passed' if g['ok'] else 'FAILED'}: {g['name']}" for g in data.get("gates", [])]
     lines += ["", "## Review", f"Model review ({review.get('model', 'unknown')}): {review.get('verdict', 'none')}.",
-              neutral(str(review.get("summary", "")).strip()), "",
+              neutral(str(review.get("summary", "")).strip())]
+    if review.get("notes"):
+        lines += ["", "Reviewer notes (not blocking):"] + [f"- {neutral(str(n))}" for n in review["notes"]]
+    lines += ["",
               f"Implemented by a local model in {len(data.get('rounds', []))} round(s). Merging requires a person's approval."]
     return "\n".join(lines)
 

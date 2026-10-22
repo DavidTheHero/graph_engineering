@@ -154,6 +154,22 @@ class Workflow(unittest.TestCase):
         ticket = workflow.retry(self.store, ticket["id"], "person")
         self.assertEqual((ticket["state"], ticket["max_rounds"]), ("accepted", 4))
 
+    def test_notes_without_findings_do_not_block_and_reach_the_pr(self):
+        def script(role, messages):
+            if role == "intake":
+                return [call("submit_ticket", **SPEC)]
+            if role == "review":
+                return [call("submit_review", verdict="changes", findings=[], notes=["shutdown waits 10 s on spawn failure"],
+                             summary="works")]
+            return coder()(messages)
+
+        ctx = self.context(script)
+        self.store.create("calc", "Please add subtract", "person")
+        ticket = self.drive(ctx, ("awaiting_merge", "failed"), limit=6)
+        self.assertEqual((ticket["state"], ticket["round"]), ("awaiting_merge", 1), ticket["error"])
+        body = workflow.pr_body(ticket, 7)
+        self.assertIn("Reviewer notes (not blocking):\n- shutdown waits 10 s on spawn failure", body)
+
     def test_needs_info_and_answer(self):
         def script(role, messages):
             if "Clarification from the person" in messages[1]["content"]:

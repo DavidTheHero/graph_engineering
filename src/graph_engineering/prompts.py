@@ -89,8 +89,12 @@ Check, reading the code itself rather than trusting the summary:
 3. The change is correct: no broken edge cases, error paths, race conditions or security problems you can point to.
 4. The change stays in scope: no unrelated edits, no leftover debugging, no weakened existing tests.
 
-Request changes only for problems you can point to in the code, each with a concrete fix. Style preferences are not
-blocking. Then call submit_review.
+Sort what you find into two kinds:
+- findings (blocking): a criterion not met, behaviour that is wrong for a case the ticket covers, a test that would
+  not prove its criterion, a security problem, or an out-of-scope edit. Each one points to the code and gives a fix.
+- notes (not blocking): everything else worth knowing, such as minor delays on error paths, extra robustness, naming,
+  style or a possible follow-up. Notes go to the person in the pull request; they never send the change back.
+Request changes only if there is at least one finding. Then call submit_review.
 
 {UNTRUSTED}"""
 
@@ -102,6 +106,7 @@ SUBMIT_REVIEW = {
         "findings": {"type": "array", "items": {"type": "object", "properties": {
             "file": {"type": "string"}, "problem": {"type": "string"}, "fix": {"type": "string"}},
             "required": ["file", "problem", "fix"]}, "description": "Blocking problems only"},
+        "notes": {"type": "array", "items": {"type": "string"}, "description": "Non-blocking observations for the person"},
         "summary": {"type": "string", "description": "Two or three sentences on the change and your verdict"}},
         "required": ["verdict", "findings", "summary"]},
 }
