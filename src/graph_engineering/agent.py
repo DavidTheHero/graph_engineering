@@ -28,6 +28,7 @@ from .tools import Workspace
 
 CHARS_PER_TOKEN = 3.0
 LOW_WATER = 0.6            # a clearing frees down to this share of the budget, so the next one comes much later
+RESULT_SHARE = 0.25        # one tool result takes at most this share of the budget; the 9B's two file reads overflowed it
 WORKING_TOKENS = 80000      # about half of a 150K window; 40K made the coder re-read files instead of editing
 NOTES_CHARS = 6000
 
@@ -99,6 +100,7 @@ class Agent:
         # The working budget, never more than the window minus the reply and the template's own framing.
         window = (model.context - model.max_output - 2000) * CHARS_PER_TOKEN * 0.8
         self.history_chars = int(min(window, working_tokens * CHARS_PER_TOKEN))
+        self.result_chars = max(2000, int(self.history_chars * RESULT_SHARE))
         self.compactions = 0
         self.evidence = evidence          # finish must cite commands actually run after the last file change
         self.verify = verify              # the test command the harness runs itself when evidence is missing or stale
@@ -201,6 +203,7 @@ class Agent:
         allowed = self.tools
         idle = repeats = since_change = 0
         force_action = False   # after reasoning ran out without acting: next turn without thinking, a tool call required
+        compacted_at = -1
         seen: dict[str, tuple[int, str]] = {}   # call signature -> (step, tool call id) of results still in context
         try:
             for step in range(1, self.max_steps + 1):
@@ -209,11 +212,18 @@ class Agent:
                     outcome.status = "cancelled"
                     break
                 self.compact(messages, seen)
+                stuck = False
                 if self.size(messages) > self.history_chars:  # clearing was not enough
+                    # Compacting on consecutive steps means one step's reads no longer fit: the explorer re-read the same
+                    # two files after every compaction until it ran out of steps. Answer from the notes instead.
+                    stuck = compacted_at == step - 1
                     messages = self.summarise(messages, specs, task, step)
+                    compacted_at = step
                     seen.clear()
-                if step == self.max_steps:
+                if step == self.max_steps or stuck:
                     # The last step can only end the session: a warning alone did not stop a reviewer from exploring.
+                    if stuck:
+                        self.emit(step, "note", "compacted on consecutive steps; asking for the final answer")
                     messages.append({"role": "user", "content": f"This is your last step. Call {self.finish['name']} now."})
                     self.log(messages[-1])
                     reply = chat(self.model, messages, [self.finish],
@@ -306,6 +316,16 @@ class Agent:
             return "no cited command passed; fix the failures, or say in unresolved what is left"
         return None
 
+    def fit(self, result: str) -> tuple[str, int | None]:
+        """Cut a result to the per-result share of the budget at a line boundary, saying where it stopped."""
+        head = result[:self.result_chars]
+        head = head[:head.rfind("\n")] if "\n" in head else head
+        numbers = re.findall(r"(?m)^\s*(\d+)\|", head)
+        if numbers:
+            last = int(numbers[-1])
+            return (head + f"\n[cut at line {last} to fit your context; read from start_line={last + 1} for more]", last)
+        return head + f"\n[cut to {len(head)} characters to fit your context; narrow the request for the rest]", None
+
     def dispatch(self, call: dict, step: int, seen: dict, allowed) -> str | Outcome:
         name = call["name"]
         try:
@@ -350,10 +370,14 @@ class Agent:
             self.emit(step, "explored", answer[:400])
             return answer
         result = self.workspace.call(name, args, allowed)
+        shown = None
+        if len(result) > self.result_chars:
+            result, shown = self.fit(result)
         if name == "read_file" and not result.startswith("Error"):
             start = int(args.get("start_line") or 1)
             total = re.match(r".*? \((\d+) lines\)", result)
             end = min(int(args.get("end_line") or start + 399), int(total.group(1)) if total else 10 ** 9)
+            end = min(end, shown or end)
             self.reads[call["id"]] = (str(args.get("path")), start, end, step)
         if name == "run":
             match = re.match(r"exit code (-?\d+)", result)

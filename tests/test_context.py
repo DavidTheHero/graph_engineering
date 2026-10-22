@@ -40,10 +40,10 @@ class Context(unittest.TestCase):
                 return "DONE SO FAR: read big.txt pages. NEXT: finish."
             if "conversation was compacted" in messages[1]["content"]:
                 return [call("finish", summary="after compaction", coverage=[])]
-            return [call("read_file", path="big.txt", start_line=next(counter) % 16 + 1)]
+            return [call("read_file", path="big.txt", start_line=next(counter) % 16 + 1) for _ in range(3)]
 
         agent, llm = self.agent(script, notes=self.notes, working_tokens=8000, max_steps=30)
-        outcome = agent.run("task")
+        outcome = agent.run("task " + "t" * 9000)
         self.assertEqual((outcome.status, outcome.result["summary"]), ("done", "after compaction"))
         self.assertEqual(agent.compactions, 1)
         self.assertEqual(self.notes.read_text(), "DONE SO FAR: read big.txt pages. NEXT: finish.")
@@ -119,6 +119,37 @@ class Context(unittest.TestCase):
         agent.run("task")
         for earlier, later in zip(llm.requests, llm.requests[1:]):
             self.assertEqual(later["messages"][:len(earlier["messages"])], earlier["messages"])
+
+    def test_a_large_result_is_cut_to_a_share_of_a_small_budget(self):
+        """Live failure: on the 9B's 16K window two whole-file reads overflowed the budget on their own."""
+        (self.repo / "long.py").write_text("\n".join(f"value_{n} = {n}  # " + "x" * 60 for n in range(300)))
+        steps = iter([[call("read_file", path="long.py")], [call("finish", summary="s", coverage=[])]])
+        agent, llm = self.agent(lambda r, m: next(steps), working_tokens=8000)
+        agent.run("task")
+        result = next(m for m in llm.requests[-1]["messages"] if m["role"] == "tool")["content"]
+        self.assertLessEqual(len(result), agent.result_chars + 200)
+        last = int(result.rsplit("start_line=", 1)[1].split()[0]) - 1
+        self.assertIn(f"{last}|", result)
+        self.assertEqual(list(agent.reads.values())[0][2], last)
+
+    def test_compacting_on_consecutive_steps_asks_for_the_final_answer(self):
+        """Live failure: the explorer compacted, re-read the same files, and compacted again until it ran out of steps."""
+        names = ("a.txt", "b.txt", "c.txt", "d.txt", "e.txt")
+        for name in names:
+            (self.repo / name).write_text("\n".join("w" * 900 for _ in range(30)))
+
+        def script(role, messages):
+            if "Your context is full" in messages[-1]["content"]:
+                return "NOTES: the files are long."
+            if "This is your last step" in messages[-1]["content"]:
+                return [call("finish", summary="from notes", coverage=[])]
+            return [call("read_file", path=name) for name in names]
+
+        agent, llm = self.agent(script, notes=self.notes, working_tokens=6000, max_steps=20)
+        outcome = agent.run("question " + "q" * 8000)
+        self.assertEqual(outcome.status, "done")
+        self.assertLessEqual(outcome.steps, 4)
+        self.assertEqual(llm.requests[-1]["tool_choice"]["function"]["name"], "finish")
 
     def test_explore_returns_only_the_answer(self):
         questions = []
