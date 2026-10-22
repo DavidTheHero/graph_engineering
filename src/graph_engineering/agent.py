@@ -27,6 +27,7 @@ from .llm import LLMError, Model, chat
 from .tools import Workspace
 
 CHARS_PER_TOKEN = 3.0
+LOW_WATER = 0.6            # a clearing frees down to this share of the budget, so the next one comes much later
 WORKING_TOKENS = 80000      # about half of a 150K window; 40K made the coder re-read files instead of editing
 NOTES_CHARS = 6000
 
@@ -115,14 +116,19 @@ class Agent:
             self.on_step({"step": step, "kind": kind, "text": text[:400]})
 
     def compact(self, messages: list, seen: dict | None = None) -> None:
-        """Clear the oldest tool results first, keeping the latest ten, then if needed the latest three.
+        """Only once history passes the budget: clear superseded reads, then the oldest tool results (keeping the
+        latest ten, then the latest three), down to LOW_WATER of the budget.
 
-        A cleared result is forgotten by the repeat guard too, so the agent may make that call again."""
+        Rewriting an earlier message invalidates the model server's prefix cache from that point, so the history is
+        append-only between these rare, batched clearings. A cleared result is forgotten by the repeat guard too."""
+        if self.size(messages) <= self.history_chars:
+            return
         cleared = self.supersede(messages)
-        size = sum(len(json.dumps(m)) for m in messages)
+        size = self.size(messages)
+        target = int(self.history_chars * LOW_WATER)
         for keep in (10, 3):
             for message in [m for m in messages if m["role"] == "tool"][:-keep]:
-                if size <= self.history_chars:
+                if size <= target:
                     break
                 if not message["content"].startswith("[elided"):
                     size -= len(json.dumps(message["content"])) - 70
@@ -200,7 +206,7 @@ class Agent:
                     outcome.status = "cancelled"
                     break
                 self.compact(messages, seen)
-                if self.size(messages) > self.history_chars:
+                if self.size(messages) > self.history_chars:  # clearing was not enough
                     messages = self.summarise(messages, specs, task, step)
                     seen.clear()
                 if step == self.max_steps:

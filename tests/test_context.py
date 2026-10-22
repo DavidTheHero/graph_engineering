@@ -99,15 +99,26 @@ class Context(unittest.TestCase):
                       [call("read_file", path="calc.py", start_line=1, end_line=2)],
                       [call("finish", summary="s", coverage=[])]])
         agent, llm = self.agent(lambda r, m: next(steps))
-        agent.workspace_tools = None
         from graph_engineering.tools import READ_WRITE
         agent.tools = READ_WRITE[:5]
         agent.run("task")
-        tools = [m["content"] for m in llm.requests[-1]["messages"] if m["role"] == "tool"]
+        history = json.loads(json.dumps(llm.requests[-1]["messages"]))
+        agent.supersede(history)  # what a clearing does once the budget is passed
+        tools = [m["content"] for m in history if m["role"] == "tool"]
         self.assertTrue(tools[0].startswith("[an older read of calc.py"), tools[0])
         self.assertTrue(tools[1].startswith("[an older read of a.py, from before your edit"), tools[1])
         self.assertTrue(tools[2].startswith("[an older read of calc.py"), "same lines once clipped to the file's length")
         self.assertTrue(tools[4].startswith("calc.py"))
+
+    def test_history_is_append_only_under_the_budget(self):
+        """Rewriting earlier messages breaks the model server's prefix cache; below the budget nothing is rewritten."""
+        (self.repo / "a.py").write_text("A = 1\n")
+        steps = iter([[call("read_file", path="a.py")], [call("read_file", path="a.py", start_line=1, end_line=5)],
+                      [call("read_file", path="calc.py")], [call("finish", summary="s", coverage=[])]])
+        agent, llm = self.agent(lambda r, m: next(steps))
+        agent.run("task")
+        for earlier, later in zip(llm.requests, llm.requests[1:]):
+            self.assertEqual(later["messages"][:len(earlier["messages"])], earlier["messages"])
 
     def test_explore_returns_only_the_answer(self):
         questions = []
