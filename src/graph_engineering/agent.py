@@ -26,10 +26,11 @@ from typing import Callable
 from .llm import LLMError, Model, chat
 from .tools import Workspace
 
-CHARS_PER_TOKEN = 3.0
+CHARS_PER_TOKEN = 3.5      # measured 3.71 on the 27B with this code (JSON-escaped messages); a little margin
 LOW_WATER = 0.6            # a clearing frees down to this share of the budget, so the next one comes much later
 RESULT_SHARE = 0.25        # one tool result takes at most this share of the budget; the 9B's two file reads overflowed it
-WORKING_TOKENS = 80000      # about half of a 150K window; 40K made the coder re-read files instead of editing
+WORKING_TOKENS = 105000    # about 99K real tokens of a 150K window; at 80K x 3 characters the coder on task #20 cleared
+                           # every few steps and re-read agent.js ten times (40K made it re-read instead of edit)
 NOTES_CHARS = 6000
 
 NOTES_TOOL = {"name": "update_notes",

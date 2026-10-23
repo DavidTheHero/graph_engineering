@@ -35,7 +35,7 @@ together. The old 25-node pipeline never completed GE-FDD2275A; this design comp
 | Same-model reviewers share blind spots; decorrelate [26] | reviewer prefers a model other than the coder's when one fits; with one strong model it is the same 27B | gap (hardware) |
 | Poka-yoke the agent-computer interface [1][3][6] | six tools; `edit_file` needs a unique exact match; errors say how to recover | done |
 | Tool output discipline [6][17] | reads paged at 400 lines / 24K characters, command output clipped to 8K | done |
-| Context is a finite budget; smallest set of high-signal tokens [7][4] | 80K-token working budget (half the window); 40K caused re-read thrash in evals | done |
+| Context is a finite budget; smallest set of high-signal tokens [7][4] | 105K-token working budget (about 99K real tokens at the measured 3.7 characters per token); 40K, and 80K counted at 3 characters per token, both caused re-read thrash in evals | done |
 | Keep the prompt prefix stable for caching: append, don't edit [21][C] | history is append-only between rare, batched clearings | done |
 | Right-altitude prompts; must-always rules belong in code [7][4] | rules the model ignored became code: forced finish on the last step, forced action after a cut-off | done |
 | Just-in-time retrieval with a little preloaded [7][8] | opening brief (agent guide + layout); agentic search | done |
@@ -106,7 +106,7 @@ Each measure below came from a failure in a live transcript:
 - **Repository memory.** A guide per repository (layout, commands, test conventions, pitfalls), updated by a
   librarian after each accepted round. It holds facts about the repository, never a ticket's solution. The 9B
   wrote solutions into it despite instructions, so it runs on the 27B.
-- **Append-only history.** Nothing is rewritten until the 80K-token budget is passed. Then, in one batch:
+- **Append-only history.** Nothing is rewritten until the 105K-token budget is passed. Then, in one batch:
   - superseded reads are cleared: a newer read of the same lines, or a read from before an edit of that file;
   - then the oldest outputs, keeping the latest ten, then three, down to 60% of the budget.
 - **Notes.** `update_notes` writes a file outside the context. It opens every later session on the ticket,
