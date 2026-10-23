@@ -182,6 +182,13 @@ class Context(unittest.TestCase):
         tool_reply = [m for m in llm.requests[-1]["messages"] if m["role"] == "tool"][0]["content"]
         self.assertEqual(tool_reply, "Routes are tested with supertest in backend/tests/api.test.js:12.")
 
+    def test_the_coder_is_told_what_already_fails_on_the_base(self):
+        from graph_engineering.prompts import coding_task
+        ticket = {"title": "t", "problem": "p", "acceptance_criteria": ["a"]}
+        task = coding_task(ticket, {"test_command": "make test", "base_failures": "FAIL: test_old (tests.test_x)"})
+        self.assertIn("<base_failures>\nFAIL: test_old (tests.test_x)\n</base_failures>", task)
+        self.assertNotIn("base_failures", coding_task(ticket, {"test_command": "make test", "base_failures": ""}))
+
     def test_project_brief_has_the_agent_guide_and_the_layout(self):
         (self.repo / "AGENTS.md").write_text("Use unittest. Keep functions pure.")
         (self.repo / "README.md").write_text("readme text")

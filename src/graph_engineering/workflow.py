@@ -337,9 +337,11 @@ def develop(ctx: Context, ticket: dict) -> dict:
     spec = ticket["spec"]
     if "suite_seconds" not in data:
         # Time the base suite once: a hung run cost the coder the full five-minute limit for a ten-second suite.
-        code, _, seconds = sandbox.run(repo.test_command, timeout=repo.run_timeout)
+        code, out, seconds = sandbox.run(repo.test_command, timeout=repo.run_timeout)
         data["suite_seconds"] = round(seconds) if code == 0 else None
-        ctx.store.merge_data(ticket["id"], suite_seconds=data["suite_seconds"])
+        # Run 9: a base that already failed left the coder retrying finish against failures it had not caused.
+        data["base_failures"] = failure_lines(out) if code else ""
+        ctx.store.merge_data(ticket["id"], suite_seconds=data["suite_seconds"], base_failures=data["base_failures"])
     timeout = run_timeout(repo, data.get("suite_seconds"))
 
     brief = prompts.project_brief(work, read_memory(ctx, repo.name), prompts.ticket_query(spec))
@@ -371,7 +373,8 @@ def develop(ctx: Context, ticket: dict) -> dict:
                                # Run 7: 75% of the coder's output was reasoning, most of it in a few steps that ran to
                                # the 4,096 cap; Aider found Qwen3 edits as well or better without thinking.
                                thinking_budget=CODING_THINKING)
-    outcome = agent.run(prompts.coding_task(spec, {"test_command": repo.test_command, "build_command": repo.build_command},
+    outcome = agent.run(prompts.coding_task(spec, {"test_command": repo.test_command, "build_command": repo.build_command,
+                                                   "base_failures": data.get("base_failures", "")},
                                             data.get("feedback"), brief, plan or None, list(acceptance.get("files", {}))))
     ctx.store.run_end(run, outcome.status, outcome.usage)
     record = {"round": round_, "coding": {"model": coder.name, **outcome.asdict()}}
