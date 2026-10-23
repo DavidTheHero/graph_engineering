@@ -70,6 +70,13 @@ def _agent(ctx: Context, ticket: dict, role: str, workspace: Workspace, tools, f
     return agent, run, model
 
 
+def run_timeout(repo, suite_seconds: int | None) -> int:
+    """An agent's command limit: a few times the base suite's time, so a hang shows in a minute, not five."""
+    if suite_seconds is None:
+        return repo.run_timeout
+    return min(repo.run_timeout, max(60, 4 * suite_seconds + 30))
+
+
 def _explorer(ctx: Context, ticket: dict, workspace: Workspace, directory: Path, round_: int) -> Callable[[str], str]:
     """A sub-agent in a fresh read-only context; only its answer reaches the caller's context."""
     count = [0]
@@ -318,6 +325,12 @@ def develop(ctx: Context, ticket: dict) -> dict:
         data.update(setup_done=True, dependencies=gates.installed(work))
         ctx.store.merge_data(ticket["id"], base=data["base"], setup_done=True, dependencies=data["dependencies"])
     spec = ticket["spec"]
+    if "suite_seconds" not in data:
+        # Time the base suite once: a hung run cost the coder the full five-minute limit for a ten-second suite.
+        code, _, seconds = sandbox.run(repo.test_command, timeout=repo.run_timeout)
+        data["suite_seconds"] = round(seconds) if code == 0 else None
+        ctx.store.merge_data(ticket["id"], suite_seconds=data["suite_seconds"])
+    timeout = run_timeout(repo, data.get("suite_seconds"))
 
     brief = prompts.project_brief(work, read_memory(ctx, repo.name), prompts.ticket_query(spec))
     explorer = _explorer(ctx, ticket, Workspace(work), directory / "coding", round_)
@@ -342,7 +355,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
         if plan_record.get("concerns"):
             data["feedback"] = ((data.get("feedback") or "") + "\n\nThe plan reviewer's remaining concerns (address them):\n"
                                 + plan_record["concerns"]).strip()
-    agent, run, coder = _agent(ctx, ticket, "coding", Workspace(work, sandbox, repo.run_timeout), READ_WRITE, prompts.FINISH,
+    agent, run, coder = _agent(ctx, ticket, "coding", Workspace(work, sandbox, timeout), READ_WRITE, prompts.FINISH,
                                prompts.CODING, directory / "coding", round_, max_steps=repo.coding_steps, nudge_after=15,
                                notes=root / "notes.md", explorer=explorer, evidence=True, verify=repo.test_command)
     outcome = agent.run(prompts.coding_task(spec, {"test_command": repo.test_command, "build_command": repo.build_command},

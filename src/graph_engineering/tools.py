@@ -176,7 +176,10 @@ class Workspace:
         if self.sandbox is None:
             return "Error: commands are not available in this session."
         code, out, seconds = self.sandbox.run(command, timeout=self.run_timeout)
-        return f"exit code {code} ({seconds:.0f}s)\n{clip(out, OUTPUT_CHARS)}"
+        hint = (f"\n[timed out after {self.run_timeout}s, a few times longer than the whole base test suite takes: something "
+                "probably hangs (a server, timer or connection left open, or a promise never resolved). Run one test file to find "
+                "it.]") if code == 124 else ""
+        return f"exit code {code} ({seconds:.0f}s){hint}\n{clip(out, OUTPUT_CHARS)}"
 
 
 def closest(text: str, old_text: str, limit: int = 40) -> str:

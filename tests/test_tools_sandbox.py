@@ -76,6 +76,20 @@ class Confinement(unittest.TestCase):
         code, _, _ = self.sandbox.run("exit 3 | tail -1")
         self.assertNotEqual(code, 0)
 
+    def test_a_timeout_is_reported_as_a_probable_hang(self):
+        result = Workspace(self.sandbox.work, self.sandbox, run_timeout=1).run("sleep 5")
+        self.assertTrue(result.startswith("exit code 124"))
+        self.assertIn("probably hangs", result)
+
+    def test_the_agent_command_limit_follows_the_base_suite(self):
+        from graph_engineering.repos import Repo
+        from graph_engineering.workflow import run_timeout
+        repo = Repo(name="r", path="/x", test_command="true")
+        self.assertEqual(run_timeout(repo, 10), 70)
+        self.assertEqual(run_timeout(repo, 1), 60)
+        self.assertEqual(run_timeout(repo, 200), repo.run_timeout)
+        self.assertEqual(run_timeout(repo, None), repo.run_timeout)  # the base suite failed: keep the limit
+
     def test_credentials_are_unreadable(self):
         ssh = Path.home() / ".ssh"
         if not ssh.exists():
