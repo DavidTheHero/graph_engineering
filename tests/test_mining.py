@@ -27,6 +27,8 @@ class Mining(unittest.TestCase):
         self.assertEqual(task["spec"]["acceptance_criteria"], ["subtract(a, b) returns a - b", "add still works"])
         self.assertEqual(task["hidden_tests"]["command"], "python3 -m unittest tests/test_sub.py")
         self.assertTrue(task["base"].endswith("^"))
+        # The hidden test imports a name the base lacks: the spec states it, so a solution is not graded on a guess.
+        self.assertIn("Other code will import these new names: `subtract` from `calc`.", task["spec"]["problem"])
 
     @unittest.skipUnless(available(), "no OS sandbox on this host")
     def test_a_task_is_kept_only_if_the_reference_solution_validates(self):

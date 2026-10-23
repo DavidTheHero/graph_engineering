@@ -83,14 +83,44 @@ def spec_for(repo: Repo, sha: str) -> dict:
     return {"title": title[:120], "kind": kind, "problem": clip(text, 3000), "acceptance_criteria": criteria}
 
 
+PY_FROM = re.compile(r"^[ \t]*from[ \t]+([\w.]+)[ \t]+import[ \t]+(?:\(([^)]*)\)|([\w \t,]+))", re.M)
+JS_FROM = re.compile(r"""import\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']""")
+
+
+def interface(repo: Repo, sha: str, tests: list[str]) -> list[str]:
+    """Names the hidden tests import that the base does not have yet: the contract a solution must meet, stated so a
+    task does not fail on a name the spec never gave (run 8 and 9: three of four hidden-test misses were that).
+    Only names, never the tests' expected values."""
+    base = git(Path(repo.path), "grep", "-h", "-o", "-E", r"[A-Za-z_$][A-Za-z0-9_$]*", f"{sha}^", "--", ".", check=False)
+    known = set(base.split())
+    found = []
+    for path in tests:
+        text = git(Path(repo.path), "show", f"{sha}:{path}", check=False)
+        if path.endswith(".py"):
+            pairs = [(m, n) for m, group, line in PY_FROM.findall(text) for n in (group or line).split(",")]
+        else:
+            pairs = [(m, n) for names, m in JS_FROM.findall(text) for n in names.split(",")]
+        for module, name in pairs:
+            name = name.split(" as ")[0].strip()
+            if name and name not in known:
+                line = f"`{name}` from `{module}`"
+                if line not in found:
+                    found.append(line)
+    return found
+
+
 def task_for(repo: Repo, candidate: dict) -> dict:
     sha = candidate["sha"]
     tests = [p for p in candidate["tests"]
              if git(Path(repo.path), "cat-file", "-t", f"{sha}:{p}", check=False).strip() == "blob"]
     runners = [repo.runner(p) for p in tests]
     command = " && ".join(dict.fromkeys(r for r in runners if r)) if all(runners) else repo.test_command
+    spec = spec_for(repo, sha)
+    names = interface(repo, sha, tests)
+    if names:
+        spec["problem"] += "\n\nOther code will import these new names: " + ", ".join(names) + "."
     return {"id": f"{repo.name}-{sha[:8]}", "source": f"{repo.name} commit {sha[:12]}", "repo": repo.name,
-            "base": f"{sha}^", "reference": sha, "spec": spec_for(repo, sha),
+            "base": f"{sha}^", "reference": sha, "spec": spec,
             "hidden_tests": {"files": {p: f"@{p}@{sha}@" for p in tests}, "command": command}}
 
 
