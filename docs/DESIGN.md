@@ -90,6 +90,10 @@ Each measure below came from a failure in a live transcript:
 | `finish` was refused for stale evidence, costing turns | the harness runs the test command itself and accepts if it passes |
 | Uncapped reasoning used every output token and gave no answer | **a thinking budget per agent, enforced by vLLM** (`thinking_token_budget`): planning 6,144, coding, review and intake 4,096, explore and memory 2,048 |
 | Broken edits were found steps later by a failing suite | **an edit that breaks syntax is rolled back** with the error (Python, JSON, JavaScript); SWE-agent measured 3 points for this |
+| The 9B explorer's two whole-file reads overflowed its budget by themselves; it compacted, re-read them and compacted again every step | **one tool result takes at most a quarter of the working budget**, cut at a line with where to read on; **compacting on two steps in a row asks for the final answer**; the explorer gets a slim brief |
+| `npm test 2>&1 \| tail -25` reported tail's exit code, so a failing suite read as passing | commands run under **`bash -o pipefail`** |
+| Three hung test runs cost 900 s of a 2,095 s coding session on an 11 s suite | **the command limit follows the base suite's time** (4× + 30 s, at least 60 s), and a timeout says the run probably hangs |
+| A failed `edit_file` cost a re-read before the retry | the error shows **the closest lines of the file, numbered** (search/replace beats diffs for Qwen: Diff-XYZ, Aider) |
 
 ## Context engineering
 
@@ -221,7 +225,7 @@ Without the append-only change, the prefix-cache hit rate was 83%.
 |---|---|---|---|
 | 1 | **Measure both profiles on the current code**: quick, then thorough, 4 tasks × 3 trials each | Repository memory, notes-first plan review, thinking budgets, syntax checks, the repository map and acceptance tests are all unmeasured | 10–15 GPU-hours |
 | 2 | **Mutation gate** on the changed lines: the new tests must kill a share of mutants of the diff | LLM test suites catch at most ~36% of mutated solutions (SWE-Mutation); Meta's ACH | 2–4 days per language |
-| 3 | **Speculative decoding on the model server** (Qwen3.5 MTP, 2 tokens) | Model card; inference is nearly all of the time | server change, the person's call |
+| 3 | ~~Speculative decoding on the model server~~: **already on** (MTP, 3 draft tokens, 67% accepted, from the server's `/metrics`) | — | done |
 | 4 | **More eval tasks** from more repositories (`eval-mine` on other projects or small public libraries) | Avoid tuning to 4 tasks | small, GPU time to run |
 | 5 | **One live ticket to a real PR** on General_AI_Agent | Proves the publish/merge path | 1 ticket; needs the person's go-ahead |
 | 6 | **Containment fixes** from the stash | Required before any repository you do not own | medium |
