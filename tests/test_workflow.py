@@ -63,7 +63,7 @@ class Workflow(unittest.TestCase):
         self.source = python_repo(self.root)
         self.home = self.root / "home"
         self.store, self.repos = Store(self.home / "ge.db"), Repos(self.home)
-        self.repos.save(Repo(name="calc", path=str(self.source), test_command=TEST_COMMAND, auto_accept=True, plan=False,
+        self.repos.save(Repo(name="calc", path=str(self.source), test_command=TEST_COMMAND, auto_accept=True, plan=False, profile="thorough",
                              acceptance_tests=False,
                              test_file_runners=[{"pattern": r"^tests/.*\.py$", "command": "python3 -m unittest {file}"}]))
 
@@ -250,17 +250,18 @@ class Planning(unittest.TestCase):
         self.assertIn("chains.model is undefined with fakeChains", text)
 
     def test_auto_planning_depends_on_ticket_size(self):
-        repo = Repo(name="r", path="/tmp", test_command="t")
+        repo = Repo(name="r", path="/tmp", test_command="t", profile="thorough")
+        self.assertFalse(Repo(name="r", path="/tmp", test_command="t", plan=True).wants_plan({"acceptance_criteria": ["a"] * 5}))
         self.assertFalse(repo.wants_plan({"acceptance_criteria": ["a", "b"]}))
         self.assertTrue(repo.wants_plan({"acceptance_criteria": ["a", "b", "c"]}))
-        self.assertTrue(Repo(name="r", path="/tmp", test_command="t", plan=True).wants_plan({"acceptance_criteria": ["a"]}))
+        self.assertTrue(Repo(name="r", path="/tmp", test_command="t", plan=True, profile="thorough").wants_plan({"acceptance_criteria": ["a"]}))
 
     def test_plan_is_checked_then_given_to_the_coder_and_the_reviewer(self):
         root = temp_dir(self)
         source = python_repo(root)
         home = root / "home"
         store, repos = Store(home / "ge.db"), Repos(home)
-        repos.save(Repo(name="calc", path=str(source), test_command=TEST_COMMAND, plan=True, acceptance_tests=False,
+        repos.save(Repo(name="calc", path=str(source), test_command=TEST_COMMAND, plan=True, acceptance_tests=False, profile="thorough",
                         test_file_runners=[{"pattern": r"^tests/.*\.py$", "command": "python3 -m unittest {file}"}]))
         seen = {"plans": 0, "coder": None, "review": None, "plan_feedback": None}
         good_plan = {"approach": "add subtract beside add", "files": [{"path": "calc.py", "change": "add subtract"}],
@@ -305,7 +306,7 @@ class AcceptanceTests(unittest.TestCase):
         source = python_repo(root)
         home = root / "home"
         store, repos = Store(home / "ge.db"), Repos(home)
-        repos.save(Repo(name="calc", path=str(source), test_command=TEST_COMMAND, plan=False,
+        repos.save(Repo(name="calc", path=str(source), test_command=TEST_COMMAND, plan=False, profile="thorough",
                         test_file_runners=[{"pattern": r"^tests/test_[^/]*\.py$", "command": "python3 -m unittest {file}"}]))
         seen = {}
         already_green = "import unittest\nfrom calc import add\n\n\nclass G(unittest.TestCase):\n    def test_g(self):\n        self.assertEqual(add(1, 1), 2)\n"

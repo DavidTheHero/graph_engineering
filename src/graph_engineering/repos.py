@@ -37,7 +37,8 @@ class Repo:
     issue_required: bool = True             # create a GitHub issue and reference it with "Closes #N"
     branch_template: str = "{kind}/{issue}-{slug}"
     plan: bool | str = "auto"               # plan before any edit: True, False, or "auto" (tickets with 3+ criteria)
-    profile: str = "thorough"               # "quick": one coding agent, the gates, then the person reviews the PR
+    profile: str = "quick"                  # one coding agent, the gates, then the person reviews the PR; "thorough" adds
+                                            # acceptance tests, a plan and a model review (runs 5-8: no more reliable, 2-3x slower)
     acceptance_tests: bool = True           # thorough profile: tests written from the criteria before coding
     max_rounds: int = 3
     coding_steps: int = 80

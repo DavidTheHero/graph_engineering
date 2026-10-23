@@ -7,21 +7,28 @@ The design follows Anthropic's published guidance on agents (sources at the end)
 **a fixed workflow outside, a tool-using agent inside, ground truth from tests the harness runs itself,
 the smallest useful context, and a person at the merge.**
 
-## Where it stands (2026-10-22)
+## Where it stands (2026-10-23)
 
-On the latest full measurement (9 trials, commit c86bc30, Qwen 27B on one GPU):
+Run 8: the quick profile on commit cd153d1, Qwen 27B on one GPU, 7 trials of the 4 General_AI_Agent tasks
+before the session ended:
 
-| | Result |
-|---|---|
-| Trials accepted by gates and review | 8 of 9 (89%) |
-| Tasks solved in at least one trial (pass@k) | 3 of 3 |
-| Tasks solved in every trial (pass^k) | 2 of 3 (67%) |
-| Maintainers' hidden tests on accepted results | 2 of 3 |
-| Time per ticket | 9 min to 2 h 12 min (median 52 min) |
-| Prompt tokens per ticket | 0.6M to 6.8M (median 4.0M) |
+| | Quick, run 8 (cd153d1) | Thorough, run 5 (c86bc30) |
+|---|---|---|
+| Trials accepted by the gates (and the review, when thorough) | 7 of 7 | 8 of 9 |
+| Maintainers' hidden tests on accepted results | 3 of 4 (the miss: the spec never named the interface the tests import; fixed in the task) | 2 of 3 |
+| Time per ticket | 6 min to 48 min (median 25 min) | 9 min to 2 h 12 min (median 52 min) |
+| Prompt-cache hit rate on the model server | 89% (run 7) | 68.5% before append-only history |
 
-Eight changes made since that run target the failures and the time it measured; they are not yet measured
-together. The old 25-node pipeline never completed GE-FDD2275A; this design completes it in each trial.
+| Task | Run 8 trials | Run 7 (quick, older code) | Run 6 (thorough) |
+|---|---|---|---|
+| model-name-response | 350 s, 536 s | 554 s | 400 s |
+| model-selector | 1,514 s, 834 s | 2,172 s | 3,333 s |
+| one-command-start | 2,483 s, 2,868 s | 2,629 s | 2,586 s |
+| #20 tool search | 2,552 s (2 rounds) | out of steps | — |
+
+So the **quick profile is the default**; the thorough profile stays available per repository or ticket. Run 9
+measures the quick profile on 8 tasks from two repositories (this project's own history added). The old
+25-node pipeline never completed GE-FDD2275A; this design completes it in each trial.
 
 ## Principles, and where each lives
 
@@ -66,7 +73,8 @@ thorough  request ─► intake ─► accept ─► acceptance tests ─► [pl
 
 The quick profile is what an interactive tool such as OpenCode does with a person watching: one agent, then
 the machine checks, then the person judges intent. The thorough profile adds the steps that let a change be
-trusted unattended. Which one pays, and when, is measured, not assumed.
+trusted unattended. Which one pays, and when, is measured, not assumed: on the same tasks the thorough
+profile was no more reliable and two to three times slower (runs 5–8), so quick is the default.
 
 ## The agent loop
 
@@ -223,7 +231,7 @@ Without the append-only change, the prefix-cache hit rate was 83%.
 
 | # | Item | Why | Cost |
 |---|---|---|---|
-| 1 | **Measure both profiles on the current code**: quick, then thorough, 4 tasks × 3 trials each | Repository memory, notes-first plan review, thinking budgets, syntax checks, the repository map and acceptance tests are all unmeasured | 10–15 GPU-hours |
+| 1 | **Coder thinking: 2,048 tokens vs. off**, several trials each (trial-to-trial spread is up to 2x) | 75% of the coder's output is reasoning; Aider found Qwen3 edits as well or better without thinking | 6–8 GPU-hours |
 | 2 | **Mutation gate** on the changed lines: the new tests must kill a share of mutants of the diff | LLM test suites catch at most ~36% of mutated solutions (SWE-Mutation); Meta's ACH | 2–4 days per language |
 | 3 | ~~Speculative decoding on the model server~~: **already on** (MTP, 3 draft tokens, 67% accepted, from the server's `/metrics`) | — | done |
 | 4 | **More eval tasks** from more repositories (`eval-mine` on other projects or small public libraries) | Avoid tuning to 4 tasks | small, GPU time to run |
