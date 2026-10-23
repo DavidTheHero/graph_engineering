@@ -84,7 +84,7 @@ class Interfaces(unittest.TestCase):
 
         seeds = []
 
-        def fake_run_task(task, repos, registry, out, index, memory="", profile=None):
+        def fake_run_task(task, repos, registry, out, index, memory="", profile=None, probe=None):
             seeds.append((task["id"], memory))
             return {"task": task["id"], "run": index, "state": "x", "passed": next(results), "rounds": 1, "seconds": 1,
                     "error": None, "prompt_tokens": 1, "completion_tokens": 1, "memory_out": f"learned on {task['id']}"}

@@ -143,6 +143,54 @@ SUBMIT_TESTS = {
 }
 
 
+PROBE = f"""You test a change someone else wrote for a ticket. The change has passed its own tests; your job is to find where
+it does not do what the ticket asks. You can read, search and run commands, and write new test files.
+
+1. Read the ticket, then the changed code's public interface (the names the ticket gives, or the entry points it
+   names). Do not start from the author's tests: they test what the author thought of.
+2. Write tests in new files beside the existing tests, named probe_* (for example tests/test_probe_routing.py or
+   backend/tests/probe-context.test.js), in the repository's test framework. Cover each acceptance criterion and the
+   common variants a user of the code would expect of it (for example default and named exports, async functions,
+   empty input, an error from a dependency, boundaries). Use exactly the interface the ticket specifies.
+3. Run them. For each failure, decide whether the ticket requires the behaviour the test expects. A failure that
+   comes from a mistake in your test, or from behaviour the ticket leaves open, is not a finding: fix or drop it.
+4. Call submit_probes with the failing tests that show the change does not meet the ticket, each with the words of
+   the ticket it rests on. Report nothing about style. If everything you tried passes, submit an empty list.
+
+{UNTRUSTED}"""
+
+SUBMIT_PROBES = {
+    "name": "submit_probes",
+    "description": "Submit the probe tests that fail because the change does not meet the ticket. Ends the session.",
+    "parameters": {"type": "object", "properties": {
+        "probes": {"type": "array", "items": {"type": "object", "properties": {
+            "path": {"type": "string", "description": "The probe test file"},
+            "test": {"type": "string", "description": "The failing test's name"},
+            "requirement": {"type": "string", "description": "The words of the ticket this rests on"},
+            "observed": {"type": "string", "description": "What the change does instead"}},
+            "required": ["path", "test", "requirement", "observed"]}},
+        "tried": {"type": "string", "description": "What you tested that passed"}},
+        "required": ["probes"]},
+}
+
+
+def probe_task(ticket: dict, brief: str, test_command: str, summary: str) -> str:
+    return (f"<project>\n{brief}\n</project>\n\nTicket: {ticket['title']}\n\n{ticket['problem']}\n\n"
+            f"Acceptance criteria:\n{criteria_text(ticket)}\n\nTest command: {test_command}\n\n"
+            f"The author's summary of the change (a claim):\n{summary}\n")
+
+
+def probe_feedback(found: list[dict]) -> str:
+    parts = ["A tester wrote tests from the ticket alone and ran them against your change. These fail:"]
+    for item in found:
+        parts.append(f"\n{item['path']} :: {item.get('test', '')}\nThe ticket: {item.get('requirement', '')}\n"
+                     f"Observed: {item.get('observed', '')}\nOutput:\n{item['output']}\nThe test:\n```\n{item['source']}\n```")
+    parts.append("\nFor each: if the ticket requires that behaviour, fix the code and add an equivalent test to your own tests "
+                 "(the probe files are not in your workspace). If the probe misreads the ticket, leave the code and say why "
+                 "in unresolved when you finish; a person will judge.")
+    return "\n".join(parts)
+
+
 def testwriter_task(ticket: dict, brief: str, test_command: str) -> str:
     return (f"<project>\n{brief}\n</project>\n\nTicket: {ticket['title']}\n\n{ticket['problem']}\n\n"
             f"Acceptance criteria:\n{criteria_text(ticket)}\n\nTest command: {test_command}\n")

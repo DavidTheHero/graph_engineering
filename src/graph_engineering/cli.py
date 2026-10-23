@@ -87,6 +87,8 @@ def main(argv: list[str] | None = None) -> int:
     evals.add_argument("--repeat", type=int, default=1)
     evals.add_argument("--out", help="results directory (default <home>/evals/<timestamp>)")
     evals.add_argument("--profile", choices=["quick", "thorough"], help="override every repository's profile")
+    evals.add_argument("--probe", action=argparse.BooleanOptionalAction, default=None,
+                       help="override every repository's probe setting (quick profile)")
     mine = sub.add_parser("eval-mine", help="turn past commits with tests into validated eval tasks")
     mine.add_argument("repo")
     mine.add_argument("--ref", help="branch to mine (default: the repository's base)")
@@ -158,7 +160,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "eval":
         from .evaluation import run
         out = Path(args.out) if args.out else home / "evals" / time.strftime("%Y%m%d-%H%M%S")
-        summary = run([Path(t) for t in args.tasks], repos, registry(), out, args.repeat, profile=args.profile)
+        summary = run([Path(t) for t in args.tasks], repos, registry(), out, args.repeat, profile=args.profile,
+                      probe=args.probe)
         show(summary)
         print(f"results: {out}")
         return 0 if summary["pass_rate"] == 1 else 1

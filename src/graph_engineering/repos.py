@@ -40,6 +40,7 @@ class Repo:
     profile: str = "quick"                  # one coding agent, the gates, then the person reviews the PR; "thorough" adds
                                             # acceptance tests, a plan and a model review (runs 5-8: no more reliable, 2-3x slower)
     acceptance_tests: bool = True           # thorough profile: tests written from the criteria before coding
+    probe: bool = False                     # quick profile: after the gates, a tester probes the change from the ticket
     max_rounds: int = 3
     coding_steps: int = 80
     run_timeout: int = 300
@@ -76,6 +77,9 @@ class Repo:
 
     def wants_acceptance_tests(self, spec: dict) -> bool:
         return self.acceptance_tests and self.profile_for(spec) != "quick"
+
+    def wants_probe(self, spec: dict) -> bool:
+        return self.probe and self.profile_for(spec) == "quick"
 
     def wants_review(self, spec: dict) -> bool:
         return self.profile_for(spec) != "quick"

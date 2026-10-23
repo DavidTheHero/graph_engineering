@@ -189,6 +189,42 @@ def write_acceptance_tests(ctx: Context, ticket: dict, repo: Repo, work: Path, b
     return record
 
 
+def probe_change(ctx: Context, ticket: dict, repo: Repo, work: Path, commit: str, directory: Path, round_: int,
+                 brief: str, summary: str, dependencies: list[str] | None, timeout: int) -> list[dict]:
+    """After the gates: a tester writes tests from the ticket alone and runs them against the gated result, in a
+    scratch checkout. Runs 9-11: changes that passed every gate missed cases the maintainers tested (`async def`,
+    `export default`, an extra model call). Only failures the harness reproduces come back, as advice the coder may
+    dispute: unlike acceptance tests, a probe cannot lock in a misreading of the ticket."""
+    scratch = directory / "probe"
+    target = gates.checkout(work, commit, scratch / "work", dependencies or [])
+    box = Sandbox(scratch, target, repo.sandbox_env(), trusted=repo.trusted)
+    spec = ticket["spec"]
+    task = prompts.probe_task(spec, brief, repo.test_command, summary)
+    # The coding role: on the review role the prober went to the 9B, whose 16K window cannot hold this work.
+    agent, run, _ = _agent(ctx, ticket, "coding", Workspace(target, box, timeout), READ_WRITE, prompts.SUBMIT_PROBES,
+                           prompts.PROBE, directory / "probe-agent", round_, max_steps=30, nudge_after=15,
+                           prompt_chars=len(task) + len(prompts.PROBE), thinking_budget=CODING_THINKING)
+    outcome = agent.run(task)
+    ctx.store.run_end(run, outcome.status, outcome.usage)
+    if outcome.status == "cancelled":
+        raise Cancelled()
+    found = []
+    for item in (outcome.result or {}).get("probes", []) if outcome.status == "done" else []:
+        path = str(item.get("path", ""))
+        file = target / path
+        if not path or not repo.is_test(path) or not file.is_file() or not file.resolve().is_relative_to(target.resolve()):
+            continue
+        code, out, _ = box.run(repo.runner(path) or repo.test_command, cwd=target, timeout=timeout)
+        if code not in (0, 124):   # the harness reproduces the failure; a claim alone is not a finding
+            found.append({**item, "path": path, "source": clip(file.read_text(errors="replace"), 3000),
+                          "output": clip(failure_lines(out), 1500)})
+    shutil.rmtree(scratch, ignore_errors=True)
+    ctx.store.event(ticket["id"], "probed", "harness", {"round": round_, "status": outcome.status,
+                                                         "reported": len((outcome.result or {}).get("probes", [])),
+                                                         "reproduced": [f["path"] for f in found]})
+    return found
+
+
 def changed_acceptance(work: Path, acceptance: dict, base: str) -> str:
     """How the coder changed the acceptance tests, for the reviewer; empty when they are untouched."""
     changed = [p for p, digest in acceptance.get("files", {}).items()
@@ -397,10 +433,22 @@ def develop(ctx: Context, ticket: dict) -> dict:
 
     if report["passed"] and not repo.wants_review(spec):
         # Quick profile: the gates are the machine check; the person reviews intent in the PR.
-        record["review"] = {"model": None, "verdict": "not reviewed",
-                            "summary": "Quick profile: no model review. The harness gates passed; please review the change."}
-        return accept_round(ctx, ticket, repo, work, directory, round_, root, plan, summary, report, data, record)
-    if report["passed"]:
+        found = []
+        if repo.wants_probe(spec) and not data.get("probed") and round_ < ticket["max_rounds"]:
+            data["probed"] = True   # once per ticket: the probe is advice, not a loop
+            ctx.store.merge_data(ticket["id"], probed=True)
+            try:
+                found = probe_change(ctx, ticket, repo, work, report["commit"], directory, round_, brief, summary,
+                                     data.get("dependencies"), timeout)
+            except Cancelled:
+                return ctx.store.get(ticket["id"])
+            record["probe"] = {"reproduced": [f["path"] for f in found]}
+        if not found:
+            record["review"] = {"model": None, "verdict": "not reviewed",
+                                "summary": "Quick profile: no model review. The harness gates passed; please review the change."}
+            return accept_round(ctx, ticket, repo, work, directory, round_, root, plan, summary, report, data, record)
+        feedback = prompts.probe_feedback(found)
+    elif report["passed"]:
         ctx.renew()
         reviewer_ws = Workspace(work)
         diff_text = gates.diff(work, data["base"], report["commit"])

@@ -222,6 +222,47 @@ class Workflow(unittest.TestCase):
         self.assertNotIn("review", roles)
         self.assertIn("Quick profile: no model review", workflow.pr_body(ticket, 3))
 
+    def test_a_reproduced_probe_failure_sends_the_change_back_once(self):
+        probe_test = ("import unittest\nfrom calc import subtract\n\n\nclass Probe(unittest.TestCase):\n"
+                      "    def test_floats(self):\n        self.assertEqual(subtract(0.5, 0.25), 1)\n")
+        passing = probe_test.replace("Probe", "Fine").replace("1)", "0.25)")
+        probes, coding_tasks = [], []
+
+        def script(role, messages):
+            if role == "intake":
+                return [call("submit_ticket", **SPEC)]
+            if role == "memory":
+                return [call("submit_memory", content="- guide")]
+            if role == "probe":
+                if turns(messages) == 0:
+                    probes.append(messages[1]["content"])
+                steps = [[call("write_file", path="tests/test_probe_sub.py", content=probe_test),
+                          call("write_file", path="tests/test_probe_ok.py", content=passing)],
+                         [call("submit_probes", probes=[
+                             {"path": "tests/test_probe_sub.py", "test": "test_floats", "requirement": "subtract(a, b)",
+                              "observed": "0.25"},
+                             {"path": "tests/test_probe_ok.py", "test": "test_floats", "requirement": "x", "observed": "y"},
+                             {"path": "../outside.py", "test": "t", "requirement": "x", "observed": "y"}])]]
+                return steps[min(turns(messages), 1)]
+            if turns(messages) == 0:
+                coding_tasks.append(messages[1]["content"])
+            return coder()(messages)
+
+        from dataclasses import replace
+        self.repos.save(replace(self.repos.get("calc"), profile="quick", probe=True))
+        ctx = self.context(script)
+        self.store.create("calc", "Please add subtract", "person")
+        ticket = self.drive(ctx, ("awaiting_merge", "failed"), limit=20)
+        self.assertEqual(ticket["state"], "awaiting_merge", ticket["error"])
+        self.assertEqual(len(probes), 1)                        # once per ticket
+        self.assertEqual(len(coding_tasks), 2)
+        self.assertIn("tests/test_probe_sub.py :: test_floats", coding_tasks[1])
+        self.assertIn("subtract(0.5, 0.25), 1", coding_tasks[1])   # the test itself reaches the coder
+        self.assertNotIn("test_probe_ok", coding_tasks[1])        # a reported probe that passes is not a finding
+        self.assertNotIn("outside", coding_tasks[1])
+        event = next(e for e in self.store.events(ticket["id"]) if e["kind"] == "probed")
+        self.assertEqual(event["data"]["reproduced"], ["tests/test_probe_sub.py"])
+
     def test_needs_info_and_answer(self):
         def script(role, messages):
             if "Clarification from the person" in messages[1]["content"]:
