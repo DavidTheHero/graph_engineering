@@ -325,9 +325,29 @@ def accept_round(ctx: Context, ticket: dict, repo: Repo, work: Path, directory: 
     message = f"{spec['title']}\n\n{neutral(summary)}\n\nTicket: {ticket['id']}"
     head = git(work, "commit-tree", report["tree"], "-p", data.get("head") or data["base"], "-m", message).strip()
     git(work, "reset", "-q", "--soft", head)
+    data.pop("fallback", None)
     data.update(head=head, summary=summary, round_dir=str(directory), gates=record["gates"], review=record["review"],
                 publish=repo.auto_publish, rounds=data.get("rounds", []) + [record], feedback=None)
     return _move(ctx, ticket, "ready", "ready", {"round": round_, "head": head}, round=round_, data=data, error=None)
+
+
+def accept_fallback(ctx: Context, ticket: dict, repo: Repo, work: Path, round_: int, root: Path, plan: dict | None,
+                    data: dict, failed: dict) -> dict:
+    """The round that answered a probe did not pass the gates: accept the earlier gated result instead, and tell the
+    person which probes it still fails."""
+    fallback = data.pop("fallback")
+    git(work, "read-tree", "-u", "--reset", fallback["report"]["tree"])
+    git(work, "clean", "-fdq")   # ignored dependency directories stay
+    probes = "\n".join(f"- {p['path']} :: {p['test']} ({p['requirement']})" for p in fallback["probes"])
+    record = {**fallback["record"], "review": {
+        "model": None, "verdict": "not reviewed",
+        "summary": ("Quick profile: no model review. The harness gates passed. A tester's tests, written from the ticket, "
+                    f"fail on this change:\n{probes}\nThe attempt to address them (round {round_}) did not pass the gates, "
+                    f"so this is the round {fallback['round']} result. Please check these cases.")}}
+    data["rounds"] = data.get("rounds", []) + [failed]
+    ctx.store.event(ticket["id"], "probe_fallback", "harness", {"round": round_, "accepted_round": fallback["round"]})
+    return accept_round(ctx, ticket, repo, work, Path(fallback["dir"]), round_, root, plan, fallback["summary"],
+                        fallback["report"], data, record)
 
 
 def base_ref(repo: Repo, data: dict) -> str:
@@ -448,6 +468,12 @@ def develop(ctx: Context, ticket: dict) -> dict:
                                 "summary": "Quick profile: no model review. The harness gates passed; please review the change."}
             return accept_round(ctx, ticket, repo, work, directory, round_, root, plan, summary, report, data, record)
         feedback = prompts.probe_feedback(found)
+        # Run 12: the round after a probe broke the gates and the ticket failed, losing a result that had passed
+        # them. The probe may only improve a result: keep this one to fall back on.
+        data["fallback"] = {"round": round_, "dir": str(directory), "summary": summary, "record": record,
+                            "report": {"tree": report["tree"], "changed": report["changed"]},
+                            "probes": [{"path": f["path"], "test": f.get("test", ""), "requirement": f.get("requirement", "")}
+                                       for f in found]}
     elif report["passed"]:
         ctx.renew()
         reviewer_ws = Workspace(work)
@@ -489,6 +515,8 @@ def develop(ctx: Context, ticket: dict) -> dict:
             f"- {f.get('file')}: {f.get('problem')} Fix: {f.get('fix')}" for f in (review.result or {}).get("findings", [])) \
             if verdict == "changes" else f"The review did not complete ({review.status}); make sure the change is clear and complete."
     else:
+        if data.get("fallback"):
+            return accept_fallback(ctx, ticket, repo, work, round_, root, plan, data, record)
         feedback = gates.failures(report)
     data.update(feedback=clip(feedback, FEEDBACK_CHARS), rounds=data.get("rounds", []) + [record])
     if round_ >= ticket["max_rounds"]:

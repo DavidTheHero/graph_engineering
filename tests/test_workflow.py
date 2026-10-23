@@ -263,6 +263,38 @@ class Workflow(unittest.TestCase):
         event = next(e for e in self.store.events(ticket["id"]) if e["kind"] == "probed")
         self.assertEqual(event["data"]["reproduced"], ["tests/test_probe_sub.py"])
 
+    def test_a_probe_fix_that_breaks_the_gates_falls_back_to_the_gated_result(self):
+        """Run 12: answering a probe broke the gates in the last round, and a result that had passed was lost."""
+        probe_test = ("import unittest\nfrom calc import subtract\n\n\nclass Probe(unittest.TestCase):\n"
+                      "    def test_floats(self):\n        self.assertEqual(subtract(0.5, 0.25), 1)\n")
+
+        def script(role, messages):
+            if role == "intake":
+                return [call("submit_ticket", **SPEC)]
+            if role == "memory":
+                return [call("submit_memory", content="- guide")]
+            if role == "probe":
+                steps = [[call("write_file", path="tests/test_probe_sub.py", content=probe_test)],
+                         [call("submit_probes", probes=[{"path": "tests/test_probe_sub.py", "test": "test_floats",
+                                                          "requirement": "subtract(a, b)", "observed": "0.25"}])]]
+                return steps[min(turns(messages), 1)]
+            if "A tester wrote tests" in messages[1]["content"]:   # the answer to the probe breaks add
+                steps = [[call("write_file", path="calc.py", content="def subtract(a, b):\n    return 1\n")],
+                         [call("finish", summary="Changed subtract", coverage=[],
+                               evidence=[{"command": TEST_COMMAND, "exit_code": 1}], unresolved="add broke")]]
+                return steps[min(turns(messages), 1)]
+            return coder()(messages)
+
+        from dataclasses import replace
+        self.repos.save(replace(self.repos.get("calc"), profile="quick", probe=True))
+        ctx = self.context(script)
+        self.store.create("calc", "Please add subtract", "person")
+        ticket = self.drive(ctx, ("awaiting_merge", "failed"), limit=20)
+        self.assertEqual(ticket["state"], "awaiting_merge", ticket["error"])
+        self.assertEqual(git(self.source, "show", f"{ticket['data']['head']}:calc.py"), SUB_SOURCE)
+        self.assertIn("tests/test_probe_sub.py :: test_floats", workflow.pr_body(ticket, 3))
+        self.assertIn("probe_fallback", [e["kind"] for e in self.store.events(ticket["id"])])
+
     def test_needs_info_and_answer(self):
         def script(role, messages):
             if "Clarification from the person" in messages[1]["content"]:
