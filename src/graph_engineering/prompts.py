@@ -320,8 +320,8 @@ def coding_task(ticket: dict, repo: dict, feedback: str | None = None, brief: st
             f"Test command: {repo['test_command']}\n" + (f"Build command: {repo['build_command']}\n" if repo.get("build_command") else ""))
     if repo.get("base_failures"):
         text += ("\nBefore any change, the test command already fails on the base revision:\n<base_failures>\n"
-                 f"{repo['base_failures']}\n</base_failures>\nThe gates require the whole suite to pass. Fix these only if the "
-                 "ticket covers them; otherwise do not spend steps on them, and name them in unresolved when you finish.\n")
+                 f"{repo['base_failures']}\n</base_failures>\nThe gates accept these failures but no new one. Fix them only "
+                 "if the ticket covers them; otherwise do not spend steps on them, and name them in unresolved when you finish.\n")
     if acceptance:
         text += ("\nAcceptance tests were written from the criteria before you started. Make them pass; you may not change "
                  "them (the harness checks): " + ", ".join(acceptance) + "\n")
