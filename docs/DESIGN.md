@@ -226,6 +226,10 @@ Without the append-only change, the prefix-cache hit rate was 83%.
 9. **No memory across tickets.** Each ticket rediscovers the repository: test conventions, layout, where
    things live.
 10. **Windows.** No sandbox mechanism, so only `trusted` repositories run there.
+11. **A base whose suite already fails cannot pass.** The suite gate requires every test to pass, so a
+    repository with failing or environment-dependent tests on its base blocks every ticket. The coder is told
+    what already fails; the gate should compare failures before and after (no new failures, the new tests
+    green) instead. Seen in run 9, where nested sandboxing made 23 of this project's own tests fail.
 
 ## What is missing, in order of expected value
 
