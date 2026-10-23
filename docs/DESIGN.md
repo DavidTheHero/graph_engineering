@@ -41,6 +41,14 @@ On #20 the thorough profile's own acceptance test encoded a misreading of the sp
 `tool_search`), and the coder may not change acceptance tests, so the misreading was locked in. Acceptance
 tests written before coding are only as good as the test writer's reading; they need a way to be disputed.
 
+Run 12 added the **probe** to the quick profile (after the gates, a tester writes tests from the ticket and the
+harness reproduces each reported failure): on the same four tasks it found two real defects the gates had passed
+(`tool_search` missing from `allowed_tools`; a leaf file with the ticket's words ranked below a central one), but
+the hidden-test pass rate stayed 2 of 4 and the time doubled (3.4 h against 1.7 h). On #20 the round that answered
+the probe broke the gates in the last round and the ticket failed; the probe now falls back to the earlier gated
+result and names the failing probes in the PR. The probe stays opt-in (`probe: true`, `eval --probe`) until more
+trials show it pays.
+
 So the **quick profile is the default**; the thorough profile stays available per repository or ticket. Run 9
 measures the quick profile on 8 tasks from two repositories (this project's own history added). The old
 25-node pipeline never completed GE-FDD2275A; this design completes it in each trial.
