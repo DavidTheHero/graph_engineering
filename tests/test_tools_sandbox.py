@@ -76,6 +76,16 @@ class Confinement(unittest.TestCase):
         code, _, _ = self.sandbox.run("exit 3 | tail -1")
         self.assertNotEqual(code, 0)
 
+    def test_a_background_process_does_not_hold_the_command_open(self):
+        """Run 9: `server &` kept the output pipe open, so every such command ran to the timeout."""
+        code, out, seconds = self.sandbox.run("sleep 30 & echo started", timeout=20)
+        self.assertEqual(code, 0)
+        self.assertIn("started", out)
+        self.assertIn("background processes this command started were stopped", out)
+        self.assertLess(seconds, 10)
+        code, out, _ = self.sandbox.run("echo plain")
+        self.assertEqual(out.strip(), "plain")   # nothing left behind, nothing said
+
     def test_a_timeout_is_reported_as_a_probable_hang(self):
         result = Workspace(self.sandbox.work, self.sandbox, run_timeout=1).run("sleep 5")
         self.assertTrue(result.startswith("exit code 124"))

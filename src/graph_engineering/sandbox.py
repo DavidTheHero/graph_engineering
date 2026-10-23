@@ -12,6 +12,7 @@ import platform
 import shutil
 import signal
 import subprocess
+import threading
 import time
 
 SECRETS = (".ssh", ".config/gh", ".aws", ".azure", ".config/gcloud", ".docker", ".kube", ".gnupg", ".netrc",
@@ -99,18 +100,32 @@ class Sandbox:
         return shell
 
     def run(self, command: str, cwd: Path | None = None, timeout: int = 300, network: bool = False) -> tuple[int, str, float]:
+        """Run ``command`` and return (exit code, output, seconds). The command ends when its shell exits: anything it
+        left running in the background is stopped then, so `npm start &` does not hold the output open until the
+        timeout (run 9: four 138-second timeouts on one ticket) or keep a port busy for later commands."""
         started = time.time()
         proc = subprocess.Popen(self.command(command, network), cwd=cwd or self.work, env=self.env, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
+        chunks: list[bytes] = []
+        reader = threading.Thread(target=lambda: chunks.extend(iter(lambda: proc.stdout.read1(65536), b"")), daemon=True)
+        reader.start()
+        note = b""
         try:
-            out, _ = proc.communicate(timeout=timeout)
-            code = proc.returncode
+            code = proc.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
+            code, note = 124, f"\n[killed after {timeout}s]".encode()
+        reader.join(timeout=1)
+        try:
+            os.killpg(proc.pid, 0)            # raises when nothing of this command's session is left
             os.killpg(proc.pid, signal.SIGKILL)
-            out, _ = proc.communicate()
-            out += f"\n[killed after {timeout}s]".encode()
-            code = 124
-        return code, out.decode("utf-8", "replace"), time.time() - started
+            if code != 124:
+                note = (b"\n[background processes this command started were stopped when it ended; start and use a "
+                        b"server within one command]")
+        except (ProcessLookupError, PermissionError):
+            pass
+        reader.join(timeout=5)
+        proc.wait()
+        return code, (b"".join(chunks) + note).decode("utf-8", "replace"), time.time() - started
 
 
 def git(cwd: Path, *args: str, check: bool = True) -> str:
