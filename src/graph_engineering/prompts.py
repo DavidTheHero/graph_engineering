@@ -48,6 +48,10 @@ Work like this:
 2. Write tests that express the acceptance criteria, in the existing test files or new files beside them.
    Run them and confirm they fail for the right reason: missing behaviour, not a typo or a broken import of your own.
    Test real behaviour: do not stub out the code under test.
+   Cover each case the ticket names and the common variants a user of the code would expect of it (for example
+   default and named exports, async functions, empty input, an error from a dependency): the maintainers' own tests
+   go beyond the examples given. Where the ticket specifies an interface (names, parameters, return shapes, message
+   formats), use exactly that; other code depends on it.
 3. Implement the change. Keep it focused on the ticket; no unrelated refactors or formatting.
 4. Run your tests, then the full test suite, then the build. Fix what breaks. Never weaken, skip or delete
    existing tests to get green.
