@@ -176,8 +176,8 @@ class Workspace:
         if self.sandbox is None:
             return "Error: commands are not available in this session."
         code, out, seconds = self.sandbox.run(command, timeout=self.run_timeout)
-        hint = (f"\n[timed out after {self.run_timeout}s: something probably hangs (a server, timer or connection left open, or a promise never resolved). Run one test file to find "
-                "it.]") if code == 124 else ""
+        hint = (f"\n[timed out after {self.run_timeout}s: something probably hangs (a server, timer or connection left "
+                "open, or a promise never resolved). Run one test file to find it.]") if code == 124 else ""
         return f"exit code {code} ({seconds:.0f}s){hint}\n{clip(out, OUTPUT_CHARS)}"
 
 
