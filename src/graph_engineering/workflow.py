@@ -71,6 +71,13 @@ def _agent(ctx: Context, ticket: dict, role: str, workspace: Workspace, tools, f
 
 
 CODING_THINKING = 2048
+FAILURE = re.compile(r"✖|✗|FAIL|Error|assert|expected|actual|not ok", re.I)
+
+
+def failure_lines(detail: str, limit: int = 12) -> str:
+    """The lines that say why a check failed, for the ticket's history; the full output stays in gates.json."""
+    lines = list(dict.fromkeys(l.strip() for l in detail.splitlines() if FAILURE.search(l) and not l.strip().startswith("at ")))
+    return "\n".join(lines[:limit]) if lines else detail[-600:]
 
 
 def run_timeout(repo, suite_seconds: int | None) -> int:
@@ -380,7 +387,9 @@ def develop(ctx: Context, ticket: dict) -> dict:
                              allow_test_config=bool(spec.get("allow_test_config")))
     (directory / "gates.json").write_text(json.dumps(report, indent=1))
     record["gates"] = [{"name": c["name"], "ok": c["ok"]} for c in report["checks"]]
-    ctx.store.event(ticket["id"], "gates", "harness", {"round": round_, "passed": report["passed"], "checks": record["gates"]})
+    ctx.store.event(ticket["id"], "gates", "harness", {"round": round_, "passed": report["passed"], "checks": record["gates"],
+                                                        "failures": {c["name"]: failure_lines(c.get("detail") or "")
+                                                                     for c in report["checks"] if not c["ok"]}})
     summary = (outcome.result or {}).get("summary") or f"(the coding agent stopped without a summary: {outcome.status})"
 
     if report["passed"] and not repo.wants_review(spec):
