@@ -236,7 +236,9 @@ class Agent:
                     reply = chat(self.model, messages, specs, tool_choice="required", think=False)
                     force_action = False
                 else:
-                    reply = chat(self.model, messages, specs, budget=self.thinking_budget)
+                    # A budget of 0 turns thinking off (Aider: Qwen3 edits as well or better without it).
+                    reply = chat(self.model, messages, specs, budget=self.thinking_budget,
+                                 think=False if self.thinking_budget == 0 else None)
                 for key in outcome.usage:
                     outcome.usage[key] += reply.usage.get(key, 0)
                 message = {"role": "assistant", "content": reply.content}

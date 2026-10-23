@@ -243,3 +243,12 @@ class ThinkingBudget(unittest.TestCase):
         first, second = llm.requests
         self.assertEqual(first["thinking_token_budget"], 6144)
         self.assertNotIn("thinking_token_budget", second)   # the forced turn runs without thinking
+
+    def test_a_budget_of_zero_turns_thinking_off(self):
+        llm = FakeLLM(lambda role, messages: [call("finish", summary="s", coverage=[])])
+        self.addCleanup(llm.close)
+        model = llm.model()
+        model.think = True
+        Agent(model, Workspace(python_repo(temp_dir(self))), READ_WRITE[:3], FINISH, "s", thinking_budget=0).run("task")
+        self.assertFalse(llm.requests[0]["chat_template_kwargs"]["enable_thinking"])
+        self.assertNotIn("thinking_token_budget", llm.requests[0])

@@ -26,13 +26,14 @@ from .workflow import Context, accept, develop
 
 
 def run_task(task: dict, repos: Repos, registry: Registry, out: Path, index: int, memory: str = "",
-             profile: str | None = None, probe: bool | None = None) -> dict:
+             profile: str | None = None, probe: bool | None = None, coding_thinking: int | None = None) -> dict:
     home = (out / f"{task['id']}-{index}").resolve()
     if home.exists():
         shutil.rmtree(home)
     repo = repos.get(task["repo"])
     repo = replace(repo, auto_accept=False, auto_publish=False, profile=profile or repo.profile,
                    probe=repo.probe if probe is None else probe,
+                   coding_thinking=repo.coding_thinking if coding_thinking is None else coding_thinking,
                    max_rounds=task.get("max_rounds", repo.max_rounds))
     local = Repos(home)
     (local.dir / f"{repo.name}.json").write_text(json.dumps(repo.public()))
@@ -90,7 +91,7 @@ def hidden(spec: dict, repo, root: Path) -> dict:
 
 
 def run(tasks: list[Path], repos: Repos, registry: Registry, out: Path, repeat: int = 1, log=print,
-        profile: str | None = None, probe: bool | None = None) -> dict:
+        profile: str | None = None, probe: bool | None = None, coding_thinking: int | None = None) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     results = []
     loaded = [json.loads(Path(path).read_text()) for path in tasks]
@@ -102,7 +103,7 @@ def run(tasks: list[Path], repos: Repos, registry: Registry, out: Path, repeat: 
             source, text = learned.get(task["repo"], ("", ""))
             memory = text if source and source != task["id"] else ""
             log(f"{task['id']} run {index}/{repeat} ..." + (f" (memory from {source})" if memory else ""))
-            result = run_task(task, repos, registry, out, index, memory, profile, probe)
+            result = run_task(task, repos, registry, out, index, memory, profile, probe, coding_thinking)
             if result.get("memory_out"):
                 learned[task["repo"]] = (task["id"], result["memory_out"])
             results.append(result)

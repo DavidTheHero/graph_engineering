@@ -428,7 +428,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
                                notes=root / "notes.md", explorer=explorer, evidence=True, verify=repo.test_command,
                                # Run 7: 75% of the coder's output was reasoning, most of it in a few steps that ran to
                                # the 4,096 cap; Aider found Qwen3 edits as well or better without thinking.
-                               thinking_budget=CODING_THINKING)
+                               thinking_budget=repo.coding_thinking)
     outcome = agent.run(prompts.coding_task(spec, {"test_command": repo.test_command, "build_command": repo.build_command,
                                                    "base_failures": data.get("base_failures", "")},
                                             data.get("feedback"), brief, plan or None, list(acceptance.get("files", {}))))

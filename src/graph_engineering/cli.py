@@ -89,6 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     evals.add_argument("--profile", choices=["quick", "thorough"], help="override every repository's profile")
     evals.add_argument("--probe", action=argparse.BooleanOptionalAction, default=None,
                        help="override every repository's probe setting (quick profile)")
+    evals.add_argument("--coding-thinking", type=int, help="the coder's reasoning tokens per turn; 0 turns thinking off")
     mine = sub.add_parser("eval-mine", help="turn past commits with tests into validated eval tasks")
     mine.add_argument("repo")
     mine.add_argument("--ref", help="branch to mine (default: the repository's base)")
@@ -161,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
         from .evaluation import run
         out = Path(args.out) if args.out else home / "evals" / time.strftime("%Y%m%d-%H%M%S")
         summary = run([Path(t) for t in args.tasks], repos, registry(), out, args.repeat, profile=args.profile,
-                      probe=args.probe)
+                      probe=args.probe, coding_thinking=args.coding_thinking)
         show(summary)
         print(f"results: {out}")
         return 0 if summary["pass_rate"] == 1 else 1
