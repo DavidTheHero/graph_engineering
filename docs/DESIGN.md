@@ -26,6 +26,21 @@ before the session ended:
 | one-command-start | 2,483 s, 2,868 s | 2,629 s | 2,586 s |
 | #20 tool search | 2,552 s (2 rounds) | out of steps | — |
 
+Runs 10 and 11 compared the profiles on the four hardest tasks (one trial each, the same commit apart from a
+coding-prompt change, the same specs):
+
+| Task | Quick (run 11) | Thorough (run 10) |
+|---|---|---|
+| #20 tool search | 1,716 s, hidden: 1 of 4 tests fail | 7,641 s, hidden: 2 of 4 fail |
+| Repository map (this project) | 1,098 s, hidden: misses `async def` | 2,750 s, hidden: misses `export default` |
+| Routing (this project) | 453 s, hidden pass | 1,776 s, hidden pass |
+| Result cap (this project) | 2,782 s, hidden pass | 5,205 s, hidden pass |
+| Total | 1.7 h, 2 of 4 | 4.8 h, 2 of 4 |
+
+On #20 the thorough profile's own acceptance test encoded a misreading of the spec (it required `define` for
+`tool_search`), and the coder may not change acceptance tests, so the misreading was locked in. Acceptance
+tests written before coding are only as good as the test writer's reading; they need a way to be disputed.
+
 So the **quick profile is the default**; the thorough profile stays available per repository or ticket. Run 9
 measures the quick profile on 8 tasks from two repositories (this project's own history added). The old
 25-node pipeline never completed GE-FDD2275A; this design completes it in each trial.
