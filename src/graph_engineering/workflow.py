@@ -70,6 +70,9 @@ def _agent(ctx: Context, ticket: dict, role: str, workspace: Workspace, tools, f
     return agent, run, model
 
 
+CODING_THINKING = 2048
+
+
 def run_timeout(repo, suite_seconds: int | None) -> int:
     """An agent's command limit: a few times the base suite's time, so a hang shows in a minute, not five."""
     if suite_seconds is None:
@@ -357,7 +360,10 @@ def develop(ctx: Context, ticket: dict) -> dict:
                                 + plan_record["concerns"]).strip()
     agent, run, coder = _agent(ctx, ticket, "coding", Workspace(work, sandbox, timeout), READ_WRITE, prompts.FINISH,
                                prompts.CODING, directory / "coding", round_, max_steps=repo.coding_steps, nudge_after=15,
-                               notes=root / "notes.md", explorer=explorer, evidence=True, verify=repo.test_command)
+                               notes=root / "notes.md", explorer=explorer, evidence=True, verify=repo.test_command,
+                               # Run 7: 75% of the coder's output was reasoning, most of it in a few steps that ran to
+                               # the 4,096 cap; Aider found Qwen3 edits as well or better without thinking.
+                               thinking_budget=CODING_THINKING)
     outcome = agent.run(prompts.coding_task(spec, {"test_command": repo.test_command, "build_command": repo.build_command},
                                             data.get("feedback"), brief, plan or None, list(acceptance.get("files", {}))))
     ctx.store.run_end(run, outcome.status, outcome.usage)

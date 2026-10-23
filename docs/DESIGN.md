@@ -88,7 +88,7 @@ Each measure below came from a failure in a live transcript:
 | Explored for many steps without editing | nudge to plan and change, repeated every 15 steps |
 | Reviewers read until the budget ran out, ignoring warnings | warning 3 steps before the end; **the last step offers only the finish tool** |
 | `finish` was refused for stale evidence, costing turns | the harness runs the test command itself and accepts if it passes |
-| Uncapped reasoning used every output token and gave no answer | **a thinking budget per agent, enforced by vLLM** (`thinking_token_budget`): planning 6,144, coding, review and intake 4,096, explore and memory 2,048 |
+| Uncapped reasoning used every output token and gave no answer | **a thinking budget per agent, enforced by vLLM** (`thinking_token_budget`): planning 6,144, review and intake 4,096, coding, explore and memory 2,048 (coding was 4,096 until run 7: 75% of its output was reasoning) |
 | Broken edits were found steps later by a failing suite | **an edit that breaks syntax is rolled back** with the error (Python, JSON, JavaScript); SWE-agent measured 3 points for this |
 | The 9B explorer's two whole-file reads overflowed its budget by themselves; it compacted, re-read them and compacted again every step | **one tool result takes at most a quarter of the working budget**, cut at a line with where to read on; **compacting on two steps in a row asks for the final answer**; the explorer gets a slim brief |
 | `npm test 2>&1 \| tail -25` reported tail's exit code, so a failing suite read as passing | commands run under **`bash -o pipefail`** |
