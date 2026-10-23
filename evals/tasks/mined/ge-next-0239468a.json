@@ -1,0 +1,23 @@
+{
+  "id": "ge-next-0239468a",
+  "source": "ge-next commit 0239468ad8bd",
+  "repo": "ge-next",
+  "base": "0239468ad8bdb34aa1115a81d380cd00d0bd4c63^",
+  "reference": "0239468ad8bdb34aa1115a81d380cd00d0bd4c63",
+  "spec": {
+    "title": "A slim opening brief for the explore sub-agent",
+    "kind": "feat",
+    "problem": "The explore sub-agent runs on the 9B model with a 16K window. Its opening brief (repository memory, the project's agent guide such as AGENTS.md, the layout and the repository map) takes about half of its working budget before it reads anything. `prompts.project_brief(root, memory, query)` should accept a keyword argument `slim: bool = False`. A slim brief leaves out the agent guide (AGENTS.md / CLAUDE.md / CONTRIBUTING.md / README) entirely, keeps only a third of the repository memory, and uses a smaller repository-map budget. The explorer in workflow.py should use the slim brief; every other agent keeps the full one.",
+    "acceptance_criteria": [
+      "project_brief(..., slim=True) does not include the agent guide's text",
+      "With 4,000 characters of memory and a query, the slim brief is more than 2,000 characters shorter than the full brief",
+      "The explore sub-agent's brief is slim; the default (slim=False) brief is unchanged"
+    ]
+  },
+  "hidden_tests": {
+    "files": {
+      "tests/test_context.py": "@tests/test_context.py@0239468ad8bdb34aa1115a81d380cd00d0bd4c63@"
+    },
+    "command": "python3 -m unittest tests/test_context.py"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "id": "ge-next-59e1dedd",
+  "source": "ge-next commit 59e1deddd9d8",
+  "repo": "ge-next",
+  "base": "59e1deddd9d8df8c6e4d540fc9d2fd1aed2dc14e^",
+  "reference": "59e1deddd9d8df8c6e4d540fc9d2fd1aed2dc14e",
+  "spec": {
+    "title": "Route each role to a reachable model whose window fits the prompt",
+    "kind": "feat",
+    "problem": "`Registry.for_role(role, exclude=..., prompt_chars=...)` in llm.py should pick, in the role's configured order, the first model that is reachable (`registry.reachable(model)` returns True; tests replace this method) and whose context window fits the prompt: a model fits when `prompt_chars / 3` is below half of `context - max_output`. Models named in `exclude` are skipped when another candidate fits (so a reviewer can prefer a model other than the coder's), but if no other model fits, an excluded model that fits is still returned. The explore role should be configured to prefer the 9B model.",
+    "acceptance_criteria": [
+      "for_role returns the first reachable model in the role's order whose window fits prompt_chars",
+      "An unreachable model is skipped",
+      "exclude is honoured when another model fits, and ignored when nothing else fits",
+      "A prompt too large for the small model's 16K window goes to the large model"
+    ]
+  },
+  "hidden_tests": {
+    "files": {
+      "tests/test_context.py": "@tests/test_context.py@59e1deddd9d8df8c6e4d540fc9d2fd1aed2dc14e@"
+    },
+    "command": "python3 -m unittest tests/test_context.py"
+  }
+}
