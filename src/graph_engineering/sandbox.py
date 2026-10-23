@@ -5,6 +5,7 @@ and the network is closed except for localhost (setup may open it to install dep
 """
 from __future__ import annotations
 
+import functools
 import os
 from pathlib import Path
 import platform
@@ -29,13 +30,20 @@ def clip(text: str, limit: int) -> str:
     return text[:head] + f"\n[... {len(text) - limit} characters omitted ...]\n" + text[-(limit - head):]
 
 
+@functools.cache
 def available() -> str | None:
-    """The sandbox mechanism on this host, or None."""
+    """The sandbox mechanism on this host, or None. It is tried once, not just found: inside another sandbox (an
+    eval of this project's own history runs its tests in one) sandbox-exec exists but cannot apply a profile."""
     if platform.system() == "Darwin" and shutil.which("sandbox-exec"):
-        return "sandbox-exec"
-    if platform.system() == "Linux" and shutil.which("bwrap"):
-        return "bwrap"
-    return None
+        probe, mechanism = ["sandbox-exec", "-p", "(version 1)(allow default)", "/usr/bin/true"], "sandbox-exec"
+    elif platform.system() == "Linux" and shutil.which("bwrap"):
+        probe, mechanism = ["bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "/bin/true"], "bwrap"
+    else:
+        return None
+    try:
+        return mechanism if subprocess.run(probe, capture_output=True, timeout=20).returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired):
+        return None
 
 
 class Sandbox:
