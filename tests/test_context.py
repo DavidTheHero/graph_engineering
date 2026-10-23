@@ -132,6 +132,23 @@ class Context(unittest.TestCase):
         self.assertIn(f"{last}|", result)
         self.assertEqual(list(agent.reads.values())[0][2], last)
 
+    def test_a_long_command_output_keeps_its_end(self):
+        from graph_engineering.tools import READ_WRITE
+
+        class Box:
+            def run(self, command, timeout=None):
+                return 1, "start\n" + "x\n" * 3000 + "FAILED (failures=2)\n", 1.0
+
+        steps = iter([[call("run", command="make test")], [call("finish", summary="s", coverage=[])]])
+        llm = FakeLLM(lambda r, m: next(steps))
+        self.addCleanup(llm.close)
+        agent = Agent(llm.model(), Workspace(self.repo, Box()), READ_WRITE, FINISH, "system", working_tokens=8000)
+        agent.run("task")
+        result = next(m for m in llm.requests[-1]["messages"] if m["role"] == "tool")["content"]
+        self.assertTrue(result.startswith("exit code 1"))
+        self.assertIn("FAILED (failures=2)", result)
+        self.assertLessEqual(len(result), agent.result_chars)
+
     def test_compacting_on_consecutive_steps_asks_for_the_final_answer(self):
         """Live failure: the explorer compacted, re-read the same files, and compacted again until it ran out of steps."""
         names = ("a.txt", "b.txt", "c.txt", "d.txt", "e.txt")

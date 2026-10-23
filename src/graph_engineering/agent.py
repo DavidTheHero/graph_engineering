@@ -24,6 +24,7 @@ import time
 from typing import Callable
 
 from .llm import LLMError, Model, chat
+from .sandbox import clip
 from .tools import Workspace
 
 CHARS_PER_TOKEN = 3.5      # measured 3.71 on the 27B with this code (JSON-escaped messages); a little margin
@@ -373,7 +374,11 @@ class Agent:
         result = self.workspace.call(name, args, allowed)
         shown = None
         if len(result) > self.result_chars:
-            result, shown = self.fit(result)
+            if name == "run":   # a command's verdict is at the end: keep the exit code line and the tail
+                first, _, rest = result.partition("\n")
+                result = first + "\n" + clip(rest, self.result_chars - len(first) - 80)
+            else:
+                result, shown = self.fit(result)
         if name == "read_file" and not result.startswith("Error"):
             start = int(args.get("start_line") or 1)
             total = re.match(r".*? \((\d+) lines\)", result)
