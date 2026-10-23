@@ -90,6 +90,9 @@ class Confinement(unittest.TestCase):
         result = Workspace(self.sandbox.work, self.sandbox, run_timeout=1).run("sleep 5")
         self.assertTrue(result.startswith("exit code 124"))
         self.assertIn("probably hangs", result)
+        piped = Workspace(self.sandbox.work, self.sandbox, run_timeout=1).run("sleep 5 | tail -3")
+        self.assertIn("prints nothing when the command is killed", piped)
+        self.assertNotIn("prints nothing", result)
 
     def test_the_agent_command_limit_follows_the_base_suite(self):
         from graph_engineering.repos import Repo

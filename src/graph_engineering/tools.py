@@ -178,6 +178,12 @@ class Workspace:
         code, out, seconds = self.sandbox.run(command, timeout=self.run_timeout)
         hint = (f"\n[timed out after {self.run_timeout}s: something probably hangs (a server, timer or connection left "
                 "open, or a promise never resolved). Run one test file to find it.]") if code == 124 else ""
+        if code == 124 and re.search(r"\|\s*(tail|head|grep)\b", command):
+            # Run 13: `node --test ... | tail -50` was killed three times with no output at all, so the coder never
+            # saw which test hung and ran the same command again.
+            hint += ("\n[the output went through a pipe, which prints nothing when the command is killed. Run it without "
+                     "the pipe, or give the test runner its own per-test limit (node --test --test-timeout=10000, "
+                     "pytest --timeout=10 or -x) so the hanging test is named.]")
         return f"exit code {code} ({seconds:.0f}s){hint}\n{clip(out, OUTPUT_CHARS)}"
 
 
