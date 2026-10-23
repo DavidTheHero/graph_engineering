@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import platform
+import re
 import shutil
 import subprocess
 
@@ -124,12 +125,28 @@ def run_gates(repo: Repo, work: Path, base: str, sandbox: Sandbox, scratch: Path
             pure = checkout(work, base, scratch / "base", dependencies)
             code_pure, out_pure, _ = sandbox.run(repo.test_command, cwd=pure, timeout=repo.run_timeout * 3)
             code_before, out_before, _ = sandbox.run(repo.test_command, cwd=before, timeout=repo.run_timeout * 3)
-            checks.append(check("new tests fail on base", code_pure == 0 and code_before != 0,
+            added = (failed_tests(out_before) or set()) - (failed_tests(out_pure) or set())
+            checks.append(check("new tests fail on base", code_before != 0 and (code_pure == 0 or bool(added)),
                                 f"base alone: exit {code_pure}\n{clip(out_pure, LOG_CHARS // 2)}\n\n{', '.join(whole_suite)} on the base "
                                 f"source: exit {code_before}\n{clip(out_before, LOG_CHARS)}"))
             shutil.rmtree(pure, ignore_errors=True)
     code, out, seconds = sandbox.run(repo.test_command, cwd=result, timeout=repo.run_timeout * 3)
-    checks.append(check("test suite passes", code == 0, f"{repo.test_command}: exit {code} in {seconds:.0f}s\n{clip(out, LOG_CHARS)}"))
+    detail = f"{repo.test_command}: exit {code} in {seconds:.0f}s\n{clip(out, LOG_CHARS)}"
+    ok = code == 0
+    if not ok and code != 124:
+        # A base that already fails would block every ticket: pass only when every failing test already failed on the
+        # base. When the failing tests cannot be named, the gate stays strict.
+        pure = checkout(work, base, scratch / "base", dependencies)
+        code_base, out_base, _ = sandbox.run(repo.test_command, cwd=pure, timeout=repo.run_timeout * 3)
+        shutil.rmtree(pure, ignore_errors=True)
+        now, then = failed_tests(out), failed_tests(out_base)
+        if code_base != 0 and now and then is not None and now <= then:
+            ok = True
+            detail = (f"{repo.test_command}: exit {code}; every failing test already failed on the base, so none is new:\n"
+                      + "\n".join(sorted(now)))
+        elif code_base != 0 and now and then is not None:
+            detail += "\n\nNew failures (not failing on the base):\n" + "\n".join(sorted(now - then))
+    checks.append(check("test suite passes", ok, detail))
     if repo.build_command:
         code, out, seconds = sandbox.run(repo.build_command, cwd=result, timeout=repo.run_timeout * 2)
         checks.append(check("build passes", code == 0, f"{repo.build_command}: exit {code} in {seconds:.0f}s\n{clip(out, LOG_CHARS)}"))
@@ -139,6 +156,20 @@ def run_gates(repo: Repo, work: Path, base: str, sandbox: Sandbox, scratch: Path
         shutil.rmtree(scratch / directory, ignore_errors=True)
     return {"base": base, "commit": commit, "tree": git(work, "rev-parse", f"{commit}^{{tree}}").strip(), "changed": rows,
             "tests": [p for _, p in tests], "sources": sources, "checks": checks, "passed": all(c["ok"] for c in checks)}
+
+
+FAILED_TEST = [
+    re.compile(r"^(?:FAIL|ERROR): \S+ \(([\w.]+)\)", re.M),                 # unittest
+    re.compile(r"^(?:FAILED|ERROR) (\S+::\S+)", re.M),                        # pytest -rA / short summary
+    re.compile(r"^\s*[✖✕×] (.+?)(?: \([\d.]+ ?m?s\))?$", re.M),               # node --test, jest, vitest
+]
+
+
+def failed_tests(output: str) -> set[str] | None:
+    """The failing tests a run names, or None when it names none (the caller then stays strict)."""
+    found = {m.strip() for pattern in FAILED_TEST for m in pattern.findall(output)}
+    found -= {"failing tests:"}
+    return found or None
 
 
 def _helper(path: str) -> bool:

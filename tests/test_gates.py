@@ -4,7 +4,7 @@ from graph_engineering.gates import run_gates
 from graph_engineering.repos import Repo
 from graph_engineering.sandbox import Sandbox, available, prepare_workspace
 
-from helpers import SUB_SOURCE, SUB_TEST, TEST_COMMAND, python_repo, temp_dir
+from helpers import SUB_SOURCE, SUB_TEST, TEST_COMMAND, git, python_repo, temp_dir
 
 
 @unittest.skipUnless(available(), "no OS sandbox on this host")
@@ -21,6 +21,40 @@ class Gates(unittest.TestCase):
     def gate(self, repo=None):
         report = run_gates(repo or self.repo, self.work, self.base, self.sandbox, self.root / "run")
         return report, {c["name"]: c["ok"] for c in report["checks"]}
+
+    def broken_base(self):
+        """A base whose suite already fails: every ticket on it would otherwise be refused."""
+        source = self.root / "calc"
+        (source / "tests" / "test_old.py").write_text(
+            "import unittest\nfrom calc import add\n\n\nclass Old(unittest.TestCase):\n"
+            "    def test_old(self):\n        self.assertEqual(add(1, 1), 3)\n")
+        git(source, "add", "-A")
+        git(source, "commit", "-q", "-m", "a failing test")
+        self.work = self.root / "run2" / "work"
+        self.base = prepare_workspace(source, "main", self.work)
+        self.sandbox = Sandbox(self.root / "run2", self.work)
+        repo = Repo(name="calc", path=str(source), test_command=TEST_COMMAND)
+        return repo
+
+    def test_failures_that_were_already_on_the_base_do_not_block(self):
+        repo = self.broken_base()
+        (self.work / "tests" / "test_sub.py").write_text(SUB_TEST)
+        (self.work / "calc.py").write_text(SUB_SOURCE)
+        report = run_gates(repo, self.work, self.base, self.sandbox, self.root / "run2")
+        checks = {c["name"]: c for c in report["checks"]}
+        self.assertTrue(report["passed"], report["checks"])
+        self.assertIn("already failed on the base", checks["test suite passes"]["detail"])
+        self.assertIn("test_old", checks["test suite passes"]["detail"])
+
+    def test_a_new_failure_on_a_failing_base_is_refused(self):
+        repo = self.broken_base()
+        (self.work / "tests" / "test_sub.py").write_text(SUB_TEST)
+        (self.work / "calc.py").write_text(SUB_SOURCE.replace("return a + b", "return a + b + 1"))
+        report = run_gates(repo, self.work, self.base, self.sandbox, self.root / "run2")
+        checks = {c["name"]: c for c in report["checks"]}
+        self.assertFalse(checks["test suite passes"]["ok"])
+        self.assertIn("New failures", checks["test suite passes"]["detail"])
+        self.assertIn("test_add", checks["test suite passes"]["detail"])
 
     def test_a_real_fix_passes_every_gate(self):
         (self.work / "tests" / "test_sub.py").write_text(SUB_TEST)
@@ -94,3 +128,15 @@ class Gates(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FailedTests(unittest.TestCase):
+    def test_names_from_each_runner_and_none_when_unnamed(self):
+        from graph_engineering.gates import failed_tests
+        self.assertEqual(failed_tests("FAIL: test_x (tests.test_a.A.test_x)\nERROR: test_y (tests.test_a.A.test_y)\n"),
+                         {"tests.test_a.A.test_x", "tests.test_a.A.test_y"})
+        self.assertEqual(failed_tests("FAILED tests/test_a.py::test_x - assert 1 == 2\n"), {"tests/test_a.py::test_x"})
+        self.assertEqual(failed_tests("\u2716 renders the model (12.5ms)\n\u2716 failing tests:\n\u2716 renders the model (12.9ms)\n"),
+                         {"renders the model"})   # durations differ between runs
+        self.assertIsNone(failed_tests("Segmentation fault\n"))
+
