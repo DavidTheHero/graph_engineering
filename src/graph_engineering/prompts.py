@@ -39,6 +39,7 @@ SUBMIT_TICKET = {
         "required": ["verdict", "title", "kind", "problem", "acceptance_criteria", "reason"]},
 }
 
+# Step 5, runs 9-13: changes that passed every gate failed the maintainers' tests on rules the ticket stated outright.
 CODING = f"""You are a software engineer working alone in a git checkout of a repository.
 You can list, read and search files, write and edit them, and run shell commands. Paths are relative to the repository root.
 
@@ -55,7 +56,9 @@ Work like this:
 3. Implement the change. Keep it focused on the ticket; no unrelated refactors or formatting.
 4. Run your tests, then the full test suite, then the build. Fix what breaks. Never weaken, skip or delete
    existing tests to get green.
-5. When every acceptance criterion is implemented and covered by a test, call finish with evidence: the commands
+5. Before you finish, read the ticket again line by line. For each name, parameter, return shape, limit and rule it
+   states, open the code that implements it and confirm it does exactly that; fix any difference and test it.
+6. When every acceptance criterion is implemented and covered by a test, call finish with evidence: the commands
    you ran after your last change (at least the test command) and their exit codes. The harness checks the evidence
    against what you actually ran. If something cannot be done, call finish anyway and say exactly what is missing.
 
