@@ -15,7 +15,7 @@ before the session ended:
 | | Quick, run 8 (cd153d1) | Thorough, run 5 (c86bc30) |
 |---|---|---|
 | Trials accepted by the gates (and the review, when thorough) | 7 of 7 | 8 of 9 |
-| Maintainers' hidden tests on accepted results | 3 of 4 (the miss: the spec never named the interface the tests import; fixed in the task) | 2 of 3 |
+| Maintainers' hidden tests on accepted results | 2 of 3 (the miss: the spec never named the interface the tests import; fixed in the task) | 2 of 3 |
 | Time per ticket | 6 min to 48 min (median 25 min) | 9 min to 2 h 12 min (median 52 min) |
 | Prompt-cache hit rate on the model server | 89% (run 7) | 68.5% before append-only history |
 
