@@ -79,6 +79,12 @@ class Repo:
     def wants_acceptance_tests(self, spec: dict) -> bool:
         return self.acceptance_tests and self.profile_for(spec) != "quick"
 
+    def coding_steps_for(self, spec: dict) -> int:
+        """Larger tickets get more steps in one session: runs 13-14, the two five-criterion tasks ran out of 80 steps
+        while still making progress, and a new round starts by re-reading the code."""
+        extra = 20 * max(0, len(spec.get("acceptance_criteria") or []) - 4)
+        return min(self.coding_steps + extra, self.coding_steps * 3 // 2)
+
     def wants_probe(self, spec: dict) -> bool:
         return self.probe and self.profile_for(spec) == "quick"
 

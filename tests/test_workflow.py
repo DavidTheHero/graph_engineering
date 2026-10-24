@@ -322,6 +322,12 @@ class Planning(unittest.TestCase):
         self.assertIn("any that the code does not resolve is a blocking finding", text)
         self.assertIn("chains.model is undefined with fakeChains", text)
 
+    def test_larger_tickets_get_more_coding_steps(self):
+        repo = Repo(name="r", path="/tmp", test_command="t")
+        self.assertEqual(repo.coding_steps_for({"acceptance_criteria": ["a"] * 4}), 80)
+        self.assertEqual(repo.coding_steps_for({"acceptance_criteria": ["a"] * 5}), 100)
+        self.assertEqual(repo.coding_steps_for({"acceptance_criteria": ["a"] * 9}), 120)
+
     def test_auto_planning_depends_on_ticket_size(self):
         repo = Repo(name="r", path="/tmp", test_command="t", profile="thorough")
         self.assertFalse(Repo(name="r", path="/tmp", test_command="t", plan=True).wants_plan({"acceptance_criteria": ["a"] * 5}))

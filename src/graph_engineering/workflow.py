@@ -426,7 +426,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
             data["feedback"] = ((data.get("feedback") or "") + "\n\nThe plan reviewer's remaining concerns (address them):\n"
                                 + plan_record["concerns"]).strip()
     agent, run, coder = _agent(ctx, ticket, "coding", Workspace(work, sandbox, timeout), READ_WRITE, prompts.FINISH,
-                               prompts.CODING, directory / "coding", round_, max_steps=repo.coding_steps, nudge_after=15,
+                               prompts.CODING, directory / "coding", round_, max_steps=repo.coding_steps_for(spec), nudge_after=15,
                                notes=root / "notes.md", explorer=explorer, evidence=True, verify=repo.test_command,
                                # Run 7: 75% of the coder's output was reasoning, most of it in a few steps that ran to
                                # the 4,096 cap; Aider found Qwen3 edits as well or better without thinking.
