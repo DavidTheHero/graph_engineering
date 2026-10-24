@@ -72,6 +72,11 @@ def run_task(task: dict, repos: Repos, registry: Registry, out: Path, index: int
     learned = home / "memory" / f"{repo.name}.md"
     result["memory_in"] = len(memory)
     result["memory_out"] = learned.read_text() if result["passed"] and learned.exists() else ""
+    # The workspace clone and its installed dependencies are ~230 MB a trial (16 GB over 16 runs filled the disk);
+    # transcripts, gate reports, the diff and the store stay.
+    for ticket_dir in (home / "work").glob("*"):
+        for bulky in ("work", "tmp"):
+            shutil.rmtree(ticket_dir / bulky, ignore_errors=True)
     return result
 
 
