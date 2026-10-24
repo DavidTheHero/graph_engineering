@@ -182,8 +182,10 @@ class Workspace:
             # Run 13: `node --test ... | tail -50` was killed three times with no output at all, so the coder never
             # saw which test hung and ran the same command again.
             hint += ("\n[the output went through a pipe, which prints nothing when the command is killed. Run it without "
-                     "the pipe, or give the test runner its own per-test limit (node --test --test-timeout=10000, "
-                     "pytest --timeout=10 or -x) so the hanging test is named.]")
+                     "the pipe, or give the test runner a per-test limit on the command line, well under "
+                     f"{self.run_timeout}s (node --test --test-timeout=10000, pytest --timeout=10), so the hanging test is "
+                     "named. Do not put it in the project's test configuration (package.json scripts, pytest.ini): the "
+                     "gates refuse such changes.]")
         return f"exit code {code} ({seconds:.0f}s){hint}\n{clip(out, OUTPUT_CHARS)}"
 
 
