@@ -33,6 +33,9 @@ RESULT_SHARE = 0.25        # one tool result takes at most this share of the bud
 WORKING_TOKENS = 105000    # about 99K real tokens of a 150K window; at 80K x 3 characters the coder on task #20 cleared
                            # every few steps and re-read agent.js ten times (40K made it re-read instead of edit)
 NOTES_CHARS = 6000
+FAILED_OUTPUT = re.compile(r"Traceback \(most recent call last\)|^(?:FAIL|ERROR)[:\s]|^\s*[✖✕×] |AssertionError|"
+                           r"\b\d+ (?:failed|failing)\b|^not ok ", re.M)
+SAME_OUTPUT = "[the same output as this command gave"
 
 NOTES_TOOL = {"name": "update_notes",
               "description": "Replace your working notes: the plan, what is done, what you learned about the code (file paths, "
@@ -111,6 +114,8 @@ class Agent:
         self.last_change = 0
         self.reads: dict[str, tuple] = {}     # tool call id -> (path, first line, last line, step)
         self.edits: dict[str, int] = {}       # path -> step of its latest edit
+        self.failed_at = 0                    # step of the latest command that failed, by exit code or by its output
+        self.outputs: dict[str, int] = {}     # command output -> step it was last seen
 
     def log(self, entry: dict) -> None:
         if self.transcript:
@@ -277,7 +282,7 @@ class Agent:
                     if call["name"] in ("write_file", "edit_file") and not result.startswith("Error"):
                         seen.clear()  # files changed, so earlier reads and runs may now differ
                         since_change = 0
-                    repeats = repeats + 1 if result.startswith("You already made this exact call") else 0
+                    repeats = repeats + 1 if result.startswith(("You already made this exact call", SAME_OUTPUT)) else 0
                     messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
                     self.log(messages[-1])
                     if repeats >= 3 and not restarted:
@@ -342,8 +347,7 @@ class Agent:
             return budget, None
         if budget == 0:
             return None, False
-        failed = bool(self.commands) and self.commands[-1][0] == step - 1 and self.commands[-1][2] != 0
-        return (-budget, None) if step == 1 or failed else (None, False)
+        return (-budget, None) if step == 1 or self.failed_at == step - 1 else (None, False)
 
     def fit(self, result: str) -> tuple[str, int | None]:
         """Cut a result to the per-result share of the budget at a line boundary, saying where it stopped."""
@@ -414,7 +418,19 @@ class Agent:
             self.reads[call["id"]] = (str(args.get("path")), start, end, step)
         if name == "run":
             match = re.match(r"exit code (-?\d+)", result)
-            self.commands.append((step, str(args.get("command", "")).strip(), int(match.group(1)) if match else -1))
+            code = int(match.group(1)) if match else -1
+            self.commands.append((step, str(args.get("command", "")).strip(), code))
+            # Run 16: `test | head; echo EXIT=$?` exits 0 while the test errors; the output says it failed.
+            if code != 0 or FAILED_OUTPUT.search(result):
+                self.failed_at = step
+            # Run 16: the coder ran one test 77 times changing only `head -260` to `-280`, `-300`: the same output
+            # with nothing changed is no new information, whatever the command's spelling.
+            key = re.sub(r"^exit code (-?\d+) \(\d+s\)", r"exit code \1", result)
+            seen_at = self.outputs.get(key)
+            self.outputs[key] = step
+            if seen_at is not None and seen_at >= self.last_change and seen_at < step:
+                result = (f"{SAME_OUTPUT} at step {seen_at}, and no file has changed since. Change the code, or take a "
+                          f"different step.]\n" + result)
         elif name in ("write_file", "edit_file") and not result.startswith("Error"):
             self.last_change = step
             self.edits[str(args.get("path"))] = step

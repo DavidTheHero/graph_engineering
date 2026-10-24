@@ -272,6 +272,28 @@ class ThinkingBudget(unittest.TestCase):
         self.assertEqual(thought, [True, False, True, False, False])   # step 1; after `exit 1`; not after `true`
         self.assertEqual(llm.requests[2]["thinking_token_budget"], 1024)
 
+    def test_failure_is_read_from_the_output_and_the_same_output_counts_as_a_repeat(self):
+        """Run 16: `test | head -260; echo EXIT=$?` exits 0 while the test errors, and the coder ran it 77 times
+        changing only the head count."""
+        from graph_engineering.sandbox import Sandbox, available
+        if not available():
+            self.skipTest("no OS sandbox on this host")
+        root = temp_dir(self)
+        repo = python_repo(root)
+        failing = "printf 'ERROR: test_x (t.T.test_x)\\nTraceback (most recent call last):\\n' | head -{n}; echo EXIT=$?"
+        steps = iter([[call("read_file", path="calc.py")]] + [[call("run", command=failing.format(n=n))] for n in (5, 6)]
+                     + [[call("finish", summary="s", coverage=[])]])
+        llm = FakeLLM(lambda role, messages: next(steps))
+        self.addCleanup(llm.close)
+        model = llm.model()
+        model.think = True
+        outcome = Agent(model, Workspace(repo, Sandbox(root / "run", repo)), READ_WRITE, FINISH, "s",
+                        thinking_budget=-1024).run("task")
+        thought = [r["chat_template_kwargs"]["enable_thinking"] for r in llm.requests]
+        self.assertEqual(thought[:3], [True, False, True])   # thinks after a command whose output shows a failure
+        self.assertTrue(llm.requests[3]["messages"][-1]["content"].startswith("[the same output as this command gave at step 2"))
+        self.assertEqual(outcome.status, "done")
+
     def test_a_budget_of_zero_turns_thinking_off(self):
         llm = FakeLLM(lambda role, messages: [call("finish", summary="s", coverage=[])])
         self.addCleanup(llm.close)
