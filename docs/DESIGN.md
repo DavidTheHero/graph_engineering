@@ -113,7 +113,7 @@ Each measure below came from a failure in a live transcript:
 
 | Failure seen | Measure |
 |---|---|
-| Near-greedy decoding repeated one call forever | Qwen's recommended sampling |
+| Near-greedy decoding repeated one call forever | Qwen's recommended sampling; three identical calls restart the session from its notes once (run 13: a coder re-read the same lines in circles and lost the round), a second loop ends it |
 | Reasoning hit the output limit without acting | reasoning tail handed back as notes; **next turn runs without thinking and must call a tool** |
 | Re-reads of cleared results were refused as repeats | clearing a result also forgets it in the repeat guard |
 | Explored for many steps without editing | nudge to plan and change, repeated every 15 steps |

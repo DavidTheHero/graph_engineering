@@ -206,6 +206,7 @@ class Agent:
         idle = repeats = since_change = 0
         force_action = False   # after reasoning ran out without acting: next turn without thinking, a tool call required
         compacted_at = -1
+        restarted = restart = False   # one fresh start from the notes when the agent loops
         seen: dict[str, tuple[int, str]] = {}   # call signature -> (step, tool call id) of results still in context
         try:
             for step in range(1, self.max_steps + 1):
@@ -280,9 +281,21 @@ class Agent:
                     repeats = repeats + 1 if result.startswith("You already made this exact call") else 0
                     messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
                     self.log(messages[-1])
-                    if repeats >= 3:
+                    if repeats >= 3 and not restarted:
+                        # Run 13: the coder re-read the same lines in circles ("I've been overthinking this") and the
+                        # round was lost. A repeated action predicts failure (SWE-smith); a fresh start from the
+                        # notes breaks the circle. A second loop ends the session.
+                        restarted, repeats, restart = True, 0, True   # after this turn's remaining calls answer
+                    elif repeats >= 3:
                         outcome = Outcome("looping", steps=step, usage=outcome.usage)
                         break
+                if restart:
+                    restart = False
+                    self.emit(step, "note", "repeated the same call three times; restarting from notes")
+                    messages = self.summarise(messages, specs, task, step)
+                    compacted_at = step
+                    seen.clear()
+                    continue
                 if outcome.status != "out_of_steps":
                     break
                 if step == self.max_steps - 3:

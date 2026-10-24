@@ -42,8 +42,19 @@ class AgentLoop(unittest.TestCase):
     def test_repeated_identical_calls_stop_the_run(self):
         outcome, llm = self.run_agent(lambda role, messages: [call("search", pattern="add")])
         self.assertEqual(outcome.status, "looping")
-        self.assertEqual(outcome.steps, 4)  # one real call, then three answered from memory
+        # One real call and three answered from memory, a fresh start from the notes, then the same again.
+        self.assertEqual(outcome.steps, 8)
         self.assertIn("You already made this exact call", llm.requests[-1]["messages"][-1]["content"])
+
+    def test_a_loop_restarts_from_the_notes_once(self):
+        """Run 13: a coder re-read the same lines in circles and the whole round was lost."""
+        def script(role, messages):
+            if "conversation was compacted" in messages[1]["content"]:
+                return [call("finish", summary="done after a fresh start", coverage=[])]
+            return [call("search", pattern="add")]
+
+        outcome, _ = self.run_agent(script)
+        self.assertEqual((outcome.status, outcome.result["summary"]), ("done", "done after a fresh start"))
 
     def test_edits_reset_the_repeat_memory(self):
         steps = iter([[call("read_file", path="calc.py")], [call("write_file", path="x.py", content="1")],
