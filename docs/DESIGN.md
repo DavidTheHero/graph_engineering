@@ -23,7 +23,11 @@ General_AI_Agent, 4 from this project's own history) × 2 trials, Qwen 27B on on
 
 Six tasks passed both trials and every hidden test. The misses are the two hardest: #20 (tool search: one
 trial passed the gates but not the maintainers' tests, the other never got its own tests green in three rounds),
-and the repository map (both trials miss Python `async def`, which the maintainers test). Changes since 179ec84
+and the repository map (both trials miss Python `async def`, which the maintainers test). On #20 the same
+maintainers' test failed in every run from 10 to 17 (a tool result carrying a report must end the run at once); the
+coders gated that on the request's type, so the task's interface section now states it, as it states the other
+interfaces the hidden tests depend on. The finish coverage check (5d0d992) targets the same miss: the coder cited
+existing tests for that criterion and wrote none. Changes since 179ec84
 (a loop restarts from the notes, a line-by-line ticket check before finish, the piped-timeout hint) target those
 misses and are not yet measured.
 
