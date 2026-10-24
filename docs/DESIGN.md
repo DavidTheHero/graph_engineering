@@ -27,6 +27,14 @@ and the repository map (both trials miss Python `async def`, which the maintaine
 (a loop restarts from the notes, a line-by-line ticket check before finish, the piped-timeout hint) target those
 misses and are not yet measured.
 
+Runs 15–17 measured the coder's thinking. Off (run 15): simple tickets 2–3× faster, but one-command-start ran
+for more than 5 hours without finishing. **Adaptive** (run 16, `coding_thinking: -2048`: think on the first
+step, after a failed command, after a repeat, and when six or more steps pass without an edit): trial 1 of the
+8 tasks took 2.0 h against 3.4 h with thinking always on (−42%), with 61% fewer completion tokens; gates 7 of 8,
+hidden tests 3 of 5. Run 17 (8 tasks × 2 on a5d12ae) is in progress: 6 of 6 trials accepted so far,
+one-command-start in 910 s. Its transcripts gave three more loop measures (a2bf1f5, in the table below), not yet
+measured.
+
 Earlier history:
 
 Run 8: the quick profile on commit cd153d1, Qwen 27B on one GPU, 7 trials of the 4 General_AI_Agent tasks
@@ -126,7 +134,8 @@ native tool calls). It stops on the finish tool or a stopping condition:
 
 - a step budget (80 coding, 40 intake, 30 plan and review, 20 explore);
 - four turns without a tool call;
-- three identical calls in a row with nothing changed in between;
+- three repeats in a row with nothing changed in between (an identical call, a command with the same output,
+  or an edit back to an earlier content): a restart from the notes once, then the end;
 - cancellation.
 
 Each measure below came from a failure in a live transcript:
@@ -145,6 +154,11 @@ Each measure below came from a failure in a live transcript:
 | `npm test 2>&1 \| tail -25` reported tail's exit code, so a failing suite read as passing | commands run under **`bash -o pipefail`** |
 | Three hung test runs cost 900 s of a 2,095 s coding session on an 11 s suite | **the command limit follows the base suite's time** (4× + 30 s, at least 60 s), and a timeout says the run probably hangs |
 | A failed `edit_file` cost a re-read before the retry | the error shows **the closest lines of the file, numbered** (search/replace beats diffs for Qwen: Diff-XYZ, Aider) |
+| `test \| head; echo EXIT=$?` exits 0 while the suite errors; one test was re-run 77 times changing only the `head -N` count | a command fails when its output says so, not only by its exit code; **the same output with nothing changed is a repeat** |
+| Thinking on every step: most of the output was reasoning. Thinking off: a debugging-heavy ticket ran out of steps three rounds running | **adaptive thinking** (`coding_thinking: -2048`): think on the first step, after a failed command, after a repeat, and when six or more steps pass without an edit |
+| Told its call was a repeat, a coder made it three more times while saying it would redesign its test (run 17) | **the repeated tool is not offered on the next step**; alternating it with other calls still trips the restart-then-end guard |
+| A coder applied an edit and its exact inverse twenty times over without running a test (run 17, #20, steps 56–97): each one changed the file, so nothing counted as a repeat | **an edit that leaves a file with a content it had before is a repeat**, with a hint to run the tests and see which version is right |
+| A forced last-step finish was refused for lacking passing evidence, and the summary was lost with it | the last step's finish is accepted, with the problem recorded as unresolved |
 
 ## Context engineering
 
@@ -280,7 +294,7 @@ Without the append-only change, the prefix-cache hit rate was 83%.
 
 | # | Item | Why | Cost |
 |---|---|---|---|
-| 1 | **Coder thinking: 2,048 tokens vs. off**, several trials each (trial-to-trial spread is up to 2x) | 75% of the coder's output is reasoning; Aider found Qwen3 edits as well or better without thinking | 6–8 GPU-hours |
+| 1 | ~~Coder thinking: 2,048 tokens vs. off~~: **measured** (runs 15–17, above). Off is 2–3× faster on simple tickets but lost a debugging-heavy one; adaptive thinking kept the gain (−42% in trial 1) and run 17 is confirming it | 75% of the coder's output was reasoning; Aider found Qwen3 edits as well or better without thinking | done, pending run 17 |
 | 2 | **Mutation gate** on the changed lines: the new tests must kill a share of mutants of the diff | LLM test suites catch at most ~36% of mutated solutions (SWE-Mutation); Meta's ACH | 2–4 days per language |
 | 3 | ~~Speculative decoding on the model server~~: **already on** (MTP, 3 draft tokens, 67% accepted, from the server's `/metrics`) | — | done |
 | 4 | **More eval tasks** from more repositories (`eval-mine` on other projects or small public libraries) | Avoid tuning to 4 tasks | small, GPU time to run |
