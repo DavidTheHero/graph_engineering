@@ -255,6 +255,23 @@ class ThinkingBudget(unittest.TestCase):
         self.assertEqual(first["thinking_token_budget"], 6144)
         self.assertNotIn("thinking_token_budget", second)   # the forced turn runs without thinking
 
+    def test_an_adaptive_budget_thinks_only_at_the_start_and_after_a_failure(self):
+        from graph_engineering.sandbox import Sandbox, available
+        if not available():
+            self.skipTest("no OS sandbox on this host")
+        root = temp_dir(self)
+        repo = python_repo(root)
+        steps = iter([[call("read_file", path="calc.py")], [call("run", command="exit 1")], [call("run", command="true")],
+                      [call("read_file", path="calc.py", start_line=1)], [call("finish", summary="s", coverage=[])]])
+        llm = FakeLLM(lambda role, messages: next(steps))
+        self.addCleanup(llm.close)
+        model = llm.model()
+        model.think = True
+        Agent(model, Workspace(repo, Sandbox(root / "run", repo)), READ_WRITE, FINISH, "s", thinking_budget=-1024).run("task")
+        thought = [r["chat_template_kwargs"]["enable_thinking"] for r in llm.requests]
+        self.assertEqual(thought, [True, False, True, False, False])   # step 1; after `exit 1`; not after `true`
+        self.assertEqual(llm.requests[2]["thinking_token_budget"], 1024)
+
     def test_a_budget_of_zero_turns_thinking_off(self):
         llm = FakeLLM(lambda role, messages: [call("finish", summary="s", coverage=[])])
         self.addCleanup(llm.close)

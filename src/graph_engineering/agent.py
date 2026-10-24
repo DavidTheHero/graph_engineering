@@ -237,9 +237,8 @@ class Agent:
                     reply = chat(self.model, messages, specs, tool_choice="required", think=False)
                     force_action = False
                 else:
-                    # A budget of 0 turns thinking off (Aider: Qwen3 edits as well or better without it).
-                    reply = chat(self.model, messages, specs, budget=self.thinking_budget,
-                                 think=False if self.thinking_budget == 0 else None)
+                    budget, think = self.thinking(step)
+                    reply = chat(self.model, messages, specs, budget=budget, think=think)
                 for key in outcome.usage:
                     outcome.usage[key] += reply.usage.get(key, 0)
                 message = {"role": "assistant", "content": reply.content}
@@ -332,6 +331,19 @@ class Agent:
         if not (args.get("unresolved") or "").strip() and all(item.get("exit_code") != 0 for item in items):
             return "no cited command passed; fix the failures, or say in unresolved what is left"
         return None
+
+    def thinking(self, step: int) -> tuple[int | None, bool | None]:
+        """(budget, think) for this turn. 0 turns thinking off (Aider: Qwen3 edits as well or better without it). A
+        negative budget is adaptive: think, up to that many tokens, on the first step and right after a command
+        failed, and act without thinking otherwise. Run 15: with thinking off simple tickets took half the time, but
+        a debugging-heavy one ran out of steps three rounds running."""
+        budget = self.thinking_budget
+        if budget is None or budget > 0:
+            return budget, None
+        if budget == 0:
+            return None, False
+        failed = bool(self.commands) and self.commands[-1][0] == step - 1 and self.commands[-1][2] != 0
+        return (-budget, None) if step == 1 or failed else (None, False)
 
     def fit(self, result: str) -> tuple[str, int | None]:
         """Cut a result to the per-result share of the budget at a line boundary, saying where it stopped."""

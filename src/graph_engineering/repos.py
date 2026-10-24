@@ -41,7 +41,8 @@ class Repo:
                                             # acceptance tests, a plan and a model review (runs 5-8: no more reliable, 2-3x slower)
     acceptance_tests: bool = True           # thorough profile: tests written from the criteria before coding
     probe: bool = False                     # quick profile: after the gates, a tester probes the change from the ticket
-    coding_thinking: int = 2048             # the coder's reasoning tokens per turn; 0 turns thinking off
+    coding_thinking: int = 2048             # the coder's reasoning tokens per turn; 0 turns thinking off; negative:
+                                            # think up to that many only at the start and after a failed command
     max_rounds: int = 3
     coding_steps: int = 80
     run_timeout: int = 300
