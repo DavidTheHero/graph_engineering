@@ -189,6 +189,11 @@ class Context(unittest.TestCase):
         self.assertIn("<base_failures>\nFAIL: test_old (tests.test_x)\n</base_failures>", task)
         self.assertNotIn("base_failures", coding_task(ticket, {"test_command": "make test", "base_failures": ""}))
 
+    def test_failure_lines_skip_passing_tests_named_after_errors(self):
+        from graph_engineering.workflow import failure_lines
+        out = "\u2714 errors permit a different action (0.3ms)\n\u2716 discovery stays bounded (2ms)\nAssertionError: 3 !== 1\n"
+        self.assertEqual(failure_lines(out), "\u2716 discovery stays bounded (2ms)\nAssertionError: 3 !== 1")
+
     def test_project_brief_has_the_agent_guide_and_the_layout(self):
         (self.repo / "AGENTS.md").write_text("Use unittest. Keep functions pure.")
         (self.repo / "README.md").write_text("readme text")

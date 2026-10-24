@@ -76,7 +76,9 @@ FAILURE = re.compile(r"✖|✗|FAIL|Error|assert|expected|actual|not ok", re.I)
 
 def failure_lines(detail: str, limit: int = 12) -> str:
     """The lines that say why a check failed, for the ticket's history; the full output stays in gates.json."""
-    lines = list(dict.fromkeys(l.strip() for l in detail.splitlines() if FAILURE.search(l) and not l.strip().startswith("at ")))
+    passed = ("at ", "✔", "✓", "ok ", "PASS ")   # a passing test named after errors is not a failure line
+    lines = list(dict.fromkeys(l.strip() for l in detail.splitlines()
+                               if FAILURE.search(l) and not l.strip().startswith(passed)))
     return "\n".join(lines[:limit]) if lines else detail[-600:]
 
 
