@@ -40,7 +40,7 @@ def changed_tests(work: Path, base: str, is_test) -> set[str]:
             touched = range(1, len(lines) + 1)
         else:
             touched = [n for m in HUNK.finditer(git(work, "diff", "--cached", "-U0", base, "--", path))
-                       for n in range(int(m.group(1)), int(m.group(1)) + max(int(m.group(2) or 1), 1))]
+                       for n in range(int(m.group(1)), int(m.group(1)) + int(m.group(2) or 1))]   # +c,0: a deletion only
         starts = [(i, next(g for g in m.groups() if g)) for i, line in enumerate(lines, 1) if (m := TEST_NAME.search(line))]
         for n in touched:
             enclosing = [name for i, name in starts if i <= n]

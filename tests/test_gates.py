@@ -162,6 +162,12 @@ class ChangedTests(unittest.TestCase):
         (repo / "calc.py").write_text(SUB_SOURCE)   # a source change is not a test
         self.assertEqual(changed_tests(repo, base, is_test),
                          {"test_add_negative", "test_subtract", "subtracts two numbers", "it form"})
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "more")
+        base = git(repo, "rev-parse", "HEAD").strip()
+        text = (repo / "tests" / "test_add.py").read_text()
+        (repo / "tests" / "test_add.py").write_text(text[:text.index("    def test_add_negative")])   # a deletion only
+        self.assertEqual(changed_tests(repo, base, is_test), set())
 
 
 class Feedback(unittest.TestCase):

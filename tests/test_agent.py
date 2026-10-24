@@ -70,8 +70,8 @@ class AgentLoop(unittest.TestCase):
         self.assertEqual(outcome.status, "done")
         replies = [m["content"] for m in llm.requests[-1]["messages"] if m["role"] == "tool"]
         self.assertEqual(replies[0], "Edited calc.py")
-        self.assertIn("calc.py has the content it started with again", replies[1])
-        self.assertIn("calc.py has the content it had at step 1 again", replies[3])
+        self.assertIn("calc.py has the content it had before step 1 again", replies[1])
+        self.assertIn("calc.py has the content it had after step 1 again", replies[3])
         self.assertNotIn("edit_file", [t["function"]["name"] for t in llm.requests[2]["tools"]])
 
     def test_a_loop_restarts_from_the_notes_once(self):
@@ -194,8 +194,11 @@ class Evidence(unittest.TestCase):
         plan = [[call("finish", summary="s", evidence=[{"command": test, "exit_code": 0}],
                       coverage=[{"criterion": 1, "tests": "test_subtract"}, {"criterion": 2, "tests": "test_add (existing)"}])],
                 [call("finish", summary="s", evidence=[{"command": test, "exit_code": 0}],
+                      coverage=[{"criterion": 1, "tests": "test_subtract_negative"}, {"criterion": 2, "tests": "test_add"}],
+                      unresolved="Criterion 1 is untested: it needs 2 mocked services.")],   # neither excuses criterion 2
+                [call("finish", summary="s", evidence=[{"command": test, "exit_code": 0}],
                       coverage=[{"criterion": 1, "tests": "Test_Subtract"}, {"criterion": 2, "tests": "test_add"}],
-                      unresolved="Criterion 2 is untested: it needs the network.")]]
+                      unresolved="Criteria 1 and 2 are untested: they need the network.")]]
         plan = [[call("run", command=test)]] + plan
         llm = FakeLLM(lambda role, messages: plan[min(sum(m["role"] == "assistant" for m in messages), len(plan) - 1)])
         self.addCleanup(llm.close)
@@ -203,8 +206,9 @@ class Evidence(unittest.TestCase):
                       evidence=True, max_steps=8, tests_changed=lambda: {"test_subtract"})
         outcome = agent.run("task")
         self.assertEqual(outcome.status, "done")
-        refused = [m["content"] for m in llm.requests[-1]["messages"] if m["role"] == "tool"][1]
-        self.assertIn("coverage for criteria 2 names no test this change adds or touches (those are: test_subtract)", refused)
+        refused = [m["content"] for m in llm.requests[-1]["messages"] if m["role"] == "tool"][1:3]
+        for text in refused:
+            self.assertIn("coverage for criteria 2 names no test this change adds or touches (those are: test_subtract)", text)
         self.assertEqual(outcome.result["coverage"][1]["tests"], "test_add")
 
     def test_uncited_or_stale_evidence_is_refused(self):

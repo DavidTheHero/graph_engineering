@@ -298,7 +298,7 @@ class Agent:
                         # redesign its test. Taking the tool away for a step makes the next move a different one.
                         repeats, withheld = repeats + 1, call["name"]
                         result += f"\n[{withheld} is not offered on your next step: take a different kind of step.]"
-                    elif repeated is None:
+                    elif repeated is None and withheld is None:
                         repeats = 0   # a step without the withheld tool proves nothing; the count waits
                     messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
                     self.log(messages[-1])
@@ -346,12 +346,17 @@ class Agent:
     def check_coverage(self, args: dict) -> str | None:
         """Each criterion's coverage must name a test this change adds or touches: a test that passed before the change
         proves nothing about it. Run 17: #20 cited existing tests for the one criterion the maintainers' tests failed."""
-        changed = sorted(self.tests_changed())
+        try:
+            changed = sorted(self.tests_changed())
+        except RuntimeError as exc:   # git failed: the check cannot run, and that is not the agent's fault
+            self.emit(0, "note", f"coverage check skipped: {exc}")
+            return None
         plain = lambda text: re.sub(r"\s+", " ", str(text or "")).strip().lower()
+        cited = lambda name, text: bool(plain(name)) and re.search(rf"(?<!\w){re.escape(plain(name))}(?!\w)", plain(text))
         unresolved = plain(args.get("unresolved"))
         missing = [str(item.get("criterion")) for item in args.get("coverage") or []
-                   if not any(plain(name) and plain(name) in plain(item.get("tests")) for name in changed)]
-        missing = [c for c in missing if not re.search(rf"criteri\w*[^.\n]*\b{c}\b", unresolved)]
+                   if not any(cited(name, item.get("tests")) for name in changed)]
+        missing = [c for c in missing if not re.search(rf"criteri(?:on|a)\s+(?:\d+\s*(?:,|and)\s*)*{re.escape(c)}(?!\d)", unresolved)]
         if not missing:
             return None
         return (f"coverage for criteria {', '.join(missing)} names no test this change adds or touches (those are: "
@@ -457,7 +462,7 @@ class Agent:
             return answer
         before = self.content(args.get("path")) if name in ("write_file", "edit_file") else None
         if before:
-            self.states.setdefault((str(args.get("path")), before), step - 1)
+            self.states.setdefault((str(args.get("path")), before), -step)   # negative: the content before this step
         result = self.workspace.call(name, args, allowed)
         shown = None
         if len(result) > self.result_chars:
@@ -495,11 +500,11 @@ class Agent:
             # nothing counted as a repeat. A file back at an earlier content is going round in circles.
             after = self.content(args.get("path"))
             seen_at = self.states.get((str(args.get("path")), after)) if after else None
-            if seen_at is not None and seen_at < step and after != before:
+            if seen_at is not None and after != before:
                 self.repeat_at = step
                 self.emit(step, "repeat", name)
-                when = "started with" if seen_at == 0 else f"had at step {seen_at}"
-                result = (f"{UNDONE} {args.get('path')} has the content it {when} again: you are going back and forth. "
+                when = f"before step {-seen_at}" if seen_at < 0 else f"after step {seen_at}"
+                result = (f"{UNDONE} {args.get('path')} has the content it had {when} again: you are going back and forth. "
                           f"Run the tests to see which version is right, or take a different step.]\n" + result)
             elif after:
                 self.states[(str(args.get("path")), after)] = step
