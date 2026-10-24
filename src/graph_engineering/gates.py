@@ -181,5 +181,23 @@ def summary(report: dict) -> str:
     return "\n".join(f"- {'PASS' if c['ok'] else 'FAIL'} {c['name']}" for c in report["checks"])
 
 
+FAILURE = re.compile(r"✖|✗|FAIL|Error|assert|expected|actual|not ok", re.I)
+
+
+def failure_lines(detail: str, limit: int = 12) -> str:
+    """The lines that say why a check failed, or "" when none stands out; the full output stays in gates.json."""
+    passed = ("at ", "✔", "✓", "ok ", "PASS ")   # a passing test named after errors is not a failure line
+    lines = list(dict.fromkeys(l.strip() for l in detail.splitlines()
+                               if FAILURE.search(l) and not l.strip().startswith(passed)))
+    return "\n".join(lines[:limit])
+
+
 def failures(report: dict) -> str:
-    return "\n\n".join(f"FAILED: {c['name']}\n{c['detail']}" for c in report["checks"] if not c["ok"])
+    """The failed checks as the next round's feedback. Run 17: a coder's feedback opened with 3,000 characters of
+    passing tests and the three failures sat at the end of a 13,000-character cut, so what failed comes first."""
+    parts = []
+    for check in report["checks"]:
+        if not check["ok"]:
+            key = failure_lines(check["detail"], 30)
+            parts.append(f"FAILED: {check['name']}\n" + (f"What failed:\n{key}\n\nFull output:\n" if key else "") + check["detail"])
+    return "\n\n".join(parts)

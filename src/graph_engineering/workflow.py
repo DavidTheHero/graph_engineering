@@ -71,15 +71,7 @@ def _agent(ctx: Context, ticket: dict, role: str, workspace: Workspace, tools, f
 
 
 CODING_THINKING = 2048
-FAILURE = re.compile(r"✖|✗|FAIL|Error|assert|expected|actual|not ok", re.I)
-
-
-def failure_lines(detail: str, limit: int = 12) -> str:
-    """The lines that say why a check failed, for the ticket's history; the full output stays in gates.json."""
-    passed = ("at ", "✔", "✓", "ok ", "PASS ")   # a passing test named after errors is not a failure line
-    lines = list(dict.fromkeys(l.strip() for l in detail.splitlines()
-                               if FAILURE.search(l) and not l.strip().startswith(passed)))
-    return "\n".join(lines[:limit]) if lines else detail[-600:]
+failure_lines = gates.failure_lines
 
 
 def run_timeout(repo, suite_seconds: int | None) -> int:
@@ -219,7 +211,7 @@ def probe_change(ctx: Context, ticket: dict, repo: Repo, work: Path, commit: str
         code, out, _ = box.run(repo.runner(path) or repo.test_command, cwd=target, timeout=timeout)
         if code not in (0, 124):   # the harness reproduces the failure; a claim alone is not a finding
             found.append({**item, "path": path, "source": clip(file.read_text(errors="replace"), 3000),
-                          "output": clip(failure_lines(out), 1500)})
+                          "output": clip(failure_lines(out) or out[-600:], 1500)})
     shutil.rmtree(scratch, ignore_errors=True)
     ctx.store.event(ticket["id"], "probed", "harness", {"round": round_, "status": outcome.status,
                                                          "reported": len((outcome.result or {}).get("probes", [])),
@@ -398,7 +390,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
         code, out, seconds = sandbox.run(repo.test_command, timeout=repo.run_timeout)
         data["suite_seconds"] = round(seconds) if code == 0 else None
         # Run 9: a base that already failed left the coder retrying finish against failures it had not caused.
-        data["base_failures"] = failure_lines(out) if code else ""
+        data["base_failures"] = (failure_lines(out) or out[-600:]) if code else ""
         ctx.store.merge_data(ticket["id"], suite_seconds=data["suite_seconds"], base_failures=data["base_failures"])
     timeout = run_timeout(repo, data.get("suite_seconds"))
 
@@ -449,7 +441,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
     (directory / "gates.json").write_text(json.dumps(report, indent=1))
     record["gates"] = [{"name": c["name"], "ok": c["ok"]} for c in report["checks"]]
     ctx.store.event(ticket["id"], "gates", "harness", {"round": round_, "passed": report["passed"], "checks": record["gates"],
-                                                        "failures": {c["name"]: failure_lines(c.get("detail") or "")
+                                                        "failures": {c["name"]: failure_lines(c.get("detail") or "") or (c.get("detail") or "")[-600:]
                                                                      for c in report["checks"] if not c["ok"]}})
     summary = (outcome.result or {}).get("summary") or f"(the coding agent stopped without a summary: {outcome.status})"
 

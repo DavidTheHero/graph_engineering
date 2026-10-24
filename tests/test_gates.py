@@ -140,3 +140,15 @@ class FailedTests(unittest.TestCase):
                          {"renders the model"})   # durations differ between runs
         self.assertIsNone(failed_tests("Segmentation fault\n"))
 
+
+class Feedback(unittest.TestCase):
+    def test_failures_put_what_failed_before_the_full_output(self):
+        from graph_engineering.gates import failures
+        detail = "\n".join(["✔ passes %d (1ms)" % n for n in range(40)]
+                            + ["✖ daily research submits one job (3ms)", "AssertionError: 0 !== 1", "    at Test.run"])
+        report = {"checks": [{"name": "changes tests", "ok": True, "detail": ""},
+                             {"name": "test suite passes", "ok": False, "detail": detail}]}
+        text = failures(report)
+        self.assertTrue(text.startswith("FAILED: test suite passes\nWhat failed:\n✖ daily research submits one job (3ms)\n"
+                                        "AssertionError: 0 !== 1\n\nFull output:\n✔ passes 0"))
+        self.assertEqual(failures({"checks": [{"name": "x", "ok": False, "detail": "no clue"}]}), "FAILED: x\nno clue")
