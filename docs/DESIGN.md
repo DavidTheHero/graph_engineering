@@ -7,7 +7,27 @@ The design follows Anthropic's published guidance on agents (sources at the end)
 **a fixed workflow outside, a tool-using agent inside, ground truth from tests the harness runs itself,
 the smallest useful context, and a person at the merge.**
 
-## Where it stands (2026-10-23)
+## Where it stands (2026-10-24)
+
+Run 13, the current baseline: the quick profile on commit 179ec84, 8 tasks from two repositories (4 from
+General_AI_Agent, 4 from this project's own history) × 2 trials, Qwen 27B on one GPU:
+
+| | Result |
+|---|---|
+| Trials accepted by the gates | 15 of 16 (94%) |
+| Tasks solved in every trial (pass^k) | 7 of 8 (88%) |
+| Tasks solved in at least one trial (pass@k) | 8 of 8 |
+| Maintainers' hidden tests on accepted results | 8 of 11 (73%) |
+| Time per ticket | 6 min to 1 h 43 min (median 20 min) |
+| Prompt-cache hit rate on the model server | 94% |
+
+Six tasks passed both trials and every hidden test. The misses are the two hardest: #20 (tool search: one
+trial passed the gates but not the maintainers' tests, the other never got its own tests green in three rounds),
+and the repository map (both trials miss Python `async def`, which the maintainers test). Changes since 179ec84
+(a loop restarts from the notes, a line-by-line ticket check before finish, the piped-timeout hint) target those
+misses and are not yet measured.
+
+Earlier history:
 
 Run 8: the quick profile on commit cd153d1, Qwen 27B on one GPU, 7 trials of the 4 General_AI_Agent tasks
 before the session ended:
