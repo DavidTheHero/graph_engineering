@@ -17,6 +17,7 @@ Reasoning cut off by the output limit is handed back as notes too, since chat te
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -36,6 +37,8 @@ NOTES_CHARS = 6000
 FAILED_OUTPUT = re.compile(r"Traceback \(most recent call last\)|^(?:FAIL|ERROR)[:\s]|^\s*[✖✕×] |AssertionError|"
                            r"\b\d+ (?:failed|failing)\b|^not ok ", re.M)
 SAME_OUTPUT = "[the same output as this command gave"
+UNDONE = "[after this edit"
+REPEAT_HINTS = ("You already made this exact call", SAME_OUTPUT, UNDONE)
 
 NOTES_TOOL = {"name": "update_notes",
               "description": "Replace your working notes: the plan, what is done, what you learned about the code (file paths, "
@@ -117,6 +120,7 @@ class Agent:
         self.failed_at = 0                    # step of the latest command that failed, by exit code or by its output
         self.repeat_at = 0                    # step of the latest repeated call or repeated output
         self.outputs: dict[str, int] = {}     # command output -> step it was last seen
+        self.states: dict[tuple[str, str], int] = {}   # (path, content hash) -> step at which the file had that content
 
     def log(self, entry: dict) -> None:
         if self.transcript:
@@ -213,6 +217,7 @@ class Agent:
         force_action = False   # after reasoning ran out without acting: next turn without thinking, a tool call required
         compacted_at = -1
         restarted = restart = False   # one fresh start from the notes when the agent loops
+        withheld = None   # the tool repeated on the previous step; not offered on the next one
         seen: dict[str, tuple[int, str]] = {}   # call signature -> (step, tool call id) of results still in context
         try:
             for step in range(1, self.max_steps + 1):
@@ -229,7 +234,9 @@ class Agent:
                     messages = self.summarise(messages, specs, task, step)
                     compacted_at = step
                     seen.clear()
-                if step == self.max_steps or stuck:
+                final = step == self.max_steps or stuck
+                offered = [spec for spec in specs if spec["name"] != withheld]
+                if final:
                     # The last step can only end the session: a warning alone did not stop a reviewer from exploring.
                     if stuck:
                         self.emit(step, "note", "compacted on consecutive steps; asking for the final answer")
@@ -240,11 +247,11 @@ class Agent:
                 elif force_action:
                     # Eval: the 27B hit the output limit thinking four turns running and stalled; asking it to act
                     # did not help. Without thinking and with a required tool call, it acts.
-                    reply = chat(self.model, messages, specs, tool_choice="required", think=False)
+                    reply = chat(self.model, messages, offered, tool_choice="required", think=False)
                     force_action = False
                 else:
                     budget, think = self.thinking(step)
-                    reply = chat(self.model, messages, specs, budget=budget, think=think)
+                    reply = chat(self.model, messages, offered, budget=budget, think=think)
                 for key in outcome.usage:
                     outcome.usage[key] += reply.usage.get(key, 0)
                 message = {"role": "assistant", "content": reply.content}
@@ -274,8 +281,9 @@ class Agent:
                     continue
                 idle = 0
                 since_change += 1
+                repeated, withheld = withheld, None   # a call of the withheld tool still runs; a repeat is caught below
                 for call in reply.tool_calls:
-                    result = self.dispatch(call, step, seen, allowed)
+                    result = self.dispatch(call, step, seen, allowed, final)
                     if isinstance(result, Outcome):
                         result.steps, result.usage = step, outcome.usage
                         outcome = result
@@ -283,7 +291,13 @@ class Agent:
                     if call["name"] in ("write_file", "edit_file") and not result.startswith("Error"):
                         seen.clear()  # files changed, so earlier reads and runs may now differ
                         since_change = 0
-                    repeats = repeats + 1 if result.startswith(("You already made this exact call", SAME_OUTPUT)) else 0
+                    if result.startswith(REPEAT_HINTS):
+                        # Run 17: told its call was a repeat, a coder made it three more times while saying it would
+                        # redesign its test. Taking the tool away for a step makes the next move a different one.
+                        repeats, withheld = repeats + 1, call["name"]
+                        result += f"\n[{withheld} is not offered on your next step: take a different kind of step.]"
+                    elif repeated is None:
+                        repeats = 0   # a step without the withheld tool proves nothing; the count waits
                     messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
                     self.log(messages[-1])
                     if repeats >= 3 and not restarted:
@@ -298,7 +312,7 @@ class Agent:
                     restart = False
                     self.emit(step, "note", "repeated the same call three times; restarting from notes")
                     messages = self.summarise(messages, specs, task, step)
-                    compacted_at = step
+                    compacted_at, withheld = step, None
                     seen.clear()
                     continue
                 if outcome.status != "out_of_steps":
@@ -319,6 +333,13 @@ class Agent:
         self.log({"role": "outcome", **outcome.asdict()})
         self.emit(outcome.steps, "end", outcome.status + (f": {outcome.error}" if outcome.error else ""))
         return outcome
+
+    def content(self, path) -> str | None:
+        """A hash of a file's current content; None when it does not exist or is out of bounds."""
+        try:
+            return hashlib.sha1(self.workspace.path(str(path)).read_bytes()).hexdigest()
+        except (OSError, ValueError):
+            return None
 
     def check_evidence(self, args: dict) -> str | None:
         """Evidence, not assertions: every cited command must have run, after the last file change, with that exit code."""
@@ -364,7 +385,7 @@ class Agent:
             return (head + f"\n[cut at line {last} to fit your context; read from start_line={last + 1} for more]", last)
         return head + f"\n[cut to {len(head)} characters to fit your context; narrow the request for the rest]", None
 
-    def dispatch(self, call: dict, step: int, seen: dict, allowed) -> str | Outcome:
+    def dispatch(self, call: dict, step: int, seen: dict, allowed, final: bool = False) -> str | Outcome:
         name = call["name"]
         try:
             args = json.loads(call["arguments"] or "{}")
@@ -386,8 +407,15 @@ class Agent:
                     args = {**args, "evidence": [{"command": self.verify, "exit_code": 0, "run_by": "harness"}]}
                     problem = None
                 else:
-                    return (f"Error: your finish had no fresh evidence, so the harness ran `{self.verify}` for you:\n{result}\n"
-                            "Fix the failures and run it again, or call finish saying in unresolved what is left.")
+                    problem = (f"your finish had no fresh evidence, so the harness ran `{self.verify}` for you:\n{result}\n"
+                               "Fix the failures and run it again, or call finish saying in unresolved what is left")
+                    if not final:
+                        return f"Error: {problem}."
+            if problem and final and not validate(args, self.finish["parameters"]):
+                # Run 17: a forced last-step finish was refused for its evidence and the summary was lost with it. The
+                # last step cannot fix anything, so the problem goes on record as unresolved instead.
+                args = {**args, "unresolved": f"{args.get('unresolved') or ''}\n[harness: {problem[:2000]}]".strip()}
+                problem = None
             if problem:
                 return f"Error: {problem}. Call {name} again with every required field."
             self.emit(step, "finish", json.dumps(args)[:400])
@@ -408,6 +436,9 @@ class Agent:
             answer = self.explorer(str(args.get("question", "")))
             self.emit(step, "explored", answer[:400])
             return answer
+        before = self.content(args.get("path")) if name in ("write_file", "edit_file") else None
+        if before:
+            self.states.setdefault((str(args.get("path")), before), step - 1)
         result = self.workspace.call(name, args, allowed)
         shown = None
         if len(result) > self.result_chars:
@@ -441,6 +472,18 @@ class Agent:
         elif name in ("write_file", "edit_file") and not result.startswith("Error"):
             self.last_change = step
             self.edits[str(args.get("path"))] = step
+            # Run 17: a coder applied an edit and its exact inverse twenty times over; each one changed the file, so
+            # nothing counted as a repeat. A file back at an earlier content is going round in circles.
+            after = self.content(args.get("path"))
+            seen_at = self.states.get((str(args.get("path")), after)) if after else None
+            if seen_at is not None and seen_at < step and after != before:
+                self.repeat_at = step
+                self.emit(step, "repeat", name)
+                when = "started with" if seen_at == 0 else f"had at step {seen_at}"
+                result = (f"{UNDONE} {args.get('path')} has the content it {when} again: you are going back and forth. "
+                          f"Run the tests to see which version is right, or take a different step.]\n" + result)
+            elif after:
+                self.states[(str(args.get("path")), after)] = step
         brief = ", ".join(f"{k}={str(v)[:80]!r}" for k, v in args.items() if k not in ("content", "new_text", "old_text"))
         self.emit(step, "tool", f"{name}({brief}) -> {result.splitlines()[0][:160] if result else ''}")
         return result

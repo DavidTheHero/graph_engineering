@@ -44,7 +44,35 @@ class AgentLoop(unittest.TestCase):
         self.assertEqual(outcome.status, "looping")
         # One real call and three answered from memory, a fresh start from the notes, then the same again.
         self.assertEqual(outcome.steps, 8)
-        self.assertIn("You already made this exact call", llm.requests[-1]["messages"][-1]["content"])
+        self.assertIn("search is not offered on your next step", llm.requests[-1]["messages"][-1]["content"])
+
+    def test_a_repeated_tool_is_not_offered_on_the_next_step(self):
+        """Run 17: told its call was a repeat, a coder made it three more times while saying it would change course."""
+        steps = iter([[call("search", pattern="add")], [call("search", pattern="add")], [call("search", pattern="add")],
+                      [call("read_file", path="calc.py")], [call("finish", summary="s", coverage=[])]])
+        outcome, llm = self.run_agent(lambda role, messages: next(steps))
+        self.assertEqual(outcome.status, "done")
+        offered = [[t["function"]["name"] for t in r["tools"]] for r in llm.requests]
+        self.assertIn("search", offered[1])
+        self.assertNotIn("search", offered[2])   # withheld after the repeat at step 2
+        self.assertNotIn("search", offered[3])   # and still, after the model repeated it anyway at step 3
+        self.assertIn("search", offered[4])      # back once the model took a different step
+        replies = [m["content"] for m in llm.requests[-1]["messages"] if m["role"] == "tool"]
+        self.assertIn("search is not offered on your next step", replies[1])
+        self.assertTrue(replies[2].startswith("You already made this exact call"))
+
+    def test_an_edit_that_restores_an_earlier_content_counts_as_a_repeat(self):
+        """Run 17: a coder applied an edit and its exact inverse twenty times over; each one changed the file."""
+        forward = call("edit_file", path="calc.py", old_text="return a + b", new_text="return a + b  # sum")
+        back = call("edit_file", path="calc.py", old_text="return a + b  # sum", new_text="return a + b")
+        steps = iter([[forward], [back], [call("read_file", path="calc.py")], [forward], [call("finish", summary="s", coverage=[])]])
+        outcome, llm = self.run_agent(lambda role, messages: next(steps))
+        self.assertEqual(outcome.status, "done")
+        replies = [m["content"] for m in llm.requests[-1]["messages"] if m["role"] == "tool"]
+        self.assertEqual(replies[0], "Edited calc.py")
+        self.assertIn("calc.py has the content it started with again", replies[1])
+        self.assertIn("calc.py has the content it had at step 1 again", replies[3])
+        self.assertNotIn("edit_file", [t["function"]["name"] for t in llm.requests[2]["tools"]])
 
     def test_a_loop_restarts_from_the_notes_once(self):
         """Run 13: a coder re-read the same lines in circles and the whole round was lost."""
@@ -147,6 +175,15 @@ class Evidence(unittest.TestCase):
 
     def last_tool_reply(self, llm):
         return [m for m in llm.requests[-1]["messages"] if m["role"] == "tool"][-1]["content"]
+
+    def test_the_forced_last_step_keeps_the_finish_and_records_the_evidence_problem(self):
+        """Run 17: a last-step finish was refused for lacking passing evidence, and its summary was lost with it."""
+        plan = [[call("read_file", path="calc.py", start_line=n)] for n in range(1, 8)]
+        plan.append([call("finish", summary="done as far as it goes", coverage=[])])
+        outcome, _ = self.run_agent(plan, verify="false")
+        self.assertEqual((outcome.status, outcome.steps), ("done", 8))
+        self.assertEqual(outcome.result["summary"], "done as far as it goes")
+        self.assertIn("the harness ran `false` for you", outcome.result["unresolved"])
 
     def test_uncited_or_stale_evidence_is_refused(self):
         test = "python3 -m unittest discover -s tests -q"
