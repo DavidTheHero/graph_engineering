@@ -294,6 +294,21 @@ class ThinkingBudget(unittest.TestCase):
         self.assertTrue(llm.requests[3]["messages"][-1]["content"].startswith("[the same output as this command gave at step 2"))
         self.assertEqual(outcome.status, "done")
 
+    def test_an_adaptive_budget_also_thinks_after_a_repeat_and_when_no_edit_comes(self):
+        root = temp_dir(self)
+        repo = python_repo(root)
+        reads = [[call("read_file", path="calc.py", start_line=n)] for n in (1, 2, 1, 1)]   # steps 3 and 4 repeat step 1
+        reads += [[call("read_file", path="calc.py", start_line=n)] for n in (3, 4, 5, 6)]
+        steps = iter(reads + [[call("finish", summary="s", coverage=[])]])
+        llm = FakeLLM(lambda role, messages: next(steps))
+        self.addCleanup(llm.close)
+        model = llm.model()
+        model.think = True
+        Agent(model, Workspace(repo), READ_WRITE[:3], FINISH, "s", thinking_budget=-1024).run("task")
+        thought = [r["chat_template_kwargs"]["enable_thinking"] for r in llm.requests]
+        # step 1; steps 4 and 5 after the repeats; steps 6 and 9, six and nine steps without an edit
+        self.assertEqual(thought, [True, False, False, True, True, True, False, False, True])
+
     def test_a_budget_of_zero_turns_thinking_off(self):
         llm = FakeLLM(lambda role, messages: [call("finish", summary="s", coverage=[])])
         self.addCleanup(llm.close)

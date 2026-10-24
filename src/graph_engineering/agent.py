@@ -115,6 +115,7 @@ class Agent:
         self.reads: dict[str, tuple] = {}     # tool call id -> (path, first line, last line, step)
         self.edits: dict[str, int] = {}       # path -> step of its latest edit
         self.failed_at = 0                    # step of the latest command that failed, by exit code or by its output
+        self.repeat_at = 0                    # step of the latest repeated call or repeated output
         self.outputs: dict[str, int] = {}     # command output -> step it was last seen
 
     def log(self, entry: dict) -> None:
@@ -347,7 +348,11 @@ class Agent:
             return budget, None
         if budget == 0:
             return None, False
-        return (-budget, None) if step == 1 or self.failed_at == step - 1 else (None, False)
+        # Run 17: a coder probed with 48 debug scripts that all exited 0 and repeated itself 11 times with thinking off.
+        # A repeat, or a long stretch of commands and reads without an edit, is a sign it is lost: think then too.
+        idle = step - self.last_change
+        stuck = self.repeat_at == step - 1 or (idle >= 6 and idle % 3 == 0)
+        return (-budget, None) if step == 1 or self.failed_at == step - 1 or stuck else (None, False)
 
     def fit(self, result: str) -> tuple[str, int | None]:
         """Cut a result to the per-result share of the budget at a line boundary, saying where it stopped."""
@@ -389,6 +394,7 @@ class Agent:
             return Outcome("done", result=args)
         signature = name + json.dumps(args, sort_keys=True)
         if signature in seen:
+            self.repeat_at = step
             self.emit(step, "repeat", name)
             return (f"You already made this exact call at step {seen[signature][0]} and nothing has changed since, so the result "
                     "is the same. Use what you have and take the next step.")
@@ -429,6 +435,7 @@ class Agent:
             seen_at = self.outputs.get(key)
             self.outputs[key] = step
             if seen_at is not None and seen_at >= self.last_change and seen_at < step:
+                self.repeat_at = step
                 result = (f"{SAME_OUTPUT} at step {seen_at}, and no file has changed since. Change the code, or take a "
                           f"different step.]\n" + result)
         elif name in ("write_file", "edit_file") and not result.startswith("Error"):
