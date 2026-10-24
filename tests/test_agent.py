@@ -185,6 +185,28 @@ class Evidence(unittest.TestCase):
         self.assertEqual(outcome.result["summary"], "done as far as it goes")
         self.assertIn("the harness ran `false` for you", outcome.result["unresolved"])
 
+    def test_coverage_must_cite_a_new_or_changed_test_for_each_criterion(self):
+        """Run 17: #20's coder cited existing tests for the one criterion the maintainers' tests failed."""
+        from graph_engineering.sandbox import Sandbox
+        import shutil
+        test, work = "python3 -m unittest discover -s tests -q", self.root / "box" / "work"
+        shutil.copytree(self.repo, work)
+        plan = [[call("finish", summary="s", evidence=[{"command": test, "exit_code": 0}],
+                      coverage=[{"criterion": 1, "tests": "test_subtract"}, {"criterion": 2, "tests": "test_add (existing)"}])],
+                [call("finish", summary="s", evidence=[{"command": test, "exit_code": 0}],
+                      coverage=[{"criterion": 1, "tests": "Test_Subtract"}, {"criterion": 2, "tests": "test_add"}],
+                      unresolved="Criterion 2 is untested: it needs the network.")]]
+        plan = [[call("run", command=test)]] + plan
+        llm = FakeLLM(lambda role, messages: plan[min(sum(m["role"] == "assistant" for m in messages), len(plan) - 1)])
+        self.addCleanup(llm.close)
+        agent = Agent(llm.model(), Workspace(work, Sandbox(self.root, work, trusted=True)), READ_WRITE, FINISH, "system",
+                      evidence=True, max_steps=8, tests_changed=lambda: {"test_subtract"})
+        outcome = agent.run("task")
+        self.assertEqual(outcome.status, "done")
+        refused = [m["content"] for m in llm.requests[-1]["messages"] if m["role"] == "tool"][1]
+        self.assertIn("coverage for criteria 2 names no test this change adds or touches (those are: test_subtract)", refused)
+        self.assertEqual(outcome.result["coverage"][1]["tests"], "test_add")
+
     def test_uncited_or_stale_evidence_is_refused(self):
         test = "python3 -m unittest discover -s tests -q"
         outcome, llm = self.run_agent([

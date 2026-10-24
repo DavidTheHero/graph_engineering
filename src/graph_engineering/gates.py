@@ -25,6 +25,30 @@ def changes(work: Path, base: str) -> list[tuple[str, str]]:
     return [(fields[i][0], fields[i + 1]) for i in range(0, len(fields) - 1, 2)]
 
 
+TEST_NAME = re.compile(r"""(?:^|[^\w.])(?:test|it)\(\s*['"`](.+?)['"`]|^\s*(?:async\s+)?def\s+(test\w+)|^func\s+(Test\w+)""")
+HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.M)
+
+
+def changed_tests(work: Path, base: str, is_test) -> set[str]:
+    """The names of the tests this change adds or touches: a test counts as changed when a line inside it is."""
+    names: set[str] = set()
+    for status, path in changes(work, base):
+        if status == "D" or not is_test(path) or not (work / path).is_file():
+            continue
+        lines = (work / path).read_text(errors="replace").splitlines()
+        if status == "A":
+            touched = range(1, len(lines) + 1)
+        else:
+            touched = [n for m in HUNK.finditer(git(work, "diff", "--cached", "-U0", base, "--", path))
+                       for n in range(int(m.group(1)), int(m.group(1)) + max(int(m.group(2) or 1), 1))]
+        starts = [(i, next(g for g in m.groups() if g)) for i, line in enumerate(lines, 1) if (m := TEST_NAME.search(line))]
+        for n in touched:
+            enclosing = [name for i, name in starts if i <= n]
+            if enclosing:
+                names.add(enclosing[-1])
+    return names
+
+
 def snapshot(work: Path, base: str) -> str:
     """An unreferenced commit of exactly what is staged: what the gates test is what gets published."""
     git(work, "add", "-A")

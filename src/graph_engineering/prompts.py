@@ -60,7 +60,9 @@ Work like this:
    states, open the code that implements it and confirm it does exactly that; fix any difference and test it.
 6. When every acceptance criterion is implemented and covered by a test, call finish with evidence: the commands
    you ran after your last change (at least the test command) and their exit codes. The harness checks the evidence
-   against what you actually ran. If something cannot be done, call finish anyway and say exactly what is missing.
+   against what you actually ran, and that each criterion's coverage names a test this change adds or touches: a
+   test that already passed proves nothing about it. If something cannot be done, call finish anyway and say exactly
+   what is missing.
 
 Think briefly before each action and act in small steps: one tool call, look at the result, then decide.
 You do not need a complete design before you start; test results will tell you what is missing.
@@ -78,7 +80,8 @@ FINISH = {
     "parameters": {"type": "object", "properties": {
         "summary": {"type": "string", "description": "What changed and why, file by file"},
         "coverage": {"type": "array", "items": {"type": "object", "properties": {
-            "criterion": {"type": "integer"}, "tests": {"type": "string", "description": "Test names that cover it"}},
+            "criterion": {"type": "integer"}, "tests": {"type": "string", "description": "The exact names of the new or "
+                                                                              "changed tests that cover it, as in the test file"}},
             "required": ["criterion", "tests"]}},
         "unresolved": {"type": "string", "description": "Anything not done, or empty"},
         "evidence": {"type": "array", "description": "Commands you ran after your last file change that show the result, "

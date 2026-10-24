@@ -100,7 +100,8 @@ class Agent:
                  max_steps: int = 60, nudge_after: int | None = None, transcript: Path | None = None,
                  on_step: Callable[[dict], None] | None = None, cancelled: Callable[[], bool] = lambda: False,
                  notes: Path | None = None, explorer: Callable[[str], str] | None = None, working_tokens: int = WORKING_TOKENS,
-                 evidence: bool = False, verify: str | None = None, thinking_budget: int | None = None):
+                 evidence: bool = False, verify: str | None = None, thinking_budget: int | None = None,
+                 tests_changed: Callable[[], set[str]] | None = None):
         self.model, self.workspace, self.tools, self.finish, self.system = model, workspace, tools, finish, system
         self.max_steps, self.nudge_after, self.on_step, self.cancelled = max_steps, nudge_after, on_step, cancelled
         self.transcript = Path(transcript) if transcript else None
@@ -112,6 +113,7 @@ class Agent:
         self.compactions = 0
         self.evidence = evidence          # finish must cite commands actually run after the last file change
         self.verify = verify              # the test command the harness runs itself when evidence is missing or stale
+        self.tests_changed = tests_changed   # names of the tests this change adds or touches, for the coverage check
         self.thinking_budget = thinking_budget   # per-agent reasoning cap; None uses the model's default
         self.commands: list[tuple[int, str, int]] = []   # (step, command, exit code) of every run call
         self.last_change = 0
@@ -341,6 +343,21 @@ class Agent:
         except (OSError, ValueError):
             return None
 
+    def check_coverage(self, args: dict) -> str | None:
+        """Each criterion's coverage must name a test this change adds or touches: a test that passed before the change
+        proves nothing about it. Run 17: #20 cited existing tests for the one criterion the maintainers' tests failed."""
+        changed = sorted(self.tests_changed())
+        plain = lambda text: re.sub(r"\s+", " ", str(text or "")).strip().lower()
+        unresolved = plain(args.get("unresolved"))
+        missing = [str(item.get("criterion")) for item in args.get("coverage") or []
+                   if not any(plain(name) and plain(name) in plain(item.get("tests")) for name in changed)]
+        missing = [c for c in missing if not re.search(rf"criteri\w*[^.\n]*\b{c}\b", unresolved)]
+        if not missing:
+            return None
+        return (f"coverage for criteria {', '.join(missing)} names no test this change adds or touches (those are: "
+                f"{', '.join(changed[:10]) or 'none'}). A criterion needs a new or changed test: write one and cite its "
+                f"exact name, or say under unresolved why criterion N is untested")
+
     def check_evidence(self, args: dict) -> str | None:
         """Evidence, not assertions: every cited command must have run, after the last file change, with that exit code."""
         items = args.get("evidence") or []
@@ -411,6 +428,8 @@ class Agent:
                                "Fix the failures and run it again, or call finish saying in unresolved what is left")
                     if not final:
                         return f"Error: {problem}."
+            if not problem and self.tests_changed:
+                problem = self.check_coverage(args)
             if problem and final and not validate(args, self.finish["parameters"]):
                 # Run 17: a forced last-step finish was refused for its evidence and the summary was lost with it. The
                 # last step cannot fix anything, so the problem goes on record as unresolved instead.

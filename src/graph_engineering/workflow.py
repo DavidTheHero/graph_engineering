@@ -420,6 +420,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
     agent, run, coder = _agent(ctx, ticket, "coding", Workspace(work, sandbox, timeout), READ_WRITE, prompts.FINISH,
                                prompts.CODING, directory / "coding", round_, max_steps=repo.coding_steps_for(spec), nudge_after=15,
                                notes=root / "notes.md", explorer=explorer, evidence=True, verify=repo.test_command,
+                               tests_changed=lambda: gates.changed_tests(work, data["base"], repo.is_test),
                                # Run 7: 75% of the coder's output was reasoning, most of it in a few steps that ran to
                                # the 4,096 cap; Aider found Qwen3 edits as well or better without thinking.
                                thinking_budget=repo.coding_thinking)

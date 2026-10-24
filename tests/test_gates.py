@@ -141,6 +141,29 @@ class FailedTests(unittest.TestCase):
         self.assertIsNone(failed_tests("Segmentation fault\n"))
 
 
+class ChangedTests(unittest.TestCase):
+    def test_a_test_counts_as_changed_when_a_line_inside_it_is(self):
+        from graph_engineering.gates import changed_tests
+        root = temp_dir(self)
+        repo = python_repo(root)
+        (repo / "tests" / "test_add.py").write_text(
+            "import unittest\nfrom calc import add\n\n\nclass Add(unittest.TestCase):\n"
+            "    def test_add(self):\n        self.assertEqual(add(2, 3), 5)\n\n"
+            "    def test_add_negative(self):\n        self.assertEqual(add(-2, 3), 1)\n")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "two tests")
+        base = git(repo, "rev-parse", "HEAD").strip()
+        is_test = Repo(name="calc", path=str(repo), test_command=TEST_COMMAND).is_test
+        self.assertEqual(changed_tests(repo, base, is_test), set())
+        (repo / "tests" / "test_add.py").write_text((repo / "tests" / "test_add.py").read_text().replace("add(-2, 3), 1", "add(-2, 3), 1)  # changed"))
+        (repo / "tests" / "test_sub.py").write_text(SUB_TEST)
+        (repo / "tests" / "test_sub.spec.js").write_text("import test from 'node:test';\ntest('subtracts two numbers', () => {});\n"
+                                                        "it(\"it form\", () => {});\n")
+        (repo / "calc.py").write_text(SUB_SOURCE)   # a source change is not a test
+        self.assertEqual(changed_tests(repo, base, is_test),
+                         {"test_add_negative", "test_subtract", "subtracts two numbers", "it form"})
+
+
 class Feedback(unittest.TestCase):
     def test_failures_put_what_failed_before_the_full_output(self):
         from graph_engineering.gates import failures
