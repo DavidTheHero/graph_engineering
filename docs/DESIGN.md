@@ -142,6 +142,12 @@ native tool calls). It stops on the finish tool or a stopping condition:
   or an edit back to an earlier content): a restart from the notes once, then the end;
 - cancellation.
 
+OpenHands' stuck detector names the same families, with its thresholds: the same action and observation four
+times, the same action failing three times, three agent messages without a tool call, two action-observation
+pairs alternating for six cycles ([agent stuck detector](https://docs.openhands.dev/sdk/guides/agent-stuck-detector)).
+This loop's thresholds are tighter (three repeats, four idle turns) because every step here costs 15–45 s of a
+single GPU.
+
 Each measure below came from a failure in a live transcript:
 
 | Failure seen | Measure |
