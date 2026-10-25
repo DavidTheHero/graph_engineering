@@ -120,7 +120,7 @@ measures the quick profile on 8 tasks from two repositories (this project's own 
 | Clearing, compaction, notes, sub-agents [7][C] | superseded reads and old outputs cleared in batches; notes file; compaction; `explore` | done |
 | Fresh context per retry [4][13] | each round is a new session in the same workspace, opened with notes and feedback | done |
 | Durable event log, restartable harness, disposable sandboxes [22] | SQLite event log; leased idempotent steps; one workspace per ticket | done |
-| Routing: small model for easy inputs [1] | role routing by reachability and context fit; `explore` prefers the 9B | done, unused: no agent has called `explore` |
+| Routing: small model for easy inputs [1] | role routing by reachability and context fit. `explore` preferred the 9B until run 19: the coder waits for every answer, and the 9B (16K context, compactions) took 103–631 s a question, nine times in one round of #20; it now prefers the 27B, with the 9B as fallback | done |
 | Oversight at plan level; agree on "done" before coding [19][23] | plan step for tickets with 3+ criteria: a test per criterion, checked by the reviewer; unresolved concerns become the final review's checklist | partial: no person approves the plan |
 | Protect the gate from the agent [13][B] | deleted tests, protected paths and test-configuration changes fail the gates | done |
 | Containment: filesystem and network isolation, credentials outside, no-follow reads [10][25][A] | sandbox-exec / bwrap, no network, credentials in the controller | partial: see Limitations |
