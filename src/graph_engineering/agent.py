@@ -101,7 +101,7 @@ class Agent:
                  on_step: Callable[[dict], None] | None = None, cancelled: Callable[[], bool] = lambda: False,
                  notes: Path | None = None, explorer: Callable[[str], str] | None = None, working_tokens: int = WORKING_TOKENS,
                  evidence: bool = False, verify: str | None = None, thinking_budget: int | None = None,
-                 tests_changed: Callable[[], set[str]] | None = None):
+                 tests_changed: Callable[[], set[str]] | None = None, must_change: bool = False):
         self.model, self.workspace, self.tools, self.finish, self.system = model, workspace, tools, finish, system
         self.max_steps, self.nudge_after, self.on_step, self.cancelled = max_steps, nudge_after, on_step, cancelled
         self.transcript = Path(transcript) if transcript else None
@@ -114,6 +114,7 @@ class Agent:
         self.evidence = evidence          # finish must cite commands actually run after the last file change
         self.verify = verify              # the test command the harness runs itself when evidence is missing or stale
         self.tests_changed = tests_changed   # names of the tests this change adds or touches, for the coverage check
+        self.must_change = must_change       # a feedback round: a finish that changed nothing needs a reason
         self.thinking_budget = thinking_budget   # per-agent reasoning cap; None uses the model's default
         self.commands: list[tuple[int, str, int]] = []   # (step, command, exit code) of every run call
         self.last_change = 0
@@ -435,6 +436,10 @@ class Agent:
                         return f"Error: {problem}."
             if not problem and self.tests_changed:
                 problem = self.check_coverage(args)
+            if not problem and self.must_change and not self.last_change and not (args.get("unresolved") or "").strip():
+                # Run 17: after a rejected round, two rounds ran a hundred commands, changed nothing and finished "done".
+                problem = ("nothing changed in this round although the previous attempt was rejected; fix the problems in "
+                           "the feedback, or say under unresolved why they cannot be fixed")
             if problem and final and not validate(args, self.finish["parameters"]):
                 # Run 17: a forced last-step finish was refused for its evidence and the summary was lost with it. The
                 # last step cannot fix anything, so the problem goes on record as unresolved instead.

@@ -211,6 +211,17 @@ class Evidence(unittest.TestCase):
             self.assertIn("coverage for criteria 2 names no test this change adds or touches (those are: test_subtract)", text)
         self.assertEqual(outcome.result["coverage"][1]["tests"], "test_add")
 
+    def test_a_feedback_round_that_changes_nothing_needs_a_reason(self):
+        """Run 17: after a rejected round, two rounds ran a hundred commands, changed nothing and finished "done"."""
+        steps = iter([[call("finish", summary="s", coverage=[])],
+                      [call("finish", summary="s", coverage=[], unresolved="the failing check is wrong: the test cannot fail on base")]])
+        llm = FakeLLM(lambda role, messages: next(steps))
+        self.addCleanup(llm.close)
+        outcome = Agent(llm.model(), Workspace(self.repo), READ_WRITE[:3], FINISH, "s", must_change=True).run("task")
+        self.assertEqual(outcome.status, "done")
+        refused = [m["content"] for m in llm.requests[-1]["messages"] if m["role"] == "tool"][0]
+        self.assertIn("nothing changed in this round although the previous attempt was rejected", refused)
+
     def test_uncited_or_stale_evidence_is_refused(self):
         test = "python3 -m unittest discover -s tests -q"
         outcome, llm = self.run_agent([

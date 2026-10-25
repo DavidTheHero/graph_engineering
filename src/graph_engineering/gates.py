@@ -29,11 +29,12 @@ TEST_NAME = re.compile(r"""(?:^|[^\w.])(?:test|it)\(\s*['"`](.+?)['"`]|^\s*(?:as
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.M)
 
 
-def changed_tests(work: Path, base: str, is_test) -> set[str]:
-    """The names of the tests this change adds or touches: a test counts as changed when a line inside it is."""
+def changed_tests(work: Path, base: str, is_test, only: str | None = None) -> set[str]:
+    """The names of the tests this change adds or touches (in one file with ``only``): a test counts as changed when a
+    line inside it is."""
     names: set[str] = set()
     for status, path in changes(work, base):
-        if status == "D" or not is_test(path) or not (work / path).is_file():
+        if status == "D" or not is_test(path) or not (work / path).is_file() or (only and path != only):
             continue
         lines = (work / path).read_text(errors="replace").splitlines()
         if status == "A":
@@ -143,6 +144,14 @@ def run_gates(repo: Repo, work: Path, base: str, sandbox: Sandbox, scratch: Path
             code_after, out_after, _ = sandbox.run(command, cwd=result, timeout=repo.run_timeout)
             detail = (f"on base: exit {code_before}\n{clip(out_before, LOG_CHARS)}\n\non result: exit {code_after}\n"
                       f"{clip(out_after, LOG_CHARS)}")
+            if code_before == 0:
+                # Run 17: a coder updated three existing tests whose assertions sit inside a callback the code under
+                # test catches; they passed on the base too, and three rounds went by without it seeing why.
+                names = ", ".join(sorted(changed_tests(work, base, repo.is_test, only=path))) or "(none found by name)"
+                detail = (f"The tests you changed in {path} pass on the base, without your source change, so they do not "
+                          f"detect the behaviour they are meant to. Changed tests: {names}. Make them fail on the base "
+                          "(check that their assertions run: one inside a callback the code under test catches is "
+                          "swallowed; assert on the returned result instead), or leave the file unchanged.\n\n" + detail)
             checks.append(check(f"{path} fails on base, passes on result", code_before != 0 and code_after == 0, detail))
         if whole_suite and any(not _helper(p) for p in whole_suite):
             # The failure must come from the new tests: the untouched base passes, base plus new tests fails.

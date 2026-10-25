@@ -71,6 +71,9 @@ class Gates(unittest.TestCase):
         report, checks = self.gate()
         self.assertFalse(report["passed"])
         self.assertFalse(checks["tests/test_more.py fails on base, passes on result"])
+        detail = [c["detail"] for c in report["checks"] if c["name"] == "tests/test_more.py fails on base, passes on result"][0]
+        self.assertTrue(detail.startswith("The tests you changed in tests/test_more.py pass on the base, without your source "
+                                          "change, so they do not detect the behaviour they are meant to. Changed tests: test_more."))
 
     def test_without_a_runner_the_whole_suite_must_fail_on_base(self):
         (self.work / "tests" / "test_sub.py").write_text(SUB_TEST)
