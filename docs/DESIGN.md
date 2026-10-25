@@ -53,7 +53,15 @@ Run 18 (7e08caf: those measures, plus the idle thinking trigger from d1c19c4 tha
 14 trials before the 27B server went down: 14 of 14 accepted, hidden tests 8 of 10, so the new checks cost no
 quality; the red-check explanation turned #20's unfixable round into a 46-step fix. But the time rose to 9.8 h
 for 14 trials (median 21 min): the coder thought on 31% of steps against 15%, 40% of those turns from the idle
-trigger, and seconds per step doubled. The idle trigger was removed (8da13f5); run 19 measures the checks alone.
+trigger, and seconds per step doubled. The idle trigger was removed (8da13f5).
+
+Run 19 (9ab5906: the checks without the idle trigger): 14 of 16 accepted, pass^k 6 of 8, hidden tests 8 of 10,
+8.5 h, median 12 min. The six easier tasks ran at run 17's pace (4–13 min); the hours went to #20 (118 and
+163 min, one trial failing three rounds) and one-command-start (28 and 40 min). The repository map passed the
+maintainers' tests in one trial, the first time. Two transcripts gave the next measures: f123b5b4 wrote 56 probe
+scripts (`dbg1.py`…) across three rounds and never a test (2e68d2a: the third scratch file is a repeat, and a
+mid-session reminder when no test has changed); #20 spent about 40 minutes of one round waiting on nine 9B
+explore calls (13630c4: explore prefers the 27B). Run 20 measures both.
 
 Earlier history:
 
