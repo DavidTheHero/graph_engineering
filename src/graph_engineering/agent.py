@@ -39,6 +39,7 @@ FAILED_OUTPUT = re.compile(r"Traceback \(most recent call last\)|^(?:FAIL|ERROR)
 SAME_OUTPUT = "[the same output as this command gave"
 UNDONE = "[after this edit"
 REPEAT_HINTS = ("You already made this exact call", SAME_OUTPUT, UNDONE)
+SCRATCH = re.compile(r"(^|[/_.-])(dbg|debug|scratch|tmp|temp|junk)([/_.-]|$)", re.I)   # a file name that says "leftover"
 
 NOTES_TOOL = {"name": "update_notes",
               "description": "Replace your working notes: the plan, what is done, what you learned about the code (file paths, "
@@ -101,7 +102,8 @@ class Agent:
                  on_step: Callable[[dict], None] | None = None, cancelled: Callable[[], bool] = lambda: False,
                  notes: Path | None = None, explorer: Callable[[str], str] | None = None, working_tokens: int = WORKING_TOKENS,
                  evidence: bool = False, verify: str | None = None, thinking_budget: int | None = None,
-                 tests_changed: Callable[[], set[str]] | None = None, must_change: bool = False):
+                 tests_changed: Callable[[], set[str]] | None = None, must_change: bool = False,
+                 added_files: Callable[[], list[str]] | None = None):
         self.model, self.workspace, self.tools, self.finish, self.system = model, workspace, tools, finish, system
         self.max_steps, self.nudge_after, self.on_step, self.cancelled = max_steps, nudge_after, on_step, cancelled
         self.transcript = Path(transcript) if transcript else None
@@ -115,6 +117,7 @@ class Agent:
         self.verify = verify              # the test command the harness runs itself when evidence is missing or stale
         self.tests_changed = tests_changed   # names of the tests this change adds or touches, for the coverage check
         self.must_change = must_change       # a feedback round: a finish that changed nothing needs a reason
+        self.added_files = added_files       # paths this change adds, for the scratch-file check at finish
         self.thinking_budget = thinking_budget   # per-agent reasoning cap; None uses the model's default
         self.commands: list[tuple[int, str, int]] = []   # (step, command, exit code) of every run call
         self.last_change = 0
@@ -344,6 +347,21 @@ class Agent:
         except (OSError, ValueError):
             return None
 
+    def check_scratch(self, args: dict) -> str | None:
+        """Run 18: a coder left backend/tests/__dbg-min.test.js behind; the gates then held it to the red check and the
+        round was lost. An added file whose name says scratch must go, or be declared intended under unresolved."""
+        try:
+            added = self.added_files()
+        except RuntimeError as exc:
+            self.emit(0, "note", f"scratch check skipped: {exc}")
+            return None
+        unresolved = str(args.get("unresolved") or "")
+        scratch = [p for p in added if SCRATCH.search(Path(p).name) and Path(p).name not in unresolved]
+        if not scratch:
+            return None
+        return (f"added files look like scratch: {', '.join(scratch)}. Remove them, or say under unresolved that each is "
+                "intended and why")
+
     def check_coverage(self, args: dict) -> str | None:
         """Each criterion's coverage must name a test this change adds or touches: a test that passed before the change
         proves nothing about it. Run 17: #20 cited existing tests for the one criterion the maintainers' tests failed."""
@@ -435,6 +453,8 @@ class Agent:
                         return f"Error: {problem}."
             if not problem and self.tests_changed:
                 problem = self.check_coverage(args)
+            if not problem and self.added_files:
+                problem = self.check_scratch(args)
             if not problem and self.must_change and not self.last_change and not (args.get("unresolved") or "").strip():
                 # Run 17: after a rejected round, two rounds ran a hundred commands, changed nothing and finished "done".
                 problem = ("nothing changed in this round although the previous attempt was rejected; fix the problems in "

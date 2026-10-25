@@ -211,6 +211,19 @@ class Evidence(unittest.TestCase):
             self.assertIn("coverage for criteria 2 names no test this change adds or touches (those are: test_subtract)", text)
         self.assertEqual(outcome.result["coverage"][1]["tests"], "test_add")
 
+    def test_an_added_file_that_looks_like_scratch_is_refused_once(self):
+        """Run 18: a coder left backend/tests/__dbg-min.test.js behind and the gates held it to the red check."""
+        steps = iter([[call("finish", summary="s", coverage=[])],
+                      [call("finish", summary="s", coverage=[],
+                            unresolved="__dbg-min.test.js and tmp_store.py are intended: they pin the minimal case")]])
+        llm = FakeLLM(lambda role, messages: next(steps))
+        self.addCleanup(llm.close)
+        added = ["backend/tests/__dbg-min.test.js", "backend/context.js", "tests/tmp_store.py", "src/_private.py"]
+        outcome = Agent(llm.model(), Workspace(self.repo), READ_WRITE[:3], FINISH, "s", added_files=lambda: added).run("task")
+        self.assertEqual(outcome.status, "done")
+        refused = [m["content"] for m in llm.requests[-1]["messages"] if m["role"] == "tool"][0]
+        self.assertIn("added files look like scratch: backend/tests/__dbg-min.test.js, tests/tmp_store.py", refused)
+        self.assertEqual(outcome.steps, 2)   # _private.py and context.js never counted; the named files pass
     def test_a_feedback_round_that_changes_nothing_needs_a_reason(self):
         """Run 17: after a rejected round, two rounds ran a hundred commands, changed nothing and finished "done"."""
         steps = iter([[call("finish", summary="s", coverage=[])],
