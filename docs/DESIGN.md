@@ -32,12 +32,23 @@ existing tests for that criterion and wrote none. Changes since 179ec84
 misses and are not yet measured.
 
 Runs 15–17 measured the coder's thinking. Off (run 15): simple tickets 2–3× faster, but one-command-start ran
-for more than 5 hours without finishing. **Adaptive** (run 16, `coding_thinking: -2048`: think on the first
-step, after a failed command, after a repeat, and when six or more steps pass without an edit): trial 1 of the
-8 tasks took 2.0 h against 3.4 h with thinking always on (−42%), with 61% fewer completion tokens; gates 7 of 8,
-hidden tests 3 of 5. Run 17 (8 tasks × 2 on a5d12ae) is in progress: 6 of 6 trials accepted so far,
-one-command-start in 910 s. Its transcripts gave three more loop measures (a2bf1f5, in the table below), not yet
-measured.
+for more than 5 hours without finishing. **Adaptive** (`coding_thinking: -2048`, now the default: think on the
+first step, after a failed command, after a repeat, and every third step once six pass without an edit) against
+the run 13 baseline, same 8 tasks × 2 trials:
+
+| | Run 13: thinking on every step (179ec84) | Run 17: adaptive (a5d12ae) |
+|---|---|---|
+| Trials accepted by the gates | 15 of 16 | 15 of 16 |
+| Tasks solved in every trial (pass^k) | 7 of 8 | 7 of 8 |
+| Maintainers' hidden tests on accepted results | 8 of 11 | 8 of 11 |
+| Total time, 16 trials | 8.4 h | 5.1 h (−39%) |
+| Time per ticket, median | 20 min | 10 min |
+| Completion tokens | 1.42 M | 0.49 M (−65%) |
+| one-command-start | 73 min, 62 min | 15 min, 12 min |
+
+The misses are unchanged: #20 (one trial passes the gates but not the maintainers' test on finishing after a
+report; the other fails three rounds) and the repository map's `async def`. Run 17's transcripts gave the loop
+measures a2bf1f5, ff5f320, 5d0d992 and 4c237cc (in the table below), measured next in run 18.
 
 Earlier history:
 
@@ -165,7 +176,8 @@ Each measure below came from a failure in a live transcript:
 | Three hung test runs cost 900 s of a 2,095 s coding session on an 11 s suite | **the command limit follows the base suite's time** (4× + 30 s, at least 60 s), and a timeout says the run probably hangs |
 | A failed `edit_file` cost a re-read before the retry | the error shows **the closest lines of the file, numbered** (search/replace beats diffs for Qwen: Diff-XYZ, Aider) |
 | `test \| head; echo EXIT=$?` exits 0 while the suite errors; one test was re-run 77 times changing only the `head -N` count | a command fails when its output says so, not only by its exit code; **the same output with nothing changed is a repeat** |
-| Thinking on every step: most of the output was reasoning. Thinking off: a debugging-heavy ticket ran out of steps three rounds running | **adaptive thinking** (`coding_thinking: -2048`): think on the first step, after a failed command, after a repeat, and when six or more steps pass without an edit |
+| Thinking on every step: most of the output was reasoning. Thinking off: a debugging-heavy ticket ran out of steps three rounds running | **adaptive thinking** (`coding_thinking: -2048`, the default): think on the first step, after a failed command, after a repeat, and when six or more steps pass without an edit. Run 17: same quality as run 13, −39% time |
+| Three existing tests were updated inside a callback the code under test catches; they passed on the base too, and three rounds passed without the coder seeing why (run 17, #20) | the red check's detail says the changed tests pass on the base, names them, and says what to do; **a feedback round that changes nothing must say why under unresolved** |
 | Told its call was a repeat, a coder made it three more times while saying it would redesign its test (run 17) | **the repeated tool is not offered on the next step**; alternating it with other calls still trips the restart-then-end guard |
 | A coder applied an edit and its exact inverse twenty times over without running a test (run 17, #20, steps 56–97): each one changed the file, so nothing counted as a repeat | **an edit that leaves a file with a content it had before is a repeat**, with a hint to run the tests and see which version is right |
 | A forced last-step finish was refused for lacking passing evidence, and the summary was lost with it | the last step's finish is accepted, with the problem recorded as unresolved |
@@ -304,7 +316,7 @@ Without the append-only change, the prefix-cache hit rate was 83%.
 
 | # | Item | Why | Cost |
 |---|---|---|---|
-| 1 | ~~Coder thinking: 2,048 tokens vs. off~~: **measured** (runs 15–17, above). Off is 2–3× faster on simple tickets but lost a debugging-heavy one; adaptive thinking kept the gain (−42% in trial 1) and run 17 is confirming it | 75% of the coder's output was reasoning; Aider found Qwen3 edits as well or better without thinking | done, pending run 17 |
+| 1 | ~~Coder thinking: 2,048 tokens vs. off~~: **measured** (runs 15–17, above). Off is 2–3× faster on simple tickets but lost a debugging-heavy one; adaptive thinking kept the gain (−39% over 16 trials) at equal quality and is the default | 75% of the coder's output was reasoning; Aider found Qwen3 edits as well or better without thinking | done |
 | 2 | **Mutation gate** on the changed lines: the new tests must kill a share of mutants of the diff | LLM test suites catch at most ~36% of mutated solutions (SWE-Mutation); Meta's ACH | 2–4 days per language |
 | 3 | ~~Speculative decoding on the model server~~: **already on** (MTP, 3 draft tokens, 67% accepted, from the server's `/metrics`) | — | done |
 | 4 | **More eval tasks** from more repositories (`eval-mine` on other projects or small public libraries) | Avoid tuning to 4 tasks | small, GPU time to run |

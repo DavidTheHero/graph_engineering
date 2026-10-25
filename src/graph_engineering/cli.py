@@ -89,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     evals.add_argument("--profile", choices=["quick", "thorough"], help="override every repository's profile")
     evals.add_argument("--probe", action=argparse.BooleanOptionalAction, default=None,
                        help="override every repository's probe setting (quick profile)")
-    evals.add_argument("--coding-thinking", type=int, help="the coder's reasoning tokens per turn; 0 turns thinking off")
+    evals.add_argument("--coding-thinking", type=int, help="the coder's reasoning tokens per turn; 0 turns thinking off; negative thinks only when stuck (the default, -2048)")
     mine = sub.add_parser("eval-mine", help="turn past commits with tests into validated eval tasks")
     mine.add_argument("repo")
     mine.add_argument("--ref", help="branch to mine (default: the repository's base)")
