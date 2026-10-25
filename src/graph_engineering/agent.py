@@ -392,11 +392,10 @@ class Agent:
             return budget, None
         if budget == 0:
             return None, False
-        # Run 17: a coder probed with 48 debug scripts that all exited 0 and repeated itself 11 times with thinking off.
-        # A repeat, or a long stretch of commands and reads without an edit, is a sign it is lost: think then too.
-        idle = step - self.last_change
-        stuck = self.repeat_at == step - 1 or (idle >= 6 and idle % 3 == 0)
-        return (-budget, None) if step == 1 or self.failed_at == step - 1 or stuck else (None, False)
+        # Run 17: a coder probed with 48 debug scripts that all exited 0 and repeated itself 11 times with thinking off;
+        # a repeat is a sign it is lost, so it thinks then too. Run 18 also thought every third step once six passed
+        # without an edit: that was 40% of all thinking turns, the longest ones, and doubled the time per step.
+        return (-budget, None) if step == 1 or self.failed_at == step - 1 or self.repeat_at == step - 1 else (None, False)
 
     def fit(self, result: str) -> tuple[str, int | None]:
         """Cut a result to the per-result share of the budget at a line boundary, saying where it stopped."""

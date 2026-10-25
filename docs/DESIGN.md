@@ -33,8 +33,7 @@ misses and are not yet measured.
 
 Runs 15–17 measured the coder's thinking. Off (run 15): simple tickets 2–3× faster, but one-command-start ran
 for more than 5 hours without finishing. **Adaptive** (`coding_thinking: -2048`, now the default: think on the
-first step, after a failed command, after a repeat, and every third step once six pass without an edit) against
-the run 13 baseline, same 8 tasks × 2 trials:
+first step, after a failed command and after a repeat) against the run 13 baseline, same 8 tasks × 2 trials:
 
 | | Run 13: thinking on every step (179ec84) | Run 17: adaptive (a5d12ae) |
 |---|---|---|
@@ -176,7 +175,7 @@ Each measure below came from a failure in a live transcript:
 | Three hung test runs cost 900 s of a 2,095 s coding session on an 11 s suite | **the command limit follows the base suite's time** (4× + 30 s, at least 60 s), and a timeout says the run probably hangs |
 | A failed `edit_file` cost a re-read before the retry | the error shows **the closest lines of the file, numbered** (search/replace beats diffs for Qwen: Diff-XYZ, Aider) |
 | `test \| head; echo EXIT=$?` exits 0 while the suite errors; one test was re-run 77 times changing only the `head -N` count | a command fails when its output says so, not only by its exit code; **the same output with nothing changed is a repeat** |
-| Thinking on every step: most of the output was reasoning. Thinking off: a debugging-heavy ticket ran out of steps three rounds running | **adaptive thinking** (`coding_thinking: -2048`, the default): think on the first step, after a failed command, after a repeat, and when six or more steps pass without an edit. Run 17: same quality as run 13, −39% time |
+| Thinking on every step: most of the output was reasoning. Thinking off: a debugging-heavy ticket ran out of steps three rounds running | **adaptive thinking** (`coding_thinking: -2048`, the default): think on the first step, after a failed command and after a repeat. Run 17: same quality as run 13, −39% time. Run 18 added a trigger every third step once six passed without an edit: 40% of all thinking turns, the longest ones, and the time per step doubled, so it was removed |
 | Three existing tests were updated inside a callback the code under test catches; they passed on the base too, and three rounds passed without the coder seeing why (run 17, #20) | the red check's detail says the changed tests pass on the base, names them, and says what to do; **a feedback round that changes nothing must say why under unresolved** |
 | Told its call was a repeat, a coder made it three more times while saying it would redesign its test (run 17) | **the repeated tool is not offered on the next step**; alternating it with other calls still trips the restart-then-end guard |
 | A coder applied an edit and its exact inverse twenty times over without running a test (run 17, #20, steps 56–97): each one changed the file, so nothing counted as a repeat | **an edit that leaves a file with a content it had before is a repeat**, with a hint to run the tests and see which version is right |
