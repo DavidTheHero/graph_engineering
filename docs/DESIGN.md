@@ -47,7 +47,13 @@ first step, after a failed command and after a repeat) against the run 13 baseli
 
 The misses are unchanged: #20 (one trial passes the gates but not the maintainers' test on finishing after a
 report; the other fails three rounds) and the repository map's `async def`. Run 17's transcripts gave the loop
-measures a2bf1f5, ff5f320, 5d0d992 and 4c237cc (in the table below), measured next in run 18.
+measures a2bf1f5, ff5f320, 5d0d992 and 4c237cc (in the table below).
+
+Run 18 (7e08caf: those measures, plus the idle thinking trigger from d1c19c4 that run 17 did not have) completed
+14 trials before the 27B server went down: 14 of 14 accepted, hidden tests 8 of 10, so the new checks cost no
+quality; the red-check explanation turned #20's unfixable round into a 46-step fix. But the time rose to 9.8 h
+for 14 trials (median 21 min): the coder thought on 31% of steps against 15%, 40% of those turns from the idle
+trigger, and seconds per step doubled. The idle trigger was removed (8da13f5); run 19 measures the checks alone.
 
 Earlier history:
 
