@@ -211,6 +211,24 @@ class Evidence(unittest.TestCase):
             self.assertIn("coverage for criteria 2 names no test this change adds or touches (those are: test_subtract)", text)
         self.assertEqual(outcome.result["coverage"][1]["tests"], "test_add")
 
+    def test_the_third_scratch_file_counts_as_a_repeat_and_half_way_without_a_test_is_said(self):
+        """Run 19: 29 probe scripts in one round, and two rounds of 80 steps that never changed a test."""
+        import re
+        from graph_engineering.repos import TEST_FILES
+        steps = iter([[call("write_file", path=f"dbg{n}.py", content=f"print({n})")] for n in (1, 2, 3)]
+                     + [[call("read_file", path="calc.py")], [call("finish", summary="s", coverage=[])]])
+        llm = FakeLLM(lambda role, messages: next(steps))
+        self.addCleanup(llm.close)
+        outcome = Agent(llm.model(), Workspace(self.repo), READ_WRITE[:5], FINISH, "s", max_steps=8,
+                        is_test=lambda p: bool(re.search(TEST_FILES, p))).run("task")
+        self.assertEqual(outcome.status, "done")
+        sent = llm.requests[-1]["messages"]
+        replies = [m["content"] for m in sent if m["role"] == "tool"]
+        self.assertEqual(replies[1], "Created dbg2.py (1 lines)")
+        self.assertTrue(replies[2].startswith("[this is scratch file 3: probing with one-off scripts is not converging."))
+        self.assertIn("write_file is not offered on your next step", replies[2])
+        self.assertIn("Half your steps are spent and no test file has changed", [m["content"] for m in sent if m["role"] == "user"][-1])
+
     def test_an_added_file_that_looks_like_scratch_is_refused_once(self):
         """Run 18: a coder left backend/tests/__dbg-min.test.js behind and the gates held it to the red check."""
         steps = iter([[call("finish", summary="s", coverage=[])],

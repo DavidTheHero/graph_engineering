@@ -38,8 +38,9 @@ FAILED_OUTPUT = re.compile(r"Traceback \(most recent call last\)|^(?:FAIL|ERROR)
                            r"\b\d+ (?:failed|failing)\b|^not ok ", re.M)
 SAME_OUTPUT = "[the same output as this command gave"
 UNDONE = "[after this edit"
-REPEAT_HINTS = ("You already made this exact call", SAME_OUTPUT, UNDONE)
-SCRATCH = re.compile(r"(^|[/_.-])(dbg|debug|scratch|tmp|temp|junk)([/_.-]|$)", re.I)   # a file name that says "leftover"
+PROBING = "[this is scratch file"
+REPEAT_HINTS = ("You already made this exact call", SAME_OUTPUT, UNDONE, PROBING)
+SCRATCH = re.compile(r"(^|[/_.-])(dbg|debug|scratch|tmp|temp|junk)\d*([/_.-]|$)", re.I)   # a file name that says "leftover"
 
 NOTES_TOOL = {"name": "update_notes",
               "description": "Replace your working notes: the plan, what is done, what you learned about the code (file paths, "
@@ -103,7 +104,7 @@ class Agent:
                  notes: Path | None = None, explorer: Callable[[str], str] | None = None, working_tokens: int = WORKING_TOKENS,
                  evidence: bool = False, verify: str | None = None, thinking_budget: int | None = None,
                  tests_changed: Callable[[], set[str]] | None = None, must_change: bool = False,
-                 added_files: Callable[[], list[str]] | None = None):
+                 added_files: Callable[[], list[str]] | None = None, is_test: Callable[[str], bool] | None = None):
         self.model, self.workspace, self.tools, self.finish, self.system = model, workspace, tools, finish, system
         self.max_steps, self.nudge_after, self.on_step, self.cancelled = max_steps, nudge_after, on_step, cancelled
         self.transcript = Path(transcript) if transcript else None
@@ -118,6 +119,8 @@ class Agent:
         self.tests_changed = tests_changed   # names of the tests this change adds or touches, for the coverage check
         self.must_change = must_change       # a feedback round: a finish that changed nothing needs a reason
         self.added_files = added_files       # paths this change adds, for the scratch-file check at finish
+        self.is_test = is_test               # which paths are test files, for the no-test nudge at mid-session
+        self.scratch_files: set[str] = set() # scratch files this session created
         self.thinking_budget = thinking_budget   # per-agent reasoning cap; None uses the model's default
         self.commands: list[tuple[int, str, int]] = []   # (step, command, exit code) of every run call
         self.last_change = 0
@@ -329,6 +332,12 @@ class Agent:
                                      "what you have found; say in it what you could not check."})
                     self.log(messages[-1])
                     self.emit(step, "note", "3 steps left: asked to finish")
+                if self.is_test and step == self.max_steps // 2 and not any(self.is_test(p) for p in self.edits):
+                    # Run 19: two rounds of 80 steps edited the source, or wrote 29 probe scripts, and never a test.
+                    messages.append({"role": "user", "content": "Half your steps are spent and no test file has changed. Write "
+                                     "the tests for the acceptance criteria now (step 2): the gates refuse a change without them."})
+                    self.log(messages[-1])
+                    self.emit(step, "note", "mid-session: no test file changed yet")
                 if self.nudge_after and since_change and since_change % self.nudge_after == 0:
                     messages.append({"role": "user", "content": f"You have explored for {self.nudge_after} steps without changing "
                                      "a file. Stop exploring: state your plan in a short paragraph, then make the first change."})
@@ -532,6 +541,16 @@ class Agent:
                           f"Run the tests to see which version is right, or take a different step.]\n" + result)
             elif after:
                 self.states[(str(args.get("path")), after)] = step
+            if name == "write_file" and not before and SCRATCH.search(Path(str(args.get("path"))).name):
+                # Run 19: a coder wrote dbg1.py to dbg29.py, one probe a step, and never a test. From the third on, a
+                # scratch file counts as a repeat: the hint, thinking on the next step, and the loop guard.
+                self.scratch_files.add(str(args.get("path")))
+                if len(self.scratch_files) >= 3:
+                    self.repeat_at = step
+                    self.emit(step, "repeat", name)
+                    result = (f"{PROBING} {len(self.scratch_files)}: probing with one-off scripts is not converging. Put what "
+                              "you have learned into a test under the test directory, and delete the scratch files before "
+                              "you finish.]\n" + result)
         brief = ", ".join(f"{k}={str(v)[:80]!r}" for k, v in args.items() if k not in ("content", "new_text", "old_text"))
         self.emit(step, "tool", f"{name}({brief}) -> {result.splitlines()[0][:160] if result else ''}")
         return result
