@@ -69,6 +69,7 @@ at or under run 17's time: one-command-start 9 and 11 min, f123b5b4 23 and 20 mi
 before), the 9B's 100–630 s explore answers became 39 s on the 27B. #20 alone took 3.8 h of the 6.3 and still
 fails the maintainers' tests in both trials; with the repository map's `async def` (1 pass in 5 trials since
 run 19) it holds every remaining hidden miss. The model-name-response hidden miss in one trial did not repeat.
+Run 21 (3dc8ba1) measures the green checkpoints: a failed round now restarts from its last gate-passing state.
 
 Earlier history:
 
@@ -198,6 +199,8 @@ Each measure below came from a failure in a live transcript:
 | `test \| head; echo EXIT=$?` exits 0 while the suite errors; one test was re-run 77 times changing only the `head -N` count | a command fails when its output says so, not only by its exit code; **the same output with nothing changed is a repeat** |
 | Thinking on every step: most of the output was reasoning. Thinking off: a debugging-heavy ticket ran out of steps three rounds running | **adaptive thinking** (`coding_thinking: -2048`, the default): think on the first step, after a failed command and after a repeat. Run 17: same quality as run 13, −39% time. Run 18 added a trigger every third step once six passed without an edit: 40% of all thinking turns, the longest ones, and the time per step doubled, so it was removed |
 | Three existing tests were updated inside a callback the code under test catches; they passed on the base too, and three rounds passed without the coder seeing why (run 17, #20) | the red check's detail says the changed tests pass on the base, names them, and says what to do; **a feedback round that changes nothing must say why under unresolved** |
+| A coder had the whole suite green at step 67, then added tests it could not satisfy in 33 more steps; the round failed and the next one spent 90 steps decoding the broken state (run 20, #20) | **green checkpoints**: a snapshot each time a whole-suite command passes; a failed round's next round starts from the latest checkpoint that passes the gates, with the later edits attached as a diff |
+| A coder wrote 56 probe scripts (`dbg1.py`…) across three rounds and never a test (run 19) | the third scratch file counts as a repeat; half-way through a session with no test file changed, the coder is told the gates will refuse the change; a finish is refused once while an added file looks like scratch |
 | Told its call was a repeat, a coder made it three more times while saying it would redesign its test (run 17) | **the repeated tool is not offered on the next step**; alternating it with other calls still trips the restart-then-end guard |
 | A coder applied an edit and its exact inverse twenty times over without running a test (run 17, #20, steps 56–97): each one changed the file, so nothing counted as a repeat | **an edit that leaves a file with a content it had before is a repeat**, with a hint to run the tests and see which version is right |
 | A forced last-step finish was refused for lacking passing evidence, and the summary was lost with it | the last step's finish is accepted, with the problem recorded as unresolved |
