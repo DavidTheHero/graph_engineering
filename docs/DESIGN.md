@@ -63,6 +63,13 @@ scripts (`dbg1.py`…) across three rounds and never a test (2e68d2a: the third 
 mid-session reminder when no test has changed); #20 spent about 40 minutes of one round waiting on nine 9B
 explore calls (13630c4: explore prefers the 27B). Run 20 measures both.
 
+Run 20 (13630c4), the current baseline: **16 of 16 accepted, pass^k 8 of 8** (the first run with every trial
+accepted), hidden tests 7 of 12, 6.3 h in all, median 9 min, 0.48 M completion tokens. Every task outside #20 ran
+at or under run 17's time: one-command-start 9 and 11 min, f123b5b4 23 and 20 min in one round each (50 and 22
+before), the 9B's 100–630 s explore answers became 39 s on the 27B. #20 alone took 3.8 h of the 6.3 and still
+fails the maintainers' tests in both trials; with the repository map's `async def` (1 pass in 5 trials since
+run 19) it holds every remaining hidden miss. The model-name-response hidden miss in one trial did not repeat.
+
 Earlier history:
 
 Run 8: the quick profile on commit cd153d1, Qwen 27B on one GPU, 7 trials of the 4 General_AI_Agent tasks
