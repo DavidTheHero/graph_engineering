@@ -18,10 +18,13 @@ def check(name: str, ok: bool, detail: str = "") -> dict:
     return {"name": name, "ok": bool(ok), "detail": detail}
 
 
-def changes(work: Path, base: str) -> list[tuple[str, str]]:
-    """(status, path) for every change against base, staged so new files count."""
-    git(work, "add", "-A")
-    fields = git(work, "diff", "--cached", "--name-status", "--no-renames", "-z", base).split("\0")
+def changes(work: Path, base: str, commit: str | None = None) -> list[tuple[str, str]]:
+    """(status, path) for every change against base: of the work tree, staged so new files count, or of ``commit``."""
+    if commit is None:
+        git(work, "add", "-A")
+        fields = git(work, "diff", "--cached", "--name-status", "--no-renames", "-z", base).split("\0")
+    else:
+        fields = git(work, "diff", "--name-status", "--no-renames", "-z", base, commit).split("\0")
     return [(fields[i][0], fields[i + 1]) for i in range(0, len(fields) - 1, 2)]
 
 
@@ -105,12 +108,13 @@ def test_configuration(repo: Repo, work: Path, base: str, commit: str, rows: lis
 
 
 def run_gates(repo: Repo, work: Path, base: str, sandbox: Sandbox, scratch: Path, dependencies: list[str] | None = None,
-              allow_test_config: bool = False) -> dict:
+              allow_test_config: bool = False, commit: str | None = None) -> dict:
     """``dependencies``: the ignored directories setup installed; anything else untracked is left out of the checks.
-    ``allow_test_config``: a person allowed this ticket to change test configuration."""
+    ``allow_test_config``: a person allowed this ticket to change test configuration. ``commit``: judge an earlier
+    snapshot of the work tree instead of its current state."""
     dependencies = [] if dependencies is None else dependencies
-    rows = changes(work, base)
-    commit = snapshot(work, base)
+    rows = changes(work, base, commit)
+    commit = commit or snapshot(work, base)
     result = checkout(work, commit, scratch / "result", dependencies)
     tests = [(s, p) for s, p in rows if repo.is_test(p)]
     sources = [p for s, p in rows if not repo.is_test(p)]

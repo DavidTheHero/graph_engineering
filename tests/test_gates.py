@@ -63,6 +63,18 @@ class Gates(unittest.TestCase):
         self.assertTrue(report["passed"], report["checks"])
         self.assertIn("tests/test_sub.py fails on base, passes on result", checks)
 
+    def test_an_earlier_snapshot_can_be_judged_instead_of_the_work_tree(self):
+        from graph_engineering.gates import snapshot
+        (self.work / "tests" / "test_sub.py").write_text(SUB_TEST)
+        (self.work / "calc.py").write_text(SUB_SOURCE)
+        green = snapshot(self.work, self.base)
+        (self.work / "calc.py").write_text("def add(a, b):\n    return a + b\n")   # broken again
+        report, checks = self.gate()
+        self.assertFalse(report["passed"])
+        report = run_gates(self.repo, self.work, self.base, self.sandbox, self.root / "run" / "green", commit=green)
+        self.assertTrue(report["passed"], [c for c in report["checks"] if not c["ok"]])
+        self.assertEqual(report["commit"], green)
+
     def test_a_test_that_already_passes_on_base_is_refused(self):
         (self.work / "tests" / "test_more.py").write_text(
             "import unittest\nfrom calc import add\n\n\nclass More(unittest.TestCase):\n"

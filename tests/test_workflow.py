@@ -116,7 +116,7 @@ class Workflow(unittest.TestCase):
         self.assertEqual(ticket["state"], "done", ticket["error"])
         self.assertIn("def subtract", (self.source / "calc.py").read_text())
         kinds = [e["kind"] for e in self.store.events(ticket["id"]) if e["kind"] != "agent"]
-        self.assertEqual(kinds, ["created", "proposed", "accepted", "gates", "memory_updated", "ready", "published",
+        self.assertEqual(kinds, ["created", "proposed", "accepted", "green", "gates", "memory_updated", "ready", "published",
                                  "merge_approved", "merged"])
         self.assertIn("python3 -m unittest discover", workflow.read_memory(ctx, "calc"))
 
@@ -144,6 +144,43 @@ class Workflow(unittest.TestCase):
         self.assertIn("REMEMBERED: tests live in tests/", openings[0])
         self.assertIn("memory_skipped", [e["kind"] for e in self.store.events(ticket["id"])])
         self.assertEqual(path.read_text(), "- REMEMBERED: tests live in tests/\n")
+
+    def test_a_failed_round_restarts_from_its_last_green_state(self):
+        """Run 20: a coder had the suite green, then added tests it could not satisfy and the round was lost."""
+        feedback_seen = []
+        broken = "def add(a, b):\n    return a + b\n\n\ndef subtract(a, b):\n    return a + b\n"
+
+        def script(role, messages):
+            if role == "intake":
+                return [call("submit_ticket", **SPEC)]
+            if role == "review":
+                return [call("submit_review", verdict="approve", findings=[], summary="ok")]
+            if turns(messages) == 0:
+                feedback_seen.append(messages[1]["content"])
+            if len(feedback_seen) == 1:   # round 1: green at step 3, then broken
+                plan = [[call("write_file", path="tests/test_sub.py", content=SUB_TEST)],
+                        [call("write_file", path="calc.py", content=SUB_SOURCE)],
+                        [call("run", command=TEST_COMMAND)],
+                        [call("write_file", path="calc.py", content=broken)],
+                        [call("run", command=TEST_COMMAND)],
+                        [call("finish", summary="tried", coverage=[{"criterion": 1, "tests": "test_subtract"}],
+                              evidence=[{"command": TEST_COMMAND, "exit_code": 1}], unresolved="subtract fails")]]
+                return plan[min(turns(messages), 5)]
+            plan = [[call("run", command=TEST_COMMAND)],
+                    [call("finish", summary="the restored state is complete", coverage=[{"criterion": 1, "tests": "test_subtract"}],
+                          evidence=[{"command": TEST_COMMAND, "exit_code": 0}], unresolved="nothing to change: the restored state passes")]]
+            return plan[min(turns(messages), 1)]
+
+        ctx = self.context(script)
+        self.store.create("calc", "Please add subtract", "person")
+        ticket = self.drive(ctx, ("awaiting_merge", "failed"))
+        self.assertEqual(ticket["state"], "awaiting_merge", ticket["error"])
+        self.assertEqual(ticket["round"], 2)
+        self.assertIn("At step 3 of your previous attempt the whole suite passed", feedback_seen[1])
+        self.assertIn("return a + b\n", feedback_seen[1])   # the later edit is attached
+        kinds = [e["kind"] for e in self.store.events(ticket["id"])]
+        self.assertIn("green", kinds)
+        self.assertIn("restored_green", kinds)
 
     def test_failed_gates_feed_the_next_round(self):
         prompts_seen = []

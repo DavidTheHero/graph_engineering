@@ -104,7 +104,8 @@ class Agent:
                  notes: Path | None = None, explorer: Callable[[str], str] | None = None, working_tokens: int = WORKING_TOKENS,
                  evidence: bool = False, verify: str | None = None, thinking_budget: int | None = None,
                  tests_changed: Callable[[], set[str]] | None = None, must_change: bool = False,
-                 added_files: Callable[[], list[str]] | None = None, is_test: Callable[[str], bool] | None = None):
+                 added_files: Callable[[], list[str]] | None = None, is_test: Callable[[str], bool] | None = None,
+                 on_green: Callable[[int, str], None] | None = None):
         self.model, self.workspace, self.tools, self.finish, self.system = model, workspace, tools, finish, system
         self.max_steps, self.nudge_after, self.on_step, self.cancelled = max_steps, nudge_after, on_step, cancelled
         self.transcript = Path(transcript) if transcript else None
@@ -121,6 +122,7 @@ class Agent:
         self.added_files = added_files       # paths this change adds, for the scratch-file check at finish
         self.is_test = is_test               # which paths are test files, for the no-test nudge at mid-session
         self.scratch_files: set[str] = set() # scratch files this session created
+        self.on_green = on_green             # told of every command that passed, for the workflow's green checkpoints
         self.thinking_budget = thinking_budget   # per-agent reasoning cap; None uses the model's default
         self.commands: list[tuple[int, str, int]] = []   # (step, command, exit code) of every run call
         self.last_change = 0
@@ -517,6 +519,11 @@ class Agent:
             # Run 16: `test | head; echo EXIT=$?` exits 0 while the test errors; the output says it failed.
             if code != 0 or FAILED_OUTPUT.search(result):
                 self.failed_at = step
+            elif self.on_green:
+                try:
+                    self.on_green(step, str(args.get("command", "")))
+                except RuntimeError as exc:
+                    self.emit(step, "note", f"checkpoint skipped: {exc}")
             # Run 16: the coder ran one test 77 times changing only `head -260` to `-280`, `-300`: the same output
             # with nothing changed is no new information, whatever the command's spelling.
             key = re.sub(r"^exit code (-?\d+) \(\d+s\)", r"exit code \1", result)

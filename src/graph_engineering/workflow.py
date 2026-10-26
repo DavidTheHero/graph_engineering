@@ -344,6 +344,38 @@ def accept_fallback(ctx: Context, ticket: dict, repo: Repo, work: Path, round_: 
                         fallback["report"], data, record)
 
 
+SUITE_RUN = re.compile(r"\b(npm (run )?test|yarn test|pnpm test|node --test|pytest|python3? -m unittest|go test|cargo test|jest|vitest|mocha)\b")
+ONE_TEST = re.compile(r"\.(test|spec)\.[cm]?[jt]sx?|(^|[\s/])test_\w+\.py|::|-k |--grep|--test-name-pattern|\.py\b")
+
+
+def suite_run(command: str, test_command: str) -> bool:
+    """Does this command run the whole suite rather than one test or file?"""
+    return test_command in command or bool(SUITE_RUN.search(command) and not ONE_TEST.search(command))
+
+
+def restore_green(ctx: Context, ticket: dict, repo: Repo, work: Path, sandbox: Sandbox, directory: Path, data: dict,
+                  greens: list[tuple[int, str]], report: dict) -> str | None:
+    """Run 20: #20's coder had the whole suite green at step 67, then added tests it could not satisfy in 33 more
+    steps, and the next round spent 90 steps decoding the broken state. When a round fails the gates, the latest
+    checkpoint that passes them becomes the next round's workspace, with the later edits attached as a diff."""
+    for step, sha in reversed(greens[-2:]):
+        if sha == report["commit"]:
+            continue
+        ctx.renew()
+        verdict = gates.run_gates(repo, work, data["base"], sandbox, directory / f"green-{step}", data.get("dependencies"),
+                                  allow_test_config=bool(ticket["spec"].get("allow_test_config")), commit=sha)
+        if not verdict["passed"]:
+            continue
+        later = git(work, "diff", "--no-renames", sha, report["commit"])
+        git(work, "read-tree", "--reset", "-u", sha)
+        ctx.store.event(ticket["id"], "restored_green", "harness", {"step": step, "commit": sha})
+        return (f"At step {step} of your previous attempt the whole suite passed, and that state passes the gates; the "
+                "workspace has been reset to it. The edits you made after it (below) broke the gates, as the failures "
+                "under them show. Keep what was right in them, and make every new test pass before you finish.\n"
+                f"<later_edits>\n{clip(later, 4000)}\n</later_edits>")
+    return None
+
+
 def base_ref(repo: Repo, data: dict) -> str:
     """What development starts from: a pinned commit if one is given, else the freshly fetched GitHub base."""
     if data.get("base_ref"):
@@ -417,13 +449,22 @@ def develop(ctx: Context, ticket: dict) -> dict:
         if plan_record.get("concerns"):
             data["feedback"] = ((data.get("feedback") or "") + "\n\nThe plan reviewer's remaining concerns (address them):\n"
                                 + plan_record["concerns"]).strip()
+    greens: list[tuple[int, str]] = []   # (step, snapshot) each time the whole suite passed
+
+    def on_green(step: int, command: str) -> None:
+        if suite_run(command, repo.test_command):
+            sha = gates.snapshot(work, data["base"])
+            if not greens or greens[-1][1] != sha:
+                greens.append((step, sha))
+                ctx.store.event(ticket["id"], "green", "harness", {"round": round_, "step": step, "commit": sha})
+
     agent, run, coder = _agent(ctx, ticket, "coding", Workspace(work, sandbox, timeout), READ_WRITE, prompts.FINISH,
                                prompts.CODING, directory / "coding", round_, max_steps=repo.coding_steps_for(spec), nudge_after=15,
                                notes=root / "notes.md", explorer=explorer, evidence=True, verify=repo.test_command,
                                tests_changed=lambda: gates.changed_tests(work, data["base"], repo.is_test),
                                must_change=bool(data.get("feedback")),
                                added_files=lambda: [p for s, p in gates.changes(work, data["base"]) if s == "A"],
-                               is_test=repo.is_test,
+                               is_test=repo.is_test, on_green=on_green,
                                # Run 7: 75% of the coder's output was reasoning, most of it in a few steps that ran to
                                # the 4,096 cap; Aider found Qwen3 edits as well or better without thinking.
                                thinking_budget=repo.coding_thinking)
@@ -516,6 +557,11 @@ def develop(ctx: Context, ticket: dict) -> dict:
         if data.get("fallback"):
             return accept_fallback(ctx, ticket, repo, work, round_, root, plan, data, record)
         feedback = gates.failures(report)
+        if round_ < ticket["max_rounds"]:
+            restored = restore_green(ctx, ticket, repo, work, sandbox, directory, data, greens, report)
+            if restored:
+                record["restored_green"] = True
+                feedback = restored + "\n\nThe failures of the state after those edits:\n" + feedback
     data.update(feedback=clip(feedback, FEEDBACK_CHARS), rounds=data.get("rounds", []) + [record])
     if round_ >= ticket["max_rounds"]:
         return _move(ctx, ticket, "failed", "rounds_spent", {"round": round_}, round=round_,
