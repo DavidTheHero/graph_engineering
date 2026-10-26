@@ -27,6 +27,20 @@ def coder(good=True):
     return step
 
 
+class SuiteRun(unittest.TestCase):
+    def test_whole_suite_commands_are_told_from_single_tests(self):
+        from graph_engineering.workflow import suite_run
+        whole = ["npm test", "npm test 2>&1 | tail -30", "node --test backend/tests/*.test.js 2>&1 | grep -E '^(✖|ℹ)'",
+                 "node --test backend/tests/ 2>&1", "python3 -m unittest discover -s tests -q", "pytest -q", "go test ./..."]
+        single = ["node --test backend/tests/context.test.js 2>&1 | tail -12", "python3 -m unittest tests.test_context -q",
+                  "python3 -m unittest -q tests/test_context.py", "pytest tests/test_x.py::test_y", "node -e 'import(\"./x.js\")'",
+                  "git diff --stat", "pytest -k routing"]
+        for command in whole:
+            self.assertTrue(suite_run(command, "npm test"), command)
+        for command in single:
+            self.assertFalse(suite_run(command, "npm test"), command)
+
+
 class Store_(unittest.TestCase):
     def setUp(self):
         self.store = Store(temp_dir(self) / "s.db")

@@ -345,12 +345,14 @@ def accept_fallback(ctx: Context, ticket: dict, repo: Repo, work: Path, round_: 
 
 
 SUITE_RUN = re.compile(r"\b(npm (run )?test|yarn test|pnpm test|node --test|pytest|python3? -m unittest|go test|cargo test|jest|vitest|mocha)\b")
-ONE_TEST = re.compile(r"\.(test|spec)\.[cm]?[jt]sx?|(^|[\s/])test_\w+\.py|::|-k |--grep|--test-name-pattern|\.py\b")
+ONE_TEST = re.compile(r"\.(test|spec)\.[cm]?[jt]sx?|(^|[\s/])test_\w+\.py|\btests?\.\w*test\w*\b|::|-k |--grep|--test-name-pattern|\.py\b")
 
 
 def suite_run(command: str, test_command: str) -> bool:
-    """Does this command run the whole suite rather than one test or file?"""
-    return test_command in command or bool(SUITE_RUN.search(command) and not ONE_TEST.search(command))
+    """Does this command run the whole suite rather than one test or file? A glob (`tests/*.test.js`) is the suite."""
+    if test_command in command or not SUITE_RUN.search(command):
+        return test_command in command
+    return "*" in command or not ONE_TEST.search(command)
 
 
 def restore_green(ctx: Context, ticket: dict, repo: Repo, work: Path, sandbox: Sandbox, directory: Path, data: dict,
