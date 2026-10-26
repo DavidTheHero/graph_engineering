@@ -1,8 +1,8 @@
 # graph_engineering
 
 A local controller for agentic software engineering. You describe a change; a local model turns it into a
-ticket, implements it in a sandbox, the harness checks the result itself, a second model session reviews it,
-and a pull request is opened for **you** to merge.
+ticket, implements it in a sandbox, the harness checks the result itself (a second model session reviews it in
+the thorough profile), and a pull request is opened for **you** to merge.
 
 ```
 request ─► intake agent ─► ticket ─► you accept ─► coding agent ─► gates ─► review agent ─► PR ─► you approve merge
