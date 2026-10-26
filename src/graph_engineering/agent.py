@@ -121,7 +121,7 @@ class Agent:
         self.must_change = must_change       # a feedback round: a finish that changed nothing needs a reason
         self.added_files = added_files       # paths this change adds, for the scratch-file check at finish
         self.is_test = is_test               # which paths are test files, for the no-test nudge at mid-session
-        self.scratch_files: set[str] = set() # scratch files this session created
+        self.scratch_writes = 0              # writes and edits of scratch-named files this session
         self.on_green = on_green             # told of every command that passed, for the workflow's green checkpoints
         self.thinking_budget = thinking_budget   # per-agent reasoning cap; None uses the model's default
         self.commands: list[tuple[int, str, int]] = []   # (step, command, exit code) of every run call
@@ -548,16 +548,17 @@ class Agent:
                           f"Run the tests to see which version is right, or take a different step.]\n" + result)
             elif after:
                 self.states[(str(args.get("path")), after)] = step
-            if name == "write_file" and not before and SCRATCH.search(Path(str(args.get("path"))).name):
-                # Run 19: a coder wrote dbg1.py to dbg29.py, one probe a step, and never a test. From the third on, a
-                # scratch file counts as a repeat: the hint, thinking on the next step, and the loop guard.
-                self.scratch_files.add(str(args.get("path")))
-                if len(self.scratch_files) >= 3:
+            if SCRATCH.search(Path(str(args.get("path"))).name):
+                # Run 19: a coder wrote dbg1.py to dbg29.py, one probe a step, and never a test; run 21: dbg_stuck.py
+                # rewritten 33 times. From the third write of a scratch file on, it counts as a repeat: the hint,
+                # thinking on the next step, and the loop guard.
+                self.scratch_writes += 1
+                if self.scratch_writes >= 3:
                     self.repeat_at = step
                     self.emit(step, "repeat", name)
-                    result = (f"{PROBING} {len(self.scratch_files)}: probing with one-off scripts is not converging. Put what "
-                              "you have learned into a test under the test directory, and delete the scratch files before "
-                              "you finish.]\n" + result)
+                    result = (f"{PROBING} write {self.scratch_writes}: probing with one-off scripts is not converging. Put "
+                              "what you have learned into a test under the test directory, and delete the scratch files "
+                              "before you finish.]\n" + result)
         brief = ", ".join(f"{k}={str(v)[:80]!r}" for k, v in args.items() if k not in ("content", "new_text", "old_text"))
         self.emit(step, "tool", f"{name}({brief}) -> {result.splitlines()[0][:160] if result else ''}")
         return result

@@ -215,8 +215,9 @@ class Evidence(unittest.TestCase):
         """Run 19: 29 probe scripts in one round, and two rounds of 80 steps that never changed a test."""
         import re
         from graph_engineering.repos import TEST_FILES
-        steps = iter([[call("write_file", path=f"dbg{n}.py", content=f"print({n})")] for n in (1, 2, 3)]
-                     + [[call("read_file", path="calc.py")], [call("finish", summary="s", coverage=[])]])
+        steps = iter([[call("write_file", path="dbg.py", content="print(1)")], [call("write_file", path="dbg2.py", content="print(2)")],
+                      [call("write_file", path="dbg.py", content="print(3)")],   # the same file again: still the third write
+                      [call("read_file", path="calc.py")], [call("finish", summary="s", coverage=[])]])
         llm = FakeLLM(lambda role, messages: next(steps))
         self.addCleanup(llm.close)
         outcome = Agent(llm.model(), Workspace(self.repo), READ_WRITE[:5], FINISH, "s", max_steps=8,
@@ -225,7 +226,7 @@ class Evidence(unittest.TestCase):
         sent = llm.requests[-1]["messages"]
         replies = [m["content"] for m in sent if m["role"] == "tool"]
         self.assertEqual(replies[1], "Created dbg2.py (1 lines)")
-        self.assertTrue(replies[2].startswith("[this is scratch file 3: probing with one-off scripts is not converging."))
+        self.assertTrue(replies[2].startswith("[this is scratch file write 3: probing with one-off scripts is not converging."))
         self.assertIn("write_file is not offered on your next step", replies[2])
         self.assertIn("Half your steps are spent and no test file has changed", [m["content"] for m in sent if m["role"] == "user"][-1])
 
