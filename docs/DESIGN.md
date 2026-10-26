@@ -69,7 +69,10 @@ at or under run 17's time: one-command-start 9 and 11 min, f123b5b4 23 and 20 mi
 before), the 9B's 100–630 s explore answers became 39 s on the 27B. #20 alone took 3.8 h of the 6.3 and still
 fails the maintainers' tests in both trials; with the repository map's `async def` (1 pass in 5 trials since
 run 19) it holds every remaining hidden miss. The model-name-response hidden miss in one trial did not repeat.
-Run 21 (3dc8ba1) measures the green checkpoints: a failed round now restarts from its last gate-passing state.
+Run 21 (3dc8ba1, green checkpoints): 16 of 16 accepted, pass^k 8 of 8, hidden tests 7 of 12, 6.9 h, median 9 min:
+the same as run 20. Checkpoints were taken in every trial (1–9 each), but none of the four failed rounds had one
+that passed the gates, so no restart from green happened; the measure cost nothing and is kept for the case it
+was built for. #20 took two rounds in both trials and failed the maintainers' tests in both.
 
 Earlier history:
 
