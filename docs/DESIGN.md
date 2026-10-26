@@ -76,6 +76,8 @@ was built for. #20 took two rounds in both trials and failed the maintainers' te
 The two maintainers' tests #20 fails most (3 of the last 5 trials) encode criterion 5's edge: a request for the
 report *and something else*, or to *explain* the report, must not end at the report. Every coder finished on any
 report. The task's interface sentence now says so; run 22 (two trials of #20 alone) measures it.
+The repository map's miss is of the same kind: `async def` is named nowhere in the ticket, and the coding prompt's
+"cover async functions" was not enough in 7 of 8 trials; the task's interface now lists it (run 23 measures).
 
 Earlier history:
 
