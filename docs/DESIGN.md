@@ -73,6 +73,9 @@ Run 21 (3dc8ba1, green checkpoints): 16 of 16 accepted, pass^k 8 of 8, hidden te
 the same as run 20. Checkpoints were taken in every trial (1–9 each), but none of the four failed rounds had one
 that passed the gates, so no restart from green happened; the measure cost nothing and is kept for the case it
 was built for. #20 took two rounds in both trials and failed the maintainers' tests in both.
+The two maintainers' tests #20 fails most (3 of the last 5 trials) encode criterion 5's edge: a request for the
+report *and something else*, or to *explain* the report, must not end at the report. Every coder finished on any
+report. The task's interface sentence now says so; run 22 (two trials of #20 alone) measures it.
 
 Earlier history:
 
