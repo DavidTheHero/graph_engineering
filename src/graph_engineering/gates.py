@@ -37,7 +37,8 @@ def changed_tests(work: Path, base: str, is_test, only: str | None = None) -> se
     line inside it is."""
     names: set[str] = set()
     for status, path in changes(work, base):
-        if status == "D" or not is_test(path) or not (work / path).is_file() or (only and path != only):
+        if status == "D" or not is_test(path) or not (work / path).is_file() or (work / path).is_symlink() \
+                or (only and path != only):
             continue
         lines = (work / path).read_text(errors="replace").splitlines()
         if status == "A":
@@ -108,7 +109,8 @@ def test_configuration(repo: Repo, work: Path, base: str, commit: str, rows: lis
 
 
 def run_gates(repo: Repo, work: Path, base: str, sandbox: Sandbox, scratch: Path, dependencies: list[str] | None = None,
-              allow_test_config: bool = False, commit: str | None = None) -> dict:
+              allow_test_config: bool = False, commit: str | None = None,
+              reports: Path | None = None) -> dict:
     """``dependencies``: the ignored directories setup installed; anything else untracked is left out of the checks.
     ``allow_test_config``: a person allowed this ticket to change test configuration. ``commit``: judge an earlier
     snapshot of the work tree instead of its current state."""
@@ -188,7 +190,9 @@ def run_gates(repo: Repo, work: Path, base: str, sandbox: Sandbox, scratch: Path
         code, out, seconds = sandbox.run(repo.build_command, cwd=result, timeout=repo.run_timeout * 2)
         checks.append(check("build passes", code == 0, f"{repo.build_command}: exit {code} in {seconds:.0f}s\n{clip(out, LOG_CHARS)}"))
     patch = git(work, "diff", "--no-renames", base, commit)
-    (scratch / "change.diff").write_text(patch)
+    scratch.mkdir(parents=True, exist_ok=True)
+    (reports or scratch).mkdir(parents=True, exist_ok=True)
+    (reports or scratch).joinpath("change.diff").write_text(patch)
     for directory in ("baseline", "result"):
         shutil.rmtree(scratch / directory, ignore_errors=True)
     return {"base": base, "commit": commit, "tree": git(work, "rev-parse", f"{commit}^{{tree}}").strip(), "changed": rows,

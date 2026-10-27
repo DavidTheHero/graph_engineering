@@ -104,6 +104,23 @@ class Interfaces(unittest.TestCase):
         # round-robin; a trial never starts from memory its own task produced
         self.assertEqual(seeds, [("a", ""), ("b", "learned on a"), ("a", "learned on b"), ("b", "learned on a")])
 
+    def test_hidden_tests_are_not_written_through_a_symbolic_link(self):
+        from graph_engineering import evaluation
+        from graph_engineering.sandbox import available
+        if not available():
+            self.skipTest("no OS sandbox on this host")
+        box = self.root / "box"
+        (box / "work" / "tests").mkdir(parents=True)
+        outside = self.root / "outside"
+        outside.mkdir()
+        (box / "work" / "tests" / "test_x.py").symlink_to(outside / "x.py")
+        (box / "work" / "linked").symlink_to(outside)
+        for path in ("tests/test_x.py", "linked/test_y.py"):
+            result = evaluation.hidden({"files": {path: "print('hi')"}, "command": "true"}, self.repos.get("calc"), box)
+            self.assertFalse(result["passed"])
+            self.assertIn("symbolic link", result["output"])
+        self.assertEqual(list(outside.iterdir()), [])
+
     def test_cli_registers_a_repository_and_files_a_ticket(self):
         home = self.root / "cli-home"
         out = io.StringIO()

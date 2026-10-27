@@ -9,11 +9,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 from urllib.parse import quote
 
-from .sandbox import git
+from .sandbox import GIT, SAFE_GIT, git
 
+GH = shutil.which("gh") or "gh"   # resolved once, at import
 SHA = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?")
 STATUS_CONTEXT = "graph-engineering/harness"
 
@@ -75,7 +77,7 @@ class GitHub:
         self.slug, self.base, self.prefix = slug, base, f"repos/{slug}"
 
     def api(self, endpoint: str, method: str = "GET", payload: dict | None = None):
-        command = ["gh", "api", "--hostname", "github.com", "--method", method, "-H", "Accept: application/vnd.github+json", endpoint]
+        command = [GH, "api", "--hostname", "github.com", "--method", method, "-H", "Accept: application/vnd.github+json", endpoint]
         if payload is not None:
             command += ["--input", "-"]
         try:
@@ -124,11 +126,11 @@ class GitHub:
         if existing and existing["head"]["sha"] == head and existing["base"]["ref"] == self.base:
             return self.brief(existing)
         if existing and (existing["state"] != "open" or existing["base"]["ref"] != self.base or subprocess.run(
-                ["git", "merge-base", "--is-ancestor", existing["head"]["sha"], head], cwd=work).returncode):
+                [GIT, *SAFE_GIT, "merge-base", "--is-ancestor", existing["head"]["sha"], head], cwd=work).returncode):
             raise PublishError(f"PR #{existing['number']} for this ticket is closed or has other history; it was not touched")
         if git(work, "rev-parse", "HEAD").strip() != head:
             raise PublishError("workspace HEAD is not the tested commit")
-        rewrites = subprocess.run(["git", "config", "--get-regexp", r"^url\..*\.(insteadof|pushinsteadof)$"], cwd=work,
+        rewrites = subprocess.run([GIT, *SAFE_GIT, "config", "--get-regexp", r"^url\..*\.(insteadof|pushinsteadof)$"], cwd=work,
                                   capture_output=True, text=True)
         if rewrites.stdout.strip():
             raise PublishError("Git URL rewrite configuration could redirect the push; publish manually")
@@ -137,7 +139,7 @@ class GitHub:
         taken = [r for r in remote if r.get("ref") == f"refs/heads/{branch}" and r["object"]["sha"] not in (head, ours)]
         if taken:
             raise PublishError(f"branch {branch} already exists on GitHub with other commits; it was not touched")
-        git(work, "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential", "push", "--porcelain",
+        git(work, "-c", "credential.helper=", "-c", f"credential.helper=!{GH} auth git-credential", "push", "--porcelain",
             f"https://github.com/{self.slug}.git", f"HEAD:refs/heads/{branch}")
         if existing:
             self.api(f"{self.prefix}/pulls/{existing['number']}", "PATCH", {"body": body + "\n\n" + marker(key)})
@@ -250,9 +252,9 @@ class Local:
         if head != approved_head:
             return {"merged": False, "reasons": ["branch moved since approval"], "pending": False}
         base_head = git(self.repo, "rev-parse", f"refs/heads/{self.base}").strip()
-        if subprocess.run(["git", "merge-base", "--is-ancestor", head, base_head], cwd=self.repo).returncode == 0:
+        if subprocess.run([GIT, *SAFE_GIT, "merge-base", "--is-ancestor", head, base_head], cwd=self.repo).returncode == 0:
             return {"merged": True, "merge_commit": base_head}
-        if subprocess.run(["git", "merge-base", "--is-ancestor", base_head, head], cwd=self.repo).returncode:
+        if subprocess.run([GIT, *SAFE_GIT, "merge-base", "--is-ancestor", base_head, head], cwd=self.repo).returncode:
             return {"merged": False, "reasons": [f"{self.base} has moved on; the change needs another round on the new base"],
                     "pending": False}
         current = git(self.repo, "symbolic-ref", "--quiet", "--short", "HEAD", check=False).strip()

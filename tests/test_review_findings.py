@@ -95,13 +95,13 @@ class SetupRecovery(unittest.TestCase):
                               state="proposed")
         workflow.accept(store, repos, ticket["id"], "p")
         # A previous worker cloned the workspace and died before setup finished.
-        prepare_workspace(source, "main", home / "work" / ticket["id"] / "work")
+        prepare_workspace(source, "main", home / "work" / ticket["id"] / "box" / "work")
         llm = FakeLLM(lambda role, messages: [call("finish", summary="nothing", coverage=[])] if role == "coding"
                       else [call("submit_review", verdict="approve", findings=[], summary="ok")])
         self.addCleanup(llm.close)
         ctx = workflow.Context(home, store, repos, llm.registry(), owner="w")
         workflow.develop(ctx, store.claim("w", 600))
-        self.assertTrue((home / "work" / ticket["id"] / "work" / "setup-ran").exists())
+        self.assertTrue((home / "work" / ticket["id"] / "box" / "work" / "setup-ran").exists())
         self.assertTrue(store.get(ticket["id"])["data"]["setup_done"])
 
 

@@ -143,6 +143,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command in ("serve", "work"):
         from .scheduler import Scheduler
         ctx = workflow.Context(home, store, repos, registry())
+        if args.command == "serve":
+            from .sandbox import CLOSED_PORTS
+            CLOSED_PORTS.add(args.port)   # before any worker runs a command: the sandbox must not reach the control centre
         scheduler = Scheduler(ctx, workers=args.workers)
         scheduler.start()
         try:

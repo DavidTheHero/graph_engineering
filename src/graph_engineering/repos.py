@@ -9,6 +9,8 @@ import re
 import shlex
 import subprocess
 
+from .sandbox import GIT, SAFE_GIT
+
 NAME = re.compile(r"[A-Za-z0-9_.-]{1,64}")
 SLUG = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 TEST_FILES = r"(^|/)(tests?|__tests__)/|\.(test|spec)\.[cm]?[jt]sx?$|(^|/)test_[^/]*\.py$|_test\.(py|go)$"
@@ -139,10 +141,10 @@ def detect(path: Path) -> dict:
             start = "tests" if (path / "tests").is_dir() else "."
             found["test_command"] = f"python3 -m unittest discover -s {start} -q"
     try:
-        branch = subprocess.run(["git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"], cwd=path,
+        branch = subprocess.run([GIT, *SAFE_GIT, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"], cwd=path,
                                 capture_output=True, text=True).stdout.strip()
         found["base"] = branch.split("/", 1)[1] if "/" in branch else "main"
-        remote = subprocess.run(["git", "remote", "get-url", "origin"], cwd=path, capture_output=True, text=True).stdout.strip()
+        remote = subprocess.run([GIT, *SAFE_GIT, "remote", "get-url", "origin"], cwd=path, capture_output=True, text=True).stdout.strip()
         match = re.fullmatch(r"(?:https://github\.com/|git@github\.com:)([^/]+/[^/]+?)(?:\.git)?", remote)
         if match:
             found["slug"] = match.group(1)

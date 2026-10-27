@@ -12,6 +12,7 @@ import re
 from urllib.parse import parse_qs, urlparse
 
 from . import workflow
+from .sandbox import CLOSED_PORTS
 from .store import Conflict
 
 PAGE = Path(__file__).parent / "web" / "index.html"
@@ -162,6 +163,7 @@ def make_handler(ctx, scheduler, port: int):
 
 
 def serve(ctx, scheduler=None, port: int = 8765) -> None:
+    CLOSED_PORTS.add(port)   # merge approvals come through here; no sandboxed command may reach it
     server = ThreadingHTTPServer(("127.0.0.1", port), make_handler(ctx, scheduler, port))
     print(f"control centre: http://127.0.0.1:{port}", flush=True)
     try:

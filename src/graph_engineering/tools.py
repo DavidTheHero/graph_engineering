@@ -13,7 +13,7 @@ import re
 import shlex
 import subprocess
 
-from .sandbox import Sandbox, clip
+from .sandbox import GIT, SAFE_GIT, Sandbox, clip
 
 OUTPUT_CHARS = 8000
 READ_LINES = 400
@@ -75,7 +75,7 @@ class Workspace:
         return self.path(value).relative_to(self.root).as_posix()  # "." for the root: git rejects an empty pathspec
 
     def list_files(self, path: str = ".") -> str:
-        result = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", self.relative(path)],
+        result = subprocess.run([GIT, *SAFE_GIT, "ls-files", "--cached", "--others", "--exclude-standard", "--", self.relative(path)],
                                 cwd=self.root, capture_output=True, text=True)
         files = [f for f in result.stdout.splitlines() if (self.root / f).exists()]
         if not files:
@@ -103,7 +103,7 @@ class Workspace:
         return f"{path} ({len(lines)} lines)\n{body}{more}"
 
     def search(self, pattern: str, path: str = ".") -> str:
-        result = subprocess.run(["git", "grep", "-n", "-I", "-E", "--untracked", "-e", pattern, "--", self.relative(path)],
+        result = subprocess.run([GIT, *SAFE_GIT, "grep", "-n", "-I", "-E", "--untracked", "-e", pattern, "--", self.relative(path)],
                                 cwd=self.root, capture_output=True, text=True)
         if result.returncode == 1:
             return "No matches"

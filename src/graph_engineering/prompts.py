@@ -4,6 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 
+from .sandbox import GIT, SAFE_GIT
+
 BRIEF_FILES = ("AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "README.md")
 BRIEF_CHARS = 5000
 TREE_LINES = 60
@@ -336,11 +338,11 @@ def project_brief(root: Path, memory: str = "", query: str = "", slim: bool = Fa
                      f"on it):\n{memory.strip()[:MEMORY_CHARS // 3 if slim else MEMORY_CHARS]}")
     for name in () if slim else BRIEF_FILES:
         path = root / name
-        if path.is_file():
+        if path.is_file() and not path.is_symlink():   # a link planted in the workspace must not read outside it
             text = path.read_text(errors="replace")
             parts.append(f"{name}:\n{text[:BRIEF_CHARS]}" + ("\n[... truncated; read the file for the rest]" if len(text) > BRIEF_CHARS else ""))
             break
-    listing = subprocess.run(["git", "ls-files"], cwd=root, capture_output=True, text=True).stdout.splitlines()
+    listing = subprocess.run([GIT, *SAFE_GIT, "ls-files"], cwd=root, capture_output=True, text=True).stdout.splitlines()
     folders: dict[str, int] = {}
     for path in listing:
         pieces = path.split("/")

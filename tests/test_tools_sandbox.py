@@ -60,9 +60,9 @@ class Confinement(unittest.TestCase):
 
     def setUp(self):
         self.root = temp_dir(self)
-        work = self.root / "work"
-        work.mkdir()
-        self.sandbox = Sandbox(self.root, work)
+        work = self.root / "box" / "work"
+        work.mkdir(parents=True)
+        self.sandbox = Sandbox(self.root / "box", work, profiles=self.root / "profiles")
 
     def test_writes_are_confined_to_the_run_directory(self):
         outside = Path.home() / f".ge-sandbox-probe-{os.getpid()}"
@@ -120,19 +120,82 @@ class Confinement(unittest.TestCase):
     def test_environment_is_minimal(self):
         os.environ["GE_SECRET_PROBE"] = "leak"
         self.addCleanup(os.environ.pop, "GE_SECRET_PROBE")
-        sandbox = Sandbox(self.root, self.root / "work")
+        sandbox = Sandbox(self.root / "box", self.sandbox.work, profiles=self.root / "profiles")
         _, out, _ = sandbox.run("env")
         self.assertNotIn("GE_SECRET_PROBE", out)
         self.assertNotIn("GITHUB_TOKEN", out)
-        self.assertIn(f"HOME={self.root / 'home'}", out)
+        self.assertIn(f"HOME={self.root / 'box' / 'home'}", out)
 
     def test_javascript_syntax_is_checked_with_node(self):
         import shutil
         if not shutil.which("node"):
             self.skipTest("node missing")
-        ws = Workspace(self.root / "work", self.sandbox)
+        ws = Workspace(self.sandbox.work, self.sandbox)
         self.assertIn("breaks the syntax", ws.write_file("bad.js", "export function f( {\n"))
         self.assertTrue(ws.write_file("good.mjs", "export const f = () => 1;\n").startswith("Created"))
+
+    def test_only_the_box_is_writable_and_git_metadata_is_read_only(self):
+        root = self.root / "ticket"
+        box, work = root / "box", root / "box" / "work"
+        (work / ".git").mkdir(parents=True)
+        (work / ".git" / "config").write_text("[core]\n")
+        (root / "notes.md").write_text("private")
+        sandbox = Sandbox(box, work, profiles=root / "profiles", private=[root])
+        code, out, _ = sandbox.run("echo ok > file.txt && cat file.txt")
+        self.assertEqual((code, out.strip()), (0, "ok"))
+        for target in (root / "notes.md", root / "profiles" / "sandbox.sb", work / ".git" / "config", work / ".git" / "hooks" / "x"):
+            code, _, _ = sandbox.run(f"echo x >> '{target}'")
+            self.assertNotEqual(code, 0, target)
+        self.assertEqual((work / ".git" / "config").read_text(), "[core]\n")
+        code, _, _ = sandbox.run("mv .git moved")
+        self.assertNotEqual(code, 0)
+        with self.assertRaises(ValueError):
+            Sandbox(box, work, profiles=box / "profiles")   # a profile the sandbox could rewrite
+
+    def test_git_can_restore_a_file_but_not_commit_or_install_hooks(self):
+        from graph_engineering.sandbox import prepare_workspace
+        root = self.root / "ticket"
+        work = root / "box" / "work"
+        prepare_workspace(python_repo(self.root), "main", work)
+        sandbox = Sandbox(root / "box", work, profiles=root / "profiles", private=[root])
+        code, out, _ = sandbox.run("echo x >> calc.py && git checkout -- calc.py && git status --short")
+        self.assertEqual((code, out.strip()), (0, ""))
+        for command in ("echo y >> calc.py && git commit -qam y", "git stash", "echo h > .git/hooks/pre-commit",
+                        "git config core.hooksPath hooks"):
+            code, _, _ = sandbox.run(command)
+            self.assertNotEqual(code, 0, command)
+
+    def test_the_state_directory_is_unreadable_except_the_box(self):
+        home = self.root / "state"
+        (home / "ge.db").parent.mkdir(parents=True)
+        (home / "ge.db").write_text("secret state")
+        box = home / "work" / "GE-1" / "box"
+        work = box / "work"
+        work.mkdir(parents=True)
+        (work / "readme.txt").write_text("visible")
+        sandbox = Sandbox(box, work, profiles=home / "work" / "GE-1" / "profiles", private=[home])
+        code, out, _ = sandbox.run(f"cat '{home / 'ge.db'}'")
+        self.assertNotEqual(code, 0)
+        self.assertNotIn("secret state", out)
+        code, out, _ = sandbox.run("cat readme.txt")
+        self.assertEqual((code, out.strip()), (0, "visible"))
+
+    def test_a_closed_loopback_port_is_unreachable(self):
+        import socket
+        from graph_engineering import sandbox as module
+        server = socket.socket()
+        server.bind(("127.0.0.1", 0))
+        server.listen()
+        self.addCleanup(server.close)
+        port = server.getsockname()[1]
+        probe = f"python3 -c \"import socket; socket.create_connection(('127.0.0.1', {port}), timeout=3); print('reached')\""
+        code, out, _ = self.sandbox.run(probe)
+        self.assertEqual(code, 0, out)
+        module.CLOSED_PORTS.add(port)
+        self.addCleanup(module.CLOSED_PORTS.discard, port)
+        code, out, _ = self.sandbox.run(probe)
+        self.assertNotEqual(code, 0)
+        self.assertIn("not permitted", out)
 
     def test_timeout_kills_the_process_group(self):
         code, out, _ = self.sandbox.run("sleep 30 & sleep 30", timeout=1)

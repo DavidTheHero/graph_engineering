@@ -17,7 +17,8 @@ See [docs/DESIGN.md](docs/DESIGN.md).
 - Python 3.10+ and Git. No Python dependencies (the MCP server is an optional extra).
 - An OpenAI-compatible model server with tool calling, such as vLLM with `--enable-auto-tool-choice`.
 - macOS (`sandbox-exec`) or Linux with `bwrap` for the sandbox. Elsewhere, only repositories registered as
-  `trusted` can run, without a sandbox.
+  `trusted` can run, without a sandbox. Inside it a command can write only the ticket's own box and system
+  temp, cannot read the controller's state or your credentials, and cannot reach the control centre.
 - `gh`, signed in, for GitHub publication.
 
 ## Quick start

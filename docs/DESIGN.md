@@ -169,7 +169,7 @@ measures the quick profile on 8 tasks from two repositories (this project's own 
 | Routing: small model for easy inputs [1] | role routing by reachability and context fit. `explore` preferred the 9B until run 19: the coder waits for every answer, and the 9B (16K context, compactions) took 103–631 s a question, nine times in one round of #20; it now prefers the 27B, with the 9B as fallback | done |
 | Oversight at plan level; agree on "done" before coding [19][23] | plan step for tickets with 3+ criteria: a test per criterion, checked by the reviewer; unresolved concerns become the final review's checklist | partial: no person approves the plan |
 | Protect the gate from the agent [13][B] | deleted tests, protected paths and test-configuration changes fail the gates | done |
-| Containment: filesystem and network isolation, credentials outside, no-follow reads [10][25][A] | sandbox-exec / bwrap, no network, credentials in the controller | partial: see Limitations |
+| Containment: filesystem and network isolation, credentials outside, no-follow reads [10][25][A] | sandbox-exec / bwrap: writes only in the ticket's box, state directory and credentials unreadable, `.git` read-only, control-centre port closed, no reads through planted links | done (macOS measured; bwrap untested) |
 | Escalate to a person instead of looping [20] | round budget, then `failed`; publish and merge errors stop after 3 | done |
 | Harness components encode model assumptions; ablate them [19][24] | each mechanism is a parameter; evals measure it | process |
 | Evals: real tasks, reference solutions, isolated trials, pass^k, read transcripts [14][16] | 4 tasks from real tickets, validated by the miner; hidden maintainer tests; a fresh home per trial | partial: too few tasks |
@@ -287,13 +287,22 @@ failure the research names: 29.6% of patches that pass their tests behave differ
 - **Sandboxed (untrusted).** Everything the model does, and every command from the target repository.
   The sandbox runs `sandbox-exec` or `bwrap` with:
   - a minimal environment and a neutral git identity;
-  - no network except loopback (setup may install dependencies);
-  - credential directories unreadable.
+  - no network except loopback (setup may install dependencies), and never the control centre's port,
+    where merge approvals are taken;
+  - writes only inside the ticket's *box* (`work/GE-x/box`: the workspace, its temp and home) and system
+    temp; nothing else on the machine, including the sandbox profile, the ticket's notes, transcripts and
+    gate reports, which sit beside the box;
+  - the state directory (`GE_HOME`: the store, every other ticket) and credential directories unreadable;
+  - the workspace's `.git` read-only but for the index, so no hook or configuration planted there runs when
+    the controller later runs git in the workspace; the controller's git also runs with hooks and the
+    system configuration off.
 - **Controller (privileged).** Pushes, GitHub API calls, merges with the person's `gh` credentials. Model
-  text enters only as PR prose, with closing keywords and @mentions neutralised.
+  text enters only as PR prose, with closing keywords and @mentions neutralised. Where the controller reads a
+  file at a path the model chose (tools, the project brief, changed-test names, hidden tests), it refuses
+  symbolic links and paths that resolve outside the workspace.
 
-The goal, that no instruction in a repository can reach the privileged zone, **is not yet met**; see
-Limitations.
+What remains outside the boundary is the model's text: a repository's files can still try to persuade the
+model, which the prompts call data, and the gates and review judge the result rather than the intent.
 
 ## Merge
 
@@ -332,15 +341,12 @@ Without the append-only change, the prefix-cache hit rate was 83%.
 
 ## Limitations
 
-1. **Containment is not sound (deferred, prototype first).** An independent review found the following,
-   so use the controller only on your own repositories until they are fixed:
-   - the sandbox can write the workspace's git metadata, which the controller later uses unsandboxed;
-   - the macOS profile denies writes only under `$HOME`;
-   - controller-owned files sit where the sandbox can write;
-   - loopback reaches the control centre;
-   - some reads follow planted symlinks.
-
-   A partial fix is parked in git stash `17a0331`.
+1. **Containment is measured on macOS only.** The findings of the earlier independent review (writable git
+   metadata, writes anywhere outside `$HOME`, controller files in the sandbox's reach, the control centre on
+   loopback, reads through planted symlinks) are fixed and covered by tests that run the real `sandbox-exec`.
+   The `bwrap` branch mirrors them (read-only `.git`, private directories hidden) but no Linux host has run
+   it. System temp stays writable from the sandbox because not everything honours `TMPDIR`; the controller
+   never reads from there.
 2. **Tests can be weaker than the criteria.** Red/green proves the new tests detect the change, not that
    they cover every way the code is used. That is how a change passed every gate and failed the
    maintainers' test. The plan-concern checklist addresses the case seen; the general problem remains.
@@ -374,7 +380,7 @@ Without the append-only change, the prefix-cache hit rate was 83%.
 | 3 | ~~Speculative decoding on the model server~~: **already on** (MTP, 3 draft tokens, 67% accepted, from the server's `/metrics`) | — | done |
 | 4 | **More eval tasks** from more repositories (`eval-mine` on other projects or small public libraries) | Avoid tuning to 4 tasks | small, GPU time to run |
 | 5 | **One live ticket to a real PR** on General_AI_Agent | Proves the publish/merge path | 1 ticket; needs the person's go-ahead |
-| 6 | **Containment fixes** from the stash | Required before any repository you do not own | medium |
+| 6 | ~~Containment fixes~~ from the stash: **done** (box layout, deny-by-default writes, private state, closed port, read-only `.git`, no-follow reads) | Required before any repository you do not own | done |
 | 7 | **Reviewer that can probe**: a throwaway checkout where the reviewer may write and run a scratch test | Would have caught the `model: undefined` case | medium |
 | 8 | **Dependency requests**: a tool that asks for a package; the harness installs it with network after a person or allow-list approves | Unblocks tickets that need a library | medium |
 | 9 | **Rebase round** when the base moves: re-run gates on the new base, a coding round only on conflict | Keeps PRs mergeable | medium |

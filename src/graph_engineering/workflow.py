@@ -183,15 +183,15 @@ def write_acceptance_tests(ctx: Context, ticket: dict, repo: Repo, work: Path, b
     return record
 
 
-def probe_change(ctx: Context, ticket: dict, repo: Repo, work: Path, commit: str, directory: Path, round_: int,
-                 brief: str, summary: str, dependencies: list[str] | None, timeout: int) -> list[dict]:
+def probe_change(ctx: Context, ticket: dict, repo: Repo, work: Path, sandbox: Sandbox, commit: str, directory: Path,
+                 round_: int, brief: str, summary: str, dependencies: list[str] | None, timeout: int) -> list[dict]:
     """After the gates: a tester writes tests from the ticket alone and runs them against the gated result, in a
     scratch checkout. Runs 9-11: changes that passed every gate missed cases the maintainers tested (`async def`,
     `export default`, an extra model call). Only failures the harness reproduces come back, as advice the coder may
     dispute: unlike acceptance tests, a probe cannot lock in a misreading of the ticket."""
-    scratch = directory / "probe"
+    scratch = sandbox.run_dir / "probe"   # inside the box: the only place a sandbox can run anything
     target = gates.checkout(work, commit, scratch / "work", dependencies or [])
-    box = Sandbox(scratch, target, repo.sandbox_env(), trusted=repo.trusted)
+    box = Sandbox(scratch, target, repo.sandbox_env(), trusted=repo.trusted, profiles=sandbox.profiles, private=sandbox.private)
     spec = ticket["spec"]
     task = prompts.probe_task(spec, brief, repo.test_command, summary)
     # The coding role: on the review role the prober went to the 9B, whose 16K window cannot hold this work.
@@ -367,8 +367,9 @@ def restore_green(ctx: Context, ticket: dict, repo: Repo, work: Path, sandbox: S
         if sha == report["commit"]:
             continue
         ctx.renew()
-        verdict = gates.run_gates(repo, work, data["base"], sandbox, directory / f"green-{step}", data.get("dependencies"),
-                                  allow_test_config=bool(ticket["spec"].get("allow_test_config")), commit=sha)
+        verdict = gates.run_gates(repo, work, data["base"], sandbox, sandbox.run_dir / "check", data.get("dependencies"),
+                                  allow_test_config=bool(ticket["spec"].get("allow_test_config")), commit=sha,
+                                  reports=directory / f"green-{step}")
         if not verdict["passed"]:
             continue
         later = git(work, "diff", "--no-renames", sha, report["commit"])
@@ -401,11 +402,12 @@ def develop(ctx: Context, ticket: dict) -> dict:
         return _move(ctx, ticket, "failed", "rounds_spent", error=f"no accepted result after {ticket['max_rounds']} rounds",
                      data={**data, "failed_at": "develop"})
     root = ctx.ticket_dir(ticket["id"])
-    work, directory = root / "work", root / f"round-{round_}"
+    box = root / "box"   # the only place the sandbox may write; notes, transcripts and reports stay outside it
+    work, directory = box / "work", root / f"round-{round_}"
     if directory.exists():
         shutil.rmtree(directory)  # an interrupted attempt of this round starts again
     directory.mkdir(parents=True)
-    sandbox = Sandbox(root, work, repo.sandbox_env(), trusted=repo.trusted)
+    sandbox = Sandbox(box, work, repo.sandbox_env(), trusted=repo.trusted, profiles=root / "profiles", private=[ctx.home])
     if not (work / ".git").exists() or not data.get("setup_done"):
         # A crash between cloning and the end of setup leaves a half-prepared workspace: always start it again.
         if work.exists():
@@ -486,8 +488,8 @@ def develop(ctx: Context, ticket: dict) -> dict:
         raise RuntimeError(outcome.error)
 
     ctx.renew()
-    report = gates.run_gates(repo, work, data["base"], sandbox, directory, data.get("dependencies"),
-                             allow_test_config=bool(spec.get("allow_test_config")))
+    report = gates.run_gates(repo, work, data["base"], sandbox, box / "check", data.get("dependencies"),
+                             allow_test_config=bool(spec.get("allow_test_config")), reports=directory)
     (directory / "gates.json").write_text(json.dumps(report, indent=1))
     record["gates"] = [{"name": c["name"], "ok": c["ok"]} for c in report["checks"]]
     ctx.store.event(ticket["id"], "gates", "harness", {"round": round_, "passed": report["passed"], "checks": record["gates"],
@@ -502,7 +504,7 @@ def develop(ctx: Context, ticket: dict) -> dict:
             data["probed"] = True   # once per ticket: the probe is advice, not a loop
             ctx.store.merge_data(ticket["id"], probed=True)
             try:
-                found = probe_change(ctx, ticket, repo, work, report["commit"], directory, round_, brief, summary,
+                found = probe_change(ctx, ticket, repo, work, sandbox, report["commit"], directory, round_, brief, summary,
                                      data.get("dependencies"), timeout)
             except Cancelled:
                 return ctx.store.get(ticket["id"])
@@ -613,7 +615,7 @@ def pr_body(ticket: dict, issue: int | None) -> str:
 def publish(ctx: Context, ticket: dict) -> dict:
     repo = ctx.repos.get(ticket["repo"])
     data, spec = dict(ticket["data"]), ticket["spec"]
-    work = ctx.ticket_dir(ticket["id"]) / "work"
+    work = ctx.ticket_dir(ticket["id"]) / "box" / "work"
     target = backend(repo)
     try:
         issue = data.get("issue")

@@ -68,15 +68,14 @@ def run_task(task: dict, repos: Repos, registry: Registry, out: Path, index: int
                                   for role in {r["role"] for r in runs}},
               "home": str(home)}
     if task.get("hidden_tests") and result["passed"]:
-        result["hidden"] = hidden(task["hidden_tests"], repo, home / "work" / ticket["id"])
+        result["hidden"] = hidden(task["hidden_tests"], repo, home / "work" / ticket["id"] / "box")
     learned = home / "memory" / f"{repo.name}.md"
     result["memory_in"] = len(memory)
     result["memory_out"] = learned.read_text() if result["passed"] and learned.exists() else ""
     # The workspace clone and its installed dependencies are ~230 MB a trial (16 GB over 16 runs filled the disk);
     # transcripts, gate reports, the diff and the store stay.
     for ticket_dir in (home / "work").glob("*"):
-        for bulky in ("work", "tmp"):
-            shutil.rmtree(ticket_dir / bulky, ignore_errors=True)
+        shutil.rmtree(ticket_dir / "box", ignore_errors=True)
     return result
 
 
@@ -88,9 +87,11 @@ def hidden(spec: dict, repo, root: Path) -> dict:
             source, ref = content[1:-1].rsplit("@", 1)
             content = git(Path(repo.path), "show", f"{ref}:{source}")
         target = work / path
+        if target.is_symlink() or not target.parent.resolve().is_relative_to(work.resolve()):
+            return {"passed": False, "output": f"{path} in the result is a symbolic link; the hidden tests were not written"}
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content)
-    sandbox = Sandbox(root, work, repo.sandbox_env(), trusted=repo.trusted)
+    sandbox = Sandbox(root, work, repo.sandbox_env(), trusted=repo.trusted, profiles=root.parent / "profiles")
     code, out, _ = sandbox.run(spec["command"], timeout=repo.run_timeout * 3)
     return {"passed": code == 0, "output": clip(out, 3000)}
 

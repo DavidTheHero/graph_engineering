@@ -183,6 +183,8 @@ class ChangedTests(unittest.TestCase):
         text = (repo / "tests" / "test_add.py").read_text()
         (repo / "tests" / "test_add.py").write_text(text[:text.index("    def test_add_negative")])   # a deletion only
         self.assertEqual(changed_tests(repo, base, is_test), set())
+        (repo / "tests" / "test_link.py").symlink_to(repo / "tests" / "test_sub.py")   # never read through a link
+        self.assertEqual(changed_tests(repo, base, is_test), set())
 
 
 class Feedback(unittest.TestCase):

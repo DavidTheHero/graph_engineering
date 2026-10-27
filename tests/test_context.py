@@ -205,6 +205,10 @@ class Context(unittest.TestCase):
         slim = project_brief(self.repo, "M" * 4000, "calc", slim=True)
         self.assertNotIn("Use unittest", slim)  # the explorer reads the guide only if it needs it
         self.assertLess(len(slim), len(project_brief(self.repo, "M" * 4000, "calc")) - 2000)
+        (self.repo / "AGENTS.md").unlink()
+        (self.repo.parent / "outside.txt").write_text("outside the workspace")
+        (self.repo / "AGENTS.md").symlink_to(self.repo.parent / "outside.txt")   # a coder's link: never read through
+        self.assertNotIn("outside the workspace", project_brief(self.repo))
 
 
 if __name__ == "__main__":
