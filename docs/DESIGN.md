@@ -88,6 +88,14 @@ model-name-response's first trial failed its hidden test in runs 20, 21 and 24 w
 the first task of a run has no repository memory, and the memory is what said to read the model name from the
 configuration rather than the chain object (the maintainers' test injects fake chains). The ticket now says so.
 
+Run 24 (7de4366, before 0e6a463 and 63398ae): 15 of 16 accepted, pass^k 7 of 8, hidden tests 8 of 11, 7.6 h,
+median 10 min. The failure was #20's second trial (three rounds); the first #20 trial passed the gates in two
+rounds and failed the three "report" tests that run 22's trials had passed, so the clarified sentence narrows
+the miss without removing it. one-command-start's second trial needed three rounds: 96 commands and no edit in
+one of them, most of them probe scripts written with heredocs (3664d42: those count as scratch; a session with
+no edit in 30 steps restarts from its notes and ends at 45; probes no longer count as green checkpoints).
+Run 25 (3664d42 and the task clarifications) measures those.
+
 Earlier history:
 
 Run 8: the quick profile on commit cd153d1, Qwen 27B on one GPU, 7 trials of the 4 General_AI_Agent tasks
