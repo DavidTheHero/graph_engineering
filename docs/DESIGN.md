@@ -84,6 +84,9 @@ passed 6 of the 7 maintainers' tests, including both "report" tests that every e
 sentence) was accepted in three rounds with the same 6 of 7: both trials now pass the two report tests.
 Run 23 (the repository map alone, `async def` named): both trials accepted in one round (431 s, 561 s) and both pass
 the maintainers' tests, after 1 pass in 10 trials before. Run 24 (7de4366: all of it) sets the baseline anew.
+model-name-response's first trial failed its hidden test in runs 20, 21 and 24 while the second passed each time:
+the first task of a run has no repository memory, and the memory is what said to read the model name from the
+configuration rather than the chain object (the maintainers' test injects fake chains). The ticket now says so.
 
 Earlier history:
 

@@ -1,22 +1,22 @@
 {
-  "id": "model-name-response",
-  "source": "General_AI_Agent issue #17 (fc620af)",
-  "repo": "general-ai-agent",
-  "base": "477c9cc",
-  "spec": {
-    "title": "Expose the connected AI model name in the chat response",
-    "kind": "feat",
-    "problem": "The chat response does not say which AI model answered. Expose the model the backend is connected to (the configured Ollama model) as a `model` field in the agent run response, so the chat interface can display it.",
-    "acceptance_criteria": [
-      "agent.run() returns a `model` string naming the connected model.",
-      "Existing behaviour and tests are preserved; the response-shape test includes the new key."
-    ]
+ "id": "model-name-response",
+ "source": "General_AI_Agent issue #17 (fc620af); after runs 20-24 the ticket says the name comes from the configuration (the first trial of a run, without repository memory, read it from the chain object three times running)",
+ "repo": "general-ai-agent",
+ "base": "477c9cc",
+ "spec": {
+  "title": "Expose the connected AI model name in the chat response",
+  "kind": "feat",
+  "problem": "The chat response does not say which AI model answered. Expose the model the backend is connected to (the configured Ollama model) as a `model` field in the agent run response, so the chat interface can display it. The name comes from the configuration (the `OLLAMA_MODEL` setting, with its default), not from a property of the chain object: tests build the agent with fake chains, and `model` must still be the configured name then.",
+  "acceptance_criteria": [
+   "agent.run() returns a `model` string naming the connected model.",
+   "Existing behaviour and tests are preserved; the response-shape test includes the new key."
+  ]
+ },
+ "hidden_tests": {
+  "files": {
+   "backend/tests/hidden_model_name.test.js": "@backend/tests/graph_e858be1ef5644cae.test.js@fc620af@",
+   "backend/tests/agent.test.js": "@backend/tests/agent.test.js@fc620af@"
   },
-  "hidden_tests": {
-    "files": {
-      "backend/tests/hidden_model_name.test.js": "@backend/tests/graph_e858be1ef5644cae.test.js@fc620af@",
-      "backend/tests/agent.test.js": "@backend/tests/agent.test.js@fc620af@"
-    },
-    "command": "node --test backend/tests/hidden_model_name.test.js backend/tests/agent.test.js"
-  }
+  "command": "node --test backend/tests/hidden_model_name.test.js backend/tests/agent.test.js"
+ }
 }
