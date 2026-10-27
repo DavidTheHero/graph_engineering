@@ -78,6 +78,9 @@ report *and something else*, or to *explain* the report, must not end at the rep
 report. The task's interface sentence now says so; run 22 (two trials of #20 alone) measures it.
 The repository map's miss is of the same kind: `async def` is named nowhere in the ticket, and the coding prompt's
 "cover async functions" was not enough in 7 of 8 trials; the task's interface now lists it (run 23 measures).
+Run 22 (#20 alone): the first trial was lost to a model-server outage; the second was accepted in two rounds and
+passed 6 of the 7 maintainers' tests, including both "report" tests that every earlier trial failed. The one miss,
+`usage.tool_search` not counted, is now in the interface too (a756e39).
 
 Earlier history:
 
