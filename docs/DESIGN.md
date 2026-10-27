@@ -83,7 +83,7 @@ passed 6 of the 7 maintainers' tests, including both "report" tests that every e
 `usage.tool_search` not counted, is now in the interface too (a756e39). The rerun of the first trial (run 22b, before that
 sentence) was accepted in three rounds with the same 6 of 7: both trials now pass the two report tests.
 Run 23 (the repository map alone, `async def` named): both trials accepted in one round (431 s, 561 s) and both pass
-the maintainers' tests, after 1 pass in 10 trials before. Run 24 (a9b6c11: all of it) sets the baseline anew.
+the maintainers' tests, after 1 pass in 10 trials before. Run 24 (7de4366: all of it) sets the baseline anew.
 
 Earlier history:
 
