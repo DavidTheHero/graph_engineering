@@ -230,6 +230,24 @@ class Evidence(unittest.TestCase):
         self.assertIn("write_file is not offered on your next step", replies[2])
         self.assertIn("Half your steps are spent and no test file has changed", [m["content"] for m in sent if m["role"] == "user"][-1])
 
+    def test_probe_scripts_written_by_the_shell_count_as_scratch_and_exploring_on_ends_the_session(self):
+        """Run 24: 96 commands and no edit in one round, most of them probe scripts written with a heredoc."""
+        probe = lambda n: call("run", command=f"cat > /tmp/p{n}.mjs <<'EOF'\nconsole.log({n})\nEOF\nnode /tmp/p{n}.mjs")
+        steps = iter([[probe(1)], [probe(2)], [probe(3)]] + [[call("read_file", path="calc.py", start_line=n)] for n in range(4, 20)])
+        llm = FakeLLM(lambda role, messages: next(steps))
+        self.addCleanup(llm.close)
+        root = self.root
+        from graph_engineering.sandbox import Sandbox
+        import shutil
+        work = root / "box" / "work"
+        shutil.copytree(self.repo, work)
+        outcome = Agent(llm.model(), Workspace(work, Sandbox(root, work, trusted=True)), READ_WRITE, FINISH, "s",
+                        max_steps=30, nudge_after=2, notes=root / "notes.md").run("task")
+        self.assertEqual(outcome.status, "stalled")
+        self.assertEqual(outcome.steps, 6)   # a restart from the notes at step 4, the end at step 6
+        replies = [m["content"] for m in llm.requests[3]["messages"] if m["role"] == "tool"]
+        self.assertTrue(replies[2].startswith("[this is scratch file write 3: probing with one-off scripts"), replies[2][:80])
+
     def test_an_added_file_that_looks_like_scratch_is_refused_once(self):
         """Run 18: a coder left backend/tests/__dbg-min.test.js behind and the gates held it to the red check."""
         steps = iter([[call("finish", summary="s", coverage=[])],

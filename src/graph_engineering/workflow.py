@@ -349,9 +349,12 @@ ONE_TEST = re.compile(r"\.(test|spec)\.[cm]?[jt]sx?|(^|[\s/])test_\w+\.py|\btest
 
 
 def suite_run(command: str, test_command: str) -> bool:
-    """Does this command run the whole suite rather than one test or file? A glob (`tests/*.test.js`) is the suite."""
-    if test_command in command or not SUITE_RUN.search(command):
-        return test_command in command
+    """Does this command run the whole suite rather than one test or file? A glob (`tests/*.test.js`) is the suite; a
+    probe script written in the command itself (run 24: 170 "green" checkpoints from `cat > /tmp/x.mjs <<EOF`) is not."""
+    if test_command in command:
+        return True
+    if not SUITE_RUN.search(command) or "<<" in command or "/tmp/" in command or re.search(r"\b(cat|tee)\s*>", command):
+        return False
     return "*" in command or not ONE_TEST.search(command)
 
 

@@ -41,6 +41,7 @@ UNDONE = "[after this edit"
 PROBING = "[this is scratch file"
 REPEAT_HINTS = ("You already made this exact call", SAME_OUTPUT, UNDONE, PROBING)
 SCRATCH = re.compile(r"(^|[/_.-])(dbg|debug|scratch|tmp|temp|junk|probe|hangcheck)\d*([/_.-]|$)", re.I)   # a file name that says "leftover"
+SCRIPT_WRITE = re.compile(r"(\b(cat|tee|printf|echo)\b[^|;&]*>>?\s*\S+\.(m?js|cjs|ts|py|sh|rb)\b)|(<<-?\s*['\"]?\w+['\"]?[^\n]*\.(m?js|cjs|ts|py|sh|rb)\b)")
 
 NOTES_TOOL = {"name": "update_notes",
               "description": "Replace your working notes: the plan, what is done, what you learned about the code (file paths, "
@@ -341,6 +342,19 @@ class Agent:
                     self.log(messages[-1])
                     self.emit(step, "note", "mid-session: no test file changed yet")
                 if self.nudge_after and since_change and since_change % self.nudge_after == 0:
+                    # Run 24: a coder ran 96 commands in a round, changed nothing and ignored six of these messages. The
+                    # loop guard's escalation applies: a fresh start from the notes once, then the end of the session.
+                    if since_change >= 3 * self.nudge_after:
+                        outcome.status = "stalled"
+                        self.emit(step, "note", f"no file changed in {since_change} steps; ending the session")
+                        break
+                    if since_change >= 2 * self.nudge_after and not restarted:
+                        restarted = True
+                        self.emit(step, "note", f"no file changed in {since_change} steps; restarting from notes")
+                        messages = self.summarise(messages, specs, task, step)
+                        compacted_at, withheld = step, None
+                        seen.clear()
+                        continue
                     messages.append({"role": "user", "content": f"You have explored for {self.nudge_after} steps without changing "
                                      "a file. Stop exploring: state your plan in a short paragraph, then make the first change."})
                     self.log(messages[-1])
@@ -519,7 +533,16 @@ class Agent:
             # Run 16: `test | head; echo EXIT=$?` exits 0 while the test errors; the output says it failed.
             if code != 0 or FAILED_OUTPUT.search(result):
                 self.failed_at = step
-            elif self.on_green:
+            if SCRIPT_WRITE.search(str(args.get("command", ""))):
+                # Run 24: 96 commands and no edit in one round, most of them `cat > /tmp/sigint-testN.mjs <<EOF ... node
+                # --test /tmp/...`: a probe script written by the shell is a scratch file the write tools never saw.
+                self.scratch_writes += 1
+                if self.scratch_writes >= 3:
+                    self.repeat_at = step
+                    self.emit(step, "repeat", name)
+                    result = (f"{PROBING} write {self.scratch_writes}: probing with one-off scripts is not converging. Put "
+                              "what you have learned into a test under the test directory, and change the code.]\n" + result)
+            if code == 0 and not FAILED_OUTPUT.search(result) and self.on_green:
                 try:
                     self.on_green(step, str(args.get("command", "")))
                 except RuntimeError as exc:
