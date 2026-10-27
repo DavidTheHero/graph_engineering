@@ -187,6 +187,22 @@ class ChangedTests(unittest.TestCase):
         self.assertEqual(changed_tests(repo, base, is_test), set())
 
 
+class Staging(unittest.TestCase):
+    def test_a_locked_or_corrupt_index_left_by_the_sandbox_does_not_stop_staging(self):
+        from graph_engineering.gates import snapshot
+        root = temp_dir(self)
+        repo = python_repo(root)
+        base = git(repo, "rev-parse", "HEAD").strip()
+        (repo / "new.py").write_text("x = 1\n")
+        (repo / ".git" / "index.lock").write_text("")
+        commit = snapshot(repo, base)
+        self.assertIn("new.py", git(repo, "diff", "--name-only", base, commit))
+        (repo / ".git" / "index").write_text("GARBAGE")
+        (repo / "new.py").write_text("x = 2\n")
+        commit = snapshot(repo, base)
+        self.assertIn("x = 2", git(repo, "show", f"{commit}:new.py"))
+
+
 class Feedback(unittest.TestCase):
     def test_failures_put_what_failed_before_the_full_output(self):
         from graph_engineering.gates import failures

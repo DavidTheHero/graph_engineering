@@ -26,7 +26,7 @@ class Interfaces(unittest.TestCase):
     def server(self):
         server = web.ThreadingHTTPServer(("127.0.0.1", 0), None)
         port = server.server_port
-        server.RequestHandlerClass = web.make_handler(self.ctx, None, port)
+        server.RequestHandlerClass = web.make_handler(self.ctx, None, port, "t0ken")
         threading.Thread(target=server.serve_forever, daemon=True).start()
         self.addCleanup(server.shutdown)
         return port
@@ -40,21 +40,23 @@ class Interfaces(unittest.TestCase):
 
     def test_web_files_a_ticket_and_acts_on_it(self):
         port = self.server()
-        status, ticket = self.request(port, "POST", "/api/tickets", {"repo": "calc", "request": "add subtract"}, {"X-GE": "1"})
+        status, ticket = self.request(port, "POST", "/api/tickets", {"repo": "calc", "request": "add subtract"}, {"X-GE-Token": "t0ken"})
         self.assertEqual((status, ticket["state"]), (201, "new"))
         status, state = self.request(port, "GET", "/api/state")
         self.assertEqual(state["tickets"][0]["id"], ticket["id"])
-        status, error = self.request(port, "POST", f"/api/tickets/{ticket['id']}/accept", {}, {"X-GE": "1"})
+        status, error = self.request(port, "POST", f"/api/tickets/{ticket['id']}/accept", {}, {"X-GE-Token": "t0ken"})
         self.assertEqual(status, 409)  # a new ticket has no criteria yet: the intake agent comes first
-        status, cancelled = self.request(port, "POST", f"/api/tickets/{ticket['id']}/cancel", {"text": "test"}, {"X-GE": "1"})
+        status, cancelled = self.request(port, "POST", f"/api/tickets/{ticket['id']}/cancel", {"text": "test"}, {"X-GE-Token": "t0ken"})
         self.assertEqual(cancelled["state"], "cancelled")
 
     def test_web_refuses_cross_site_and_foreign_hosts(self):
         port = self.server()
         status, _ = self.request(port, "POST", "/api/tickets", {"repo": "calc", "request": "x"})
-        self.assertEqual(status, 403)  # no X-GE header: a plain cross-site form
+        self.assertEqual(status, 403)  # no token: a plain cross-site form, or a command that reached the port
+        status, _ = self.request(port, "POST", "/api/tickets", {"repo": "calc", "request": "x"}, {"X-GE-Token": "guess"})
+        self.assertEqual(status, 403)
         status, _ = self.request(port, "POST", "/api/tickets", {"repo": "calc", "request": "x"},
-                                 {"X-GE": "1", "Origin": "https://evil.example"})
+                                 {"X-GE-Token": "t0ken", "Origin": "https://evil.example"})
         self.assertEqual(status, 403)
         status, _ = self.request(port, "GET", "/api/state", headers={"Host": "evil.example"})
         self.assertEqual(status, 421)  # DNS rebinding
@@ -66,9 +68,9 @@ class Interfaces(unittest.TestCase):
         for to in ("accepted", "ready"):
             self.store.transition(ticket["id"], to, "p", to)
         self.store.transition(ticket["id"], "awaiting_merge", "p", "published", data={"pr": {"head": "a" * 40, "branch": "b"}})
-        status, _ = self.request(port, "POST", f"/api/tickets/{ticket['id']}/approve-merge", {"head": "b" * 40}, {"X-GE": "1"})
+        status, _ = self.request(port, "POST", f"/api/tickets/{ticket['id']}/approve-merge", {"head": "b" * 40}, {"X-GE-Token": "t0ken"})
         self.assertEqual(status, 409)
-        status, ticket = self.request(port, "POST", f"/api/tickets/{ticket['id']}/approve-merge", {"head": "a" * 40}, {"X-GE": "1"})
+        status, ticket = self.request(port, "POST", f"/api/tickets/{ticket['id']}/approve-merge", {"head": "a" * 40}, {"X-GE-Token": "t0ken"})
         self.assertEqual((status, ticket["state"]), (200, "merging"))
 
     def test_mcp_tools_file_and_read_but_cannot_approve(self):
@@ -104,6 +106,12 @@ class Interfaces(unittest.TestCase):
         # round-robin; a trial never starts from memory its own task produced
         self.assertEqual(seeds, [("a", ""), ("b", "learned on a"), ("a", "learned on b"), ("b", "learned on a")])
 
+    def test_the_control_token_is_private_and_stable(self):
+        token = web.control_token(self.home)
+        self.assertEqual(web.control_token(self.home), token)
+        self.assertGreaterEqual(len(token), 32)
+        self.assertEqual(oct((self.home / "control-centre.token").stat().st_mode & 0o777), "0o600")
+
     def test_hidden_tests_are_not_written_through_a_symbolic_link(self):
         from graph_engineering import evaluation
         from graph_engineering.sandbox import available
@@ -118,7 +126,7 @@ class Interfaces(unittest.TestCase):
         for path in ("tests/test_x.py", "linked/test_y.py"):
             result = evaluation.hidden({"files": {path: "print('hi')"}, "command": "true"}, self.repos.get("calc"), box)
             self.assertFalse(result["passed"])
-            self.assertIn("symbolic link", result["output"])
+            self.assertIn("is a link", result["output"])
         self.assertEqual(list(outside.iterdir()), [])
 
     def test_cli_registers_a_repository_and_files_a_ticket(self):

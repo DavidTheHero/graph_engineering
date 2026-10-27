@@ -15,6 +15,13 @@ GOOD = {"head": "a" * 40, "checks_present": True, "checks_passed": True, "review
 POLICY = Path("/Users/daviddoan/git_code/General_AI_Agent/scripts/pr-policy.mjs")
 
 
+def present(path: Path) -> bool:
+    try:
+        return path.exists()
+    except OSError:   # inside the harness's own sandbox the home is unreadable: a permission error, not False
+        return False
+
+
 class MergeGate(unittest.TestCase):
     def test_everything_at_one_head(self):
         self.assertEqual(merge_gate(GOOD, "a" * 40, ["Ticket and scope"]), [])
@@ -45,7 +52,7 @@ class PullRequestConvention(unittest.TestCase):
         self.assertEqual(workflow.branch_name(repo, self.TICKET, 21), "feat/21-display-and-select-the-current-ai-model")
         self.assertEqual(workflow.branch_name(repo, self.TICKET, None), "ge/ge-0a1b2c3d-display-and-select-the-current-ai-model")
 
-    @unittest.skipUnless(POLICY.exists() and shutil.which("node"), "General_AI_Agent checkout or node missing")
+    @unittest.skipUnless(present(POLICY) and shutil.which("node"), "General_AI_Agent checkout or node missing")
     def test_general_ai_agent_policy_accepts_the_pr(self):
         repo = Repo(name="r", path="/tmp", test_command="t")
         branch = workflow.branch_name(repo, self.TICKET, 21)

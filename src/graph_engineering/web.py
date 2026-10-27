@@ -1,14 +1,17 @@
 """The control centre: a JSON API and one page, on localhost only.
 
-Every write needs the ``X-GE`` header (a cross-site form cannot send it) and a matching Origin, and the
-Host header must be this server, so another site cannot drive it through the browser.
+Every write needs the token printed when `serve` starts (``X-GE-Token``: a cross-site form cannot send a
+header, and a sandboxed command that somehow reached loopback does not have it) and a matching Origin, and
+the Host header must be this server, so another site cannot drive it through the browser.
 """
 from __future__ import annotations
 
+import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import re
+import secrets
 from urllib.parse import parse_qs, urlparse
 
 from . import workflow
@@ -65,7 +68,18 @@ def act(ctx, ticket_id: str, action: str, body: dict, who: str) -> dict:
             "cancel": lambda: workflow.cancel(store, ticket_id, who, text)}[action]()
 
 
-def make_handler(ctx, scheduler, port: int):
+def control_token(home: Path) -> str:
+    """The secret the person's browser presents with every write, kept in the state directory (which the sandbox
+    cannot read) and printed with the address when `serve` starts."""
+    path = home / "control-centre.token"
+    if not path.exists():
+        home.mkdir(parents=True, exist_ok=True)
+        path.touch(mode=0o600)
+        path.write_text(secrets.token_urlsafe(24))
+    return path.read_text().strip()
+
+
+def make_handler(ctx, scheduler, port: int, token: str):
     hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
 
     class Handler(BaseHTTPRequestHandler):
@@ -90,8 +104,11 @@ def make_handler(ctx, scheduler, port: int):
                 return False
             if write:
                 origin = self.headers.get("Origin")
-                if self.headers.get("X-GE") != "1" or (origin and urlparse(origin).netloc not in hosts):
+                if origin and urlparse(origin).netloc not in hosts:
                     self.send(403, {"error": "cross-site request refused"})
+                    return False
+                if not hmac.compare_digest(self.headers.get("X-GE-Token", ""), token):
+                    self.send(403, {"error": "the control centre token is missing or wrong: open the address `serve` printed"})
                     return False
             return True
 
@@ -164,8 +181,9 @@ def make_handler(ctx, scheduler, port: int):
 
 def serve(ctx, scheduler=None, port: int = 8765) -> None:
     CLOSED_PORTS.add(port)   # merge approvals come through here; no sandboxed command may reach it
-    server = ThreadingHTTPServer(("127.0.0.1", port), make_handler(ctx, scheduler, port))
-    print(f"control centre: http://127.0.0.1:{port}", flush=True)
+    token = control_token(ctx.home)
+    server = ThreadingHTTPServer(("127.0.0.1", port), make_handler(ctx, scheduler, port, token))
+    print(f"control centre: http://127.0.0.1:{port}/?token={token}", flush=True)
     try:
         server.serve_forever()
     finally:

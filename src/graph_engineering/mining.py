@@ -134,7 +134,7 @@ def validate(repo: Repo, task: dict, scratch: Path) -> dict:
     for label, revision in (("reference", task["reference"]), ("base", task["base"])):
         work = box / label
         prepare_workspace(Path(repo.path), revision, work)
-        sandbox = Sandbox(box, work, repo.sandbox_env(), trusted=repo.trusted)
+        sandbox = Sandbox(box, work, repo.sandbox_env(), trusted=repo.trusted, readable=repo.readable_paths())
         if deps is None:
             for command in repo.setup:
                 code, out, _ = sandbox.run(repo.expand(command), timeout=1800, network=True)

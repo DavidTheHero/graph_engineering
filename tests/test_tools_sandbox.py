@@ -152,6 +152,47 @@ class Confinement(unittest.TestCase):
         with self.assertRaises(ValueError):
             Sandbox(box, work, profiles=box / "profiles")   # a profile the sandbox could rewrite
 
+    def test_the_home_is_unreadable_except_toolchains_and_readable_paths(self):
+        home = Path.home()
+        code, out, _ = self.sandbox.run(f"ls '{home}'")
+        self.assertNotEqual(code, 0, out)
+        for secret in (".ssh", ".config/gh"):
+            code, _, _ = self.sandbox.run(f"ls '{home / secret}'")
+            self.assertNotEqual(code, 0, secret)
+        inside = next((home / n for n in ("Library/Preferences", ".config", ".cache") if (home / n).is_dir()), None)
+        if inside is None:
+            self.skipTest("no directory under the home to test with")
+        code, _, _ = self.sandbox.run(f"ls '{inside}' > /dev/null")
+        self.assertNotEqual(code, 0, inside)
+        opened = Sandbox(self.root / "box", self.sandbox.work, profiles=self.root / "profiles", readable=[inside])
+        code, _, _ = opened.run(f"ls '{inside}' > /dev/null")
+        self.assertEqual(code, 0, inside)
+        code, _, _ = opened.run(f"ls '{home}'")
+        self.assertNotEqual(code, 0)   # a readable path never opens the home itself
+        # a PATH entry under the home is readable, with the directory holding its bin (where its links lead)
+        tools = Sandbox(self.root / "box", self.sandbox.work, {"PATH": f"{inside}/bin:/usr/bin:/bin"}, profiles=self.root / "profiles")
+        self.assertIn(inside, tools.readable())
+        self.assertNotIn(home, tools.readable())
+
+    def test_unix_sockets_are_reachable_only_inside_the_box_and_temp(self):
+        import socket
+        outside = Path("/private/var/tmp") / f"ge-sock-{os.getpid()}"   # writable by the controller, not sandbox temp
+        if not outside.parent.is_dir():
+            self.skipTest("no /private/var/tmp")
+        server = socket.socket(socket.AF_UNIX)
+        server.bind(str(outside))
+        server.listen(1)
+        self.addCleanup(outside.unlink)
+        self.addCleanup(server.close)
+        connect = "python3 -c \"import socket; s = socket.socket(socket.AF_UNIX); s.connect('%s'); print('reached')\""
+        for network in (False, True):
+            code, out, _ = self.sandbox.run(connect % outside, network=network)
+            self.assertNotEqual(code, 0, out)
+            self.assertIn("not permitted", out)
+        code, out, _ = self.sandbox.run("python3 -c \"import socket; s = socket.socket(socket.AF_UNIX); s.bind('local.sock'); s.listen(1); "
+                                        "c = socket.socket(socket.AF_UNIX); c.connect('local.sock'); print('reached')\"")
+        self.assertEqual((code, out.strip()), (0, "reached"))
+
     def test_git_can_restore_a_file_but_not_commit_or_install_hooks(self):
         from graph_engineering.sandbox import prepare_workspace
         root = self.root / "ticket"

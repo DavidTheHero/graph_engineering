@@ -21,7 +21,7 @@ def check(name: str, ok: bool, detail: str = "") -> dict:
 def changes(work: Path, base: str, commit: str | None = None) -> list[tuple[str, str]]:
     """(status, path) for every change against base: of the work tree, staged so new files count, or of ``commit``."""
     if commit is None:
-        git(work, "add", "-A")
+        stage(work)
         fields = git(work, "diff", "--cached", "--name-status", "--no-renames", "-z", base).split("\0")
     else:
         fields = git(work, "diff", "--name-status", "--no-renames", "-z", base, commit).split("\0")
@@ -54,9 +54,20 @@ def changed_tests(work: Path, base: str, is_test, only: str | None = None) -> se
     return names
 
 
+def stage(work: Path) -> None:
+    """`git add -A` for the controller. The sandbox may write the index, so that `git checkout -- file` works
+    there, and a command can leave it locked or corrupt; staging then starts the index afresh from the tree."""
+    (work / ".git" / "index.lock").unlink(missing_ok=True)
+    try:
+        git(work, "add", "-A")
+    except RuntimeError:
+        (work / ".git" / "index").unlink(missing_ok=True)
+        git(work, "add", "-A")
+
+
 def snapshot(work: Path, base: str) -> str:
     """An unreferenced commit of exactly what is staged: what the gates test is what gets published."""
-    git(work, "add", "-A")
+    stage(work)
     tree = git(work, "write-tree").strip()
     return git(work, "commit-tree", tree, "-p", base, "-m", "graph_engineering gate snapshot").strip()
 

@@ -29,6 +29,9 @@ class Repo:
     build_command: str = ""
     setup: list = field(default_factory=list)          # shell commands run once per workspace, network allowed
     env: dict = field(default_factory=dict)            # extra sandbox environment; "{repo}" expands to the path
+    readable: list = field(default_factory=list)       # paths outside the workspace a command may read, e.g. a venv
+                                                       # the env points at ("{repo}/.venv"); the person's home is
+                                                       # otherwise unreadable from the sandbox
     test_file_pattern: str = TEST_FILES
     test_file_runners: list = field(default_factory=list)   # [{"pattern", "command" with {file}}]; else the full suite
     protected_paths: list = field(default_factory=lambda: [".github/*"])
@@ -64,6 +67,9 @@ class Repo:
 
     def sandbox_env(self) -> dict:
         return {k: self.expand(v) for k, v in self.env.items()}
+
+    def readable_paths(self) -> list[str]:
+        return [self.expand(p) for p in self.readable]
 
     def is_test(self, path: str) -> bool:
         return bool(re.search(self.test_file_pattern, path))

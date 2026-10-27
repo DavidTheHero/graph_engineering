@@ -18,7 +18,9 @@ See [docs/DESIGN.md](docs/DESIGN.md).
 - An OpenAI-compatible model server with tool calling, such as vLLM with `--enable-auto-tool-choice`.
 - macOS (`sandbox-exec`) or Linux with `bwrap` for the sandbox. Elsewhere, only repositories registered as
   `trusted` can run, without a sandbox. Inside it a command can write only the ticket's own box and system
-  temp, cannot read the controller's state or your credentials, and cannot reach the control centre.
+  temp, cannot read your home (except toolchains on PATH and paths you list under the repository's
+  `readable`, e.g. `--set 'readable=["{repo}/.venv"]'`), the controller's state or the Docker socket, and
+  cannot reach the control centre, whose writes need the token `serve` prints with its address.
 - `gh`, signed in, for GitHub publication.
 
 ## Quick start
@@ -29,7 +31,7 @@ export GE_HOME=$PWD/.runtime
 graph-engineer init                         # writes $GE_HOME/models.json; edit endpoints and roles
 graph-engineer models                       # checks every endpoint
 graph-engineer repo add myapp ~/code/myapp  # detects setup, test, build and the GitHub slug; review the output
-graph-engineer serve                        # workers + control centre at http://127.0.0.1:8765
+graph-engineer serve                        # workers + control centre; open the address it prints (it carries the token)
 ```
 
 File a ticket in the control centre or with `graph-engineer ticket new myapp "what you want"`.

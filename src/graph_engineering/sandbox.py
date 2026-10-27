@@ -18,6 +18,13 @@ import time
 
 SECRETS = (".ssh", ".config/gh", ".aws", ".azure", ".config/gcloud", ".docker", ".kube", ".gnupg", ".netrc",
            ".git-credentials", ".npmrc", ".pypirc")
+# Under the person's home only these (when present), the PATH entries and a repository's `readable` paths are
+# readable: everything else there (keychains, shell history, other projects' .env files) is not.
+TOOLCHAINS = (".nvm", ".pyenv", ".rbenv", ".nodenv", ".goenv", ".jenv", ".asdf", ".volta", ".bun", ".deno", ".cargo",
+              ".rustup", "go", ".npm-global", ".local", ".sdkman", ".m2", ".gradle", ".ghcup", ".cabal", ".opam",
+              ".dotnet", ".conda", "miniconda3", "anaconda3", ".pub-cache", ".nuget")
+DNS_SOCKET = "/private/var/run/mDNSResponder"   # name resolution on macOS: the one unix socket a networked command needs
+CONTAINER_SOCKETS = ("/var/run/docker.sock", "/run/docker.sock", "/run/podman/podman.sock", "/run/user/{uid}/podman/podman.sock")
 PASS_ENV = ("PATH", "LANG", "LC_ALL", "TZ")
 
 
@@ -60,15 +67,17 @@ def temp_roots() -> list[Path]:
 
 class Sandbox:
     """``run_dir`` is the only directory the sandbox may write (plus system temp, since not everything honours
-    TMPDIR). ``private`` directories are neither readable nor writable, except the run directory when it lies
+    TMPDIR). The person's home is unreadable but for the run directory, system temp, toolchains and ``readable``
+    paths; ``private`` directories are neither readable nor writable, except the run directory when it lies
     inside one (the state directory holds every ticket's box). ``profiles`` holds the sandbox profiles and must
     not be writable from inside, or a command could loosen the profile of the next. ``work/.git`` is read-only
     inside the sandbox: the controller runs git in the workspace, and hooks or configuration planted there
     would run outside the sandbox (with sandbox-exec only the index may change, so `git checkout -- file` still
-    works; under bwrap the whole of .git is read-only)."""
+    works; under bwrap the whole of .git is read-only). Unix sockets are reachable only inside the run directory
+    and temp: a container daemon's socket would mount the whole disk."""
 
     def __init__(self, run_dir: Path, work: Path, env: dict | None = None, trusted: bool = False,
-                 profiles: Path | None = None, private: tuple = ()):
+                 profiles: Path | None = None, private: tuple = (), readable: tuple = ()):
         self.run_dir, self.work = Path(run_dir).resolve(), Path(work).resolve()
         self.home, self.tmp = self.run_dir / "home", self.run_dir / "tmp"
         self.home.mkdir(parents=True, exist_ok=True)
@@ -78,6 +87,7 @@ class Sandbox:
             raise ValueError("sandbox profiles must live outside the run directory")
         self.profiles.mkdir(parents=True, exist_ok=True)
         self.private = [Path(p).resolve() for p in private]
+        self.extra = [Path(p).resolve() for p in readable]
         self.mechanism = available()
         if not self.mechanism and not trusted:
             raise SandboxUnavailable("no OS sandbox (sandbox-exec or bwrap) on this host; register the repository as "
@@ -91,11 +101,29 @@ class Sandbox:
                          "GIT_COMMITTER_NAME": "graph_engineering", "GIT_COMMITTER_EMAIL": "graph-engineering@localhost"})
         self.env.update(env or {})
 
+    def readable(self) -> list[Path]:
+        """What a command may read under the person's home besides the run directory: the PATH entries there (with
+        the directory holding a `bin`, where their links lead), the toolchains that exist, the repository's
+        ``readable`` paths and system temp. Never the home itself."""
+        user = Path.home().resolve()
+        roots = set(self.extra)
+        for entry in self.env.get("PATH", "").split(os.pathsep):
+            path = Path(entry)
+            if path.is_absolute() and path.resolve().is_relative_to(user):
+                roots.add(path.resolve())
+                if path.name == "bin":
+                    roots.add(path.resolve().parent)
+        roots.update(user / name for name in TOOLCHAINS if (user / name).exists())
+        roots.update(temp_roots())
+        return sorted(p for p in roots if p != user)
+
     def _profile(self, network: bool) -> Path:
         """A sandbox-exec profile. The last matching rule wins, so the order is: nothing is writable; system temp
-        and the device files are; private directories are neither readable nor writable; the run directory is both;
-        the workspace's .git is not writable except its index; the secrets are unreadable; loopback ports the
-        controller owns are closed (the control centre takes merge approvals: the sandbox must not reach it)."""
+        and the device files are; the person's home is unreadable; the toolchains and readable paths are readable;
+        private directories are neither readable nor writable; the run directory is both; the workspace's .git is
+        not writable except its index; the secrets are unreadable. Outbound unix sockets only inside the run
+        directory and temp (plus the resolver when the network is open); loopback ports the controller owns are
+        closed (the control centre takes merge approvals: the sandbox must not reach it)."""
         user = Path.home()
         subpaths = lambda paths: " ".join(f'(subpath "{p}")' for p in paths)
         enclosing = [p for p in self.private if p in self.run_dir.parents]
@@ -103,16 +131,25 @@ class Sandbox:
         rules = ["(version 1)", "(allow default)",
                  "(deny file-write*)",
                  "(allow file-write* " + subpaths(temp_roots())
-                 + ' (literal "/dev/null") (literal "/dev/zero") (regex #"^/dev/tty") (regex #"^/dev/fd/"))']
+                 + ' (literal "/dev/null") (literal "/dev/zero") (regex #"^/dev/tty") (regex #"^/dev/fd/"))',
+                 f'(deny file-read* (subpath "{user}"))',
+                 "(allow file-read* " + subpaths(self.readable()) + ")"]
         if enclosing or apart:
             rules.append("(deny file-read* file-write* " + subpaths(enclosing + apart) + ")")
+        # Programs resolve real paths by stat-ing every ancestor (node, git): the ancestors of what is readable
+        # may be stat-ed, which tells their names and dates, not their contents or listings.
+        ancestors = {a for p in [self.run_dir, *self.readable()] for a in p.parents}
         rules += [f'(allow file-read* file-write* (subpath "{self.run_dir}"))',
+                  "(allow file-read-metadata " + " ".join(f'(literal "{a}")' for a in sorted(ancestors)) + ")",
                   f'(deny file-write* (subpath "{self.work / ".git"}"))',
                   f'(allow file-write* (literal "{self.work / ".git" / "index"}") (literal "{self.work / ".git" / "index.lock"}"))',
                   "(deny file-read* " + subpaths(user / s for s in SECRETS) + ")"]
         if not network:
             rules += ["(deny network-outbound)", '(allow network-outbound (remote ip "localhost:*"))',
-                      '(allow network-outbound (remote unix-socket))', '(allow network-bind (local ip "localhost:*"))']
+                      '(allow network-bind (local ip "localhost:*"))']
+        else:
+            rules += ["(deny network-outbound (remote unix-socket))", f'(allow network-outbound (literal "{DNS_SOCKET}"))']
+        rules += ["(allow network-outbound " + subpaths([self.run_dir, *temp_roots()]) + ")"]
         rules += [f'(deny network-outbound (remote ip "localhost:{port}"))' for port in sorted(CLOSED_PORTS)]
         path = self.profiles / (f"{self.run_dir.name}-net.sb" if network else f"{self.run_dir.name}.sb")
         path.write_text("\n".join(rules) + "\n")
@@ -124,18 +161,25 @@ class Sandbox:
         if self.mechanism == "sandbox-exec":
             return ["sandbox-exec", "-f", str(self._profile(network))] + shell
         if self.mechanism == "bwrap":
-            wrap = ["bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp",
-                    "--bind", str(self.run_dir), str(self.run_dir), "--die-with-parent", "--new-session"]
+            # The same policy as the profile, as mounts in order: the disk read-only, the home empty, the readable
+            # paths back, private directories empty, the run directory writable, .git read-only, sockets masked.
+            user = Path.home().resolve()
+            wrap = ["bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--tmpfs", str(user)]
+            wrap += [arg for p in self.readable() if p.exists() and user in p.parents for arg in ("--ro-bind", str(p), str(p))]
+            wrap += [arg for p in self.private if p.exists() and p != self.run_dir for arg in ("--tmpfs", str(p))]
+            wrap += ["--bind", str(self.run_dir), str(self.run_dir)]
             if (self.work / ".git").exists():
                 wrap += ["--ro-bind", str(self.work / ".git"), str(self.work / ".git")]
-            hidden = [p for p in self.private if p.exists() and p != self.run_dir]
-            wrap[wrap.index("--bind"):wrap.index("--bind")] = [arg for p in hidden for arg in ("--tmpfs", str(p))]
             for secret in SECRETS:
                 target = Path.home() / secret
                 if target.is_dir():
                     wrap += ["--tmpfs", str(target)]
                 elif target.exists():
                     wrap += ["--ro-bind", "/dev/null", str(target)]
+            for socket in CONTAINER_SOCKETS:
+                if Path(socket.format(uid=os.getuid())).exists():
+                    wrap += ["--ro-bind", "/dev/null", socket.format(uid=os.getuid())]
+            wrap += ["--die-with-parent", "--new-session"]
             if not network:
                 wrap.append("--unshare-net")
             return wrap + shell

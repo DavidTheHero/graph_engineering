@@ -191,7 +191,8 @@ def probe_change(ctx: Context, ticket: dict, repo: Repo, work: Path, sandbox: Sa
     dispute: unlike acceptance tests, a probe cannot lock in a misreading of the ticket."""
     scratch = sandbox.run_dir / "probe"   # inside the box: the only place a sandbox can run anything
     target = gates.checkout(work, commit, scratch / "work", dependencies or [])
-    box = Sandbox(scratch, target, repo.sandbox_env(), trusted=repo.trusted, profiles=sandbox.profiles, private=sandbox.private)
+    box = Sandbox(scratch, target, repo.sandbox_env(), trusted=repo.trusted, profiles=sandbox.profiles, private=sandbox.private,
+                  readable=sandbox.extra)
     spec = ticket["spec"]
     task = prompts.probe_task(spec, brief, repo.test_command, summary)
     # The coding role: on the review role the prober went to the 9B, whose 16K window cannot hold this work.
@@ -407,7 +408,8 @@ def develop(ctx: Context, ticket: dict) -> dict:
     if directory.exists():
         shutil.rmtree(directory)  # an interrupted attempt of this round starts again
     directory.mkdir(parents=True)
-    sandbox = Sandbox(box, work, repo.sandbox_env(), trusted=repo.trusted, profiles=root / "profiles", private=[ctx.home])
+    sandbox = Sandbox(box, work, repo.sandbox_env(), trusted=repo.trusted, profiles=root / "profiles", private=[ctx.home],
+                      readable=repo.readable_paths())
     if not (work / ".git").exists() or not data.get("setup_done"):
         # A crash between cloning and the end of setup leaves a half-prepared workspace: always start it again.
         if work.exists():

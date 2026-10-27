@@ -288,18 +288,26 @@ failure the research names: 29.6% of patches that pass their tests behave differ
   The sandbox runs `sandbox-exec` or `bwrap` with:
   - a minimal environment and a neutral git identity;
   - no network except loopback (setup may install dependencies), and never the control centre's port,
-    where merge approvals are taken;
+    where merge approvals are taken; unix sockets only inside the box and temp (a container daemon's socket
+    would mount the whole disk; the review found Docker's reachable), plus the resolver when the network is
+    open;
   - writes only inside the ticket's *box* (`work/GE-x/box`: the workspace, its temp and home) and system
     temp; nothing else on the machine, including the sandbox profile, the ticket's notes, transcripts and
     gate reports, which sit beside the box;
+  - the person's home unreadable (keychains, shell history, other projects' `.env` files) but for the box,
+    temp, the PATH entries under it, the toolchains that exist (`~/.nvm`, `~/.cargo`, ...) and the
+    repository's `readable` paths (a venv its env points at); ancestors of readable places can be stat-ed,
+    since node and git resolve real paths that way, not listed or read;
   - the state directory (`GE_HOME`: the store, every other ticket) and credential directories unreadable;
   - the workspace's `.git` read-only but for the index, so no hook or configuration planted there runs when
     the controller later runs git in the workspace; the controller's git also runs with hooks and the
-    system configuration off.
+    system configuration off, and starts the index afresh when a command left it locked or corrupt.
 - **Controller (privileged).** Pushes, GitHub API calls, merges with the person's `gh` credentials. Model
   text enters only as PR prose, with closing keywords and @mentions neutralised. Where the controller reads a
   file at a path the model chose (tools, the project brief, changed-test names, hidden tests), it refuses
-  symbolic links and paths that resolve outside the workspace.
+  symbolic links and paths that resolve outside the workspace. Every write to the control centre carries
+  the token `serve` prints with its address, kept in the state directory: reaching the port is not enough
+  (a `work` process, for one, does not know the port to close).
 
 What remains outside the boundary is the model's text: a repository's files can still try to persuade the
 model, which the prompts call data, and the gates and review judge the result rather than the intent.
@@ -341,12 +349,15 @@ Without the append-only change, the prefix-cache hit rate was 83%.
 
 ## Limitations
 
-1. **Containment is measured on macOS only.** The findings of the earlier independent review (writable git
+1. **Containment is measured on macOS only.** The findings of two independent reviews (writable git
    metadata, writes anywhere outside `$HOME`, controller files in the sandbox's reach, the control centre on
-   loopback, reads through planted symlinks) are fixed and covered by tests that run the real `sandbox-exec`.
-   The `bwrap` branch mirrors them (read-only `.git`, private directories hidden) but no Linux host has run
-   it. System temp stays writable from the sandbox because not everything honours `TMPDIR`; the controller
-   never reads from there.
+   loopback, reads through planted symlinks; then allow-by-default reads of the home, a planted index
+   stopping the controller's staging, port closure resting on one process's state, and the Docker socket)
+   are fixed and covered by tests that run the real `sandbox-exec`. The `bwrap` branch mirrors them (home
+   and private directories replaced by empty mounts, read-only `.git`, container sockets masked) but no
+   Linux host has run it, and `--unshare-net` there closes loopback as well. System temp stays writable and
+   its sockets reachable from the sandbox because not everything honours `TMPDIR`; the controller never
+   reads from there. What the sandbox can still read is the rest of the disk outside the home.
 2. **Tests can be weaker than the criteria.** Red/green proves the new tests detect the change, not that
    they cover every way the code is used. That is how a change passed every gate and failed the
    maintainers' test. The plan-concern checklist addresses the case seen; the general problem remains.

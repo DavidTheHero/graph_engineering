@@ -85,8 +85,11 @@ const el = (tag, attrs = {}, ...children) => {
   for (const c of children.flat()) if (c != null) node.append(c.nodeType ? c : document.createTextNode(String(c)));
   return node;
 };
+const params = new URLSearchParams(location.search);
+if (params.get("token")) { localStorage.setItem("ge-token", params.get("token")); history.replaceState(null, "", location.pathname + location.hash); }
 const api = async (path, body) => {
-  const response = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json", "X-GE": "1" }, body: JSON.stringify(body) });
+  const headers = { "Content-Type": "application/json", "X-GE-Token": localStorage.getItem("ge-token") || "" };
+  const response = await fetch(path, body === undefined ? {} : { method: "POST", headers, body: JSON.stringify(body) });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || response.statusText);
   return data;

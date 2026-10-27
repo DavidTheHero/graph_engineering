@@ -87,11 +87,13 @@ def hidden(spec: dict, repo, root: Path) -> dict:
             source, ref = content[1:-1].rsplit("@", 1)
             content = git(Path(repo.path), "show", f"{ref}:{source}")
         target = work / path
-        if target.is_symlink() or not target.parent.resolve().is_relative_to(work.resolve()):
-            return {"passed": False, "output": f"{path} in the result is a symbolic link; the hidden tests were not written"}
+        if target.is_symlink() or not target.parent.resolve().is_relative_to(work.resolve()) \
+                or (target.exists() and target.stat().st_nlink > 1):
+            return {"passed": False, "output": f"{path} in the result is a link; the hidden tests were not written"}
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content)
-    sandbox = Sandbox(root, work, repo.sandbox_env(), trusted=repo.trusted, profiles=root.parent / "profiles")
+    sandbox = Sandbox(root, work, repo.sandbox_env(), trusted=repo.trusted, profiles=root.parent / "profiles",
+                      readable=repo.readable_paths())
     code, out, _ = sandbox.run(spec["command"], timeout=repo.run_timeout * 3)
     return {"passed": code == 0, "output": clip(out, 3000)}
 
