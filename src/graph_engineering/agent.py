@@ -40,7 +40,7 @@ SAME_OUTPUT = "[the same output as this command gave"
 UNDONE = "[after this edit"
 PROBING = "[this is scratch file"
 REPEAT_HINTS = ("You already made this exact call", SAME_OUTPUT, UNDONE, PROBING)
-SCRATCH = re.compile(r"(^|[/_.-])(dbg|debug|scratch|tmp|temp|junk)\d*([/_.-]|$)", re.I)   # a file name that says "leftover"
+SCRATCH = re.compile(r"(^|[/_.-])(dbg|debug|scratch|tmp|temp|junk|probe|hangcheck)\d*([/_.-]|$)", re.I)   # a file name that says "leftover"
 
 NOTES_TOOL = {"name": "update_notes",
               "description": "Replace your working notes: the plan, what is done, what you learned about the code (file paths, "
