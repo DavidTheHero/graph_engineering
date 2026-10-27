@@ -94,7 +94,12 @@ rounds and failed the three "report" tests that run 22's trials had passed, so t
 the miss without removing it. one-command-start's second trial needed three rounds: 96 commands and no edit in
 one of them, most of them probe scripts written with heredocs (3664d42: those count as scratch; a session with
 no edit in 30 steps restarts from its notes and ends at 45; probes no longer count as green checkpoints).
-Run 25 (3664d42 and the task clarifications) measures those.
+Run 25 (3664d42 and the task clarifications): 15 of 16 accepted, pass^k 7 of 8, hidden tests 8 of 11, 6.2 h, median
+11 min. #20's first trial passed all seven maintainers' tests, the first full pass in 25 runs; its second failed three
+rounds. model-name-response passed both hidden checks (the memory-less miss is gone). f123b5b4 missed two different
+hidden tests, one per trial, after passing in every run since 14: the finest compaction semantics, and sampling. The
+no-edit escalation ended one zero-edit round at step 45 instead of 80. Over runs 20–25 the set sits at 15–16 of 16
+accepted and 7–8 of 11–12 hidden tests; the remaining misses are at the model's edge on #20 and f123b5b4.
 
 Earlier history:
 
